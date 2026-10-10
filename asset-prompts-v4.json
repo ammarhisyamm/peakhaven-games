@@ -1,0 +1,30 @@
+[
+  {
+    "name": "tower-scene",
+    "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A snowy alpine valley with steep waterfalls and mountains, glowing blue glass vial towers at left and right edges, a circular chrome and cyan stone pedestal at bottom center, clear open sky/valley in center. Do not include floating bottles or mascot. Preserve environment and materials of reference.",
+    "ref": "codex-clipboard-f610059c-0cff-4784-b6e4-c7565ecce658.png",
+    "path": "exec-f6c7a923-522d-4df4-899c-0142990312f1.png"
+  },
+  {
+    "name": "garden-scene",
+    "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A bright botanical glasshouse laboratory with tall arched glass ceiling, white metal silver columns, green vines and white flowers framing edges. Snowy blue peaks visible through center window. Empty large circular polished chrome tabletop across lower third. No test tubes or tiles on tabletop; actual game draws them. Match environmental background of reference.",
+    "ref": "codex-clipboard-0bfd1f1d-6d47-4480-b007-51bcf0259d0b.png",
+    "path": "exec-b4a00e87-9523-4501-a52a-0f45cceee732.png"
+  },
+  {
+    "name": "crystal-scene",
+    "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A glittering blue crystal cave opening onto snowy alpine mountains, chrome science vial towers at far edges, cobalt quartz crystal clusters bordering bottom and sides. Empty center with softly lit clear blue valley, and circular futuristic silver platform across lower third. No block board, no pieces, no text. Match environment in reference.",
+    "ref": "codex-clipboard-c2ad3cd7-e6bf-41e4-b573-76fe777c9900.png",
+    "path": "exec-e5ed1179-c242-441d-a816-3648ad3cc5c5.png"
+  },
+  {
+    "name": "happy-vials",
+    "prompt": "Create a transparent-background GAME SPRITE SHEET. Exactly SIX small broad clear glass vials in ONE horizontal row, equally spaced same size each, front-on upright, no perspective. Silver reflective metal caps, polished realistic 3D glass, adorable happy tiny black eyes/smiling mouth and pink cheeks above deep navy lower label with white Peak Haven arrow/molecule emblem. Liquid colors left to right cyan, pink, yellow, purple, green, cobalt. Match vial character from supplied image but WITHOUT arms legs or accessories. Transparent space, no ground/shadow plate, no text outside labels, full bottles visible uncropped. Each bottle broad ratio width:height 0.55, all six same proportions. Premium 3D mobile game art. Make sheet wide 3:1.",
+    "path": "exec-e55c4ef2-abfa-4440-8088-fc68d0224051.png"
+  },
+  {
+    "name": "game-tiles",
+    "prompt": "Transparent game sprite sheet for Peak Haven, exactly FIVE equal square objects in one horizontal row with generous clear spacing, front-facing no perspective, all straight-on and same size. 1: vivid cobalt blue glass cube with glossy white Peak Haven arrow/molecule mark from reference. 2: translucent cyan glass cube with white diamond embossed in face. 3: polished yellow gold cube with raised bright five-point star. 4: luminous frosted icy white glass cube. 5: white polished ceramic mahjong tile, rounded rectangular square, blank face with beveled silver-grey edges. Premium detailed dimensional 3D mobile casual game sprites matching supplied reference. No words, no shadows beyond objects, no frame, no background. Wide sheet 5:1. Tiles must fill each cell equally and be uncropped.",
+    "path": "exec-e1c05a82-349c-4c06-bc63-96c36090bdea.png"
+  }
+]

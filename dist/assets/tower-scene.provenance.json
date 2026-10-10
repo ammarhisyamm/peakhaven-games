@@ -1,0 +1,8 @@
+{
+  "tool": "OpenAI image_gen.imagegen",
+  "source": "exec-f6c7a923-522d-4df4-899c-0142990312f1.png",
+  "source_sha256": "62ed9a0498b4cda5c4814f83d21180cb482da2c954049df1e419c6d3f7372f02",
+  "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A snowy alpine valley with steep waterfalls and mountains, glowing blue glass vial towers at left and right edges, a circular chrome and cyan stone pedestal at bottom center, clear open sky/valley in center. Do not include floating bottles or mascot. Preserve environment and materials of reference.",
+  "reference": "codex-clipboard-f610059c-0cff-4784-b6e4-c7565ecce658.png",
+  "derived": "Converted to WebP preserving original dimensions and alpha; original retained."
+}

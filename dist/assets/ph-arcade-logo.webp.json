@@ -1,0 +1,7 @@
+{
+  "file": "ph-arcade-logo.webp",
+  "source": "exec-2162da2e-a247-49cd-ac22-a47255139724.png",
+  "prompt": "Use case: background-extraction. Edit target: the supplied PH Arcade brand board. Extract ONLY the exact white PRIMARY LOGO in the top-left panel: white Peak Haven arrow/molecule symbol on the left, exact wide geometric PH on the upper right and exact ARCADE word directly beneath PH. Preserve original letterforms, stylized P and H, spacing, and logo proportions from the reference. Remove the blue rectangular panel, headings, mascot, all other contents. Return the single isolated white PH ARCADE lockup on a genuinely transparent background, tightly framed with 5% padding, wide landscape aspect. Keep its soft icy cyan dimensional highlights and very subtle blue edge glow. No new logo design, no extra text or objects. Exact text PH ARCADE.",
+  "tool": "built-in image_gen",
+  "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+}

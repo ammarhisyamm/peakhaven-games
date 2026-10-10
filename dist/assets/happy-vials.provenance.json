@@ -1,0 +1,8 @@
+{
+  "tool": "OpenAI image_gen.imagegen",
+  "source": "exec-e55c4ef2-abfa-4440-8088-fc68d0224051.png",
+  "source_sha256": "882f262e8f286820c822866f13077215db7e85e2fba6ef7d7a693c0aa6c058d0",
+  "prompt": "Create a transparent-background GAME SPRITE SHEET. Exactly SIX small broad clear glass vials in ONE horizontal row, equally spaced same size each, front-on upright, no perspective. Silver reflective metal caps, polished realistic 3D glass, adorable happy tiny black eyes/smiling mouth and pink cheeks above deep navy lower label with white Peak Haven arrow/molecule emblem. Liquid colors left to right cyan, pink, yellow, purple, green, cobalt. Match vial character from supplied image but WITHOUT arms legs or accessories. Transparent space, no ground/shadow plate, no text outside labels, full bottles visible uncropped. Each bottle broad ratio width:height 0.55, all six same proportions. Premium 3D mobile game art. Make sheet wide 3:1.",
+  "reference": null,
+  "derived": "Converted to WebP preserving original dimensions and alpha; original retained."
+}

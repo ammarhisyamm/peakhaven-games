@@ -1,0 +1,15 @@
+{
+  "tool": "OpenAI image_gen.imagegen",
+  "source": "exec-50d0fa4f-6426-4dc1-a741-f57b847a3525.png",
+  "source_sha256": "aaa6b9528a6509a6fb97121f4a8c61c9ceed801100e3c2d19b023d9f4b2dd667",
+  "prompt_summary": "One transparent empty sci-fi glass containment chamber, broad chrome top ring, glass walls, substantial segmented blue and chrome base, cyan illumination; interior alpha for live game contents.",
+  "reference": "codex-clipboard-1bc60612-3acb-4418-88ee-55ce3a56d546.png",
+  "derived": "WebP format conversion and transparent outer-margin crop; original retained. Alpha and object proportions preserved.",
+  "crop": [
+    6,
+    10,
+    1204,
+    1299
+  ],
+  "prompt": "Generate one isolated empty sci-fi glass containment jar GAME FRAME sprite matching the full cylinder in the reference. Transparent background and transparent inside glass chamber, NO bottles or liquids or illustrations. Front-facing with slight elevated camera. Broad polished chrome elliptical top ring and substantial detailed chrome circular bottom pedestal with cobalt blue mechanical segments and luminous cyan light strips, narrow glass walls at sides; premium tangible 3D modeled metal/glass material. Jar silhouette width:height 0.93. Opening/body occupy roughly80% of height so it can overlay live falling vial gameplay. VERY IMPORTANT empty inside is alpha transparent, no opaque fill, no background through jar, no scenery, no words, no logo, no HUD. Whole object uncropped, centered minimal transparent margin, restrained bloom crispy readable chrome. This sprite will be composited around live game objects."
+}

@@ -1,0 +1,9 @@
+{
+  "name": "peak-haven-arcade",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "preview": "python3 -m http.server 8765 --directory dist"
+  }
+}

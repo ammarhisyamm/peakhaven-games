@@ -1,0 +1,110 @@
+{
+  "branding": [
+    {
+      "file": "bottle-mascot.webp",
+      "source": "exec-e99faeeb-4f65-43db-a406-a07a910fa92d.png",
+      "prompt": "Use case: stylized-concept. Generate one production game sprite using the attached brand board only as visual reference. Exactly the SAME adorable glass vial mascot: squat clear glass cylindrical bottle, shiny silver metal cap, smiling open red mouth, one shiny black eye and one winking eye, pink cheeks, glossy blue mitten hands and blue shoes, deep navy wrap label with the white Peak Haven arrow/molecule symbol as shown. Dynamic cheerful waving pose, slight tilt, full body fully visible, premium polished toy-like 3D render. Genuine transparent background. No text, no scene, no frame. Match the reference mascot closely, retain realistic bottle proportions. Centered with narrow transparent padding.",
+      "tool": "built-in image_gen",
+      "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+    },
+    {
+      "file": "alpine-world.webp",
+      "source": "exec-8e60a823-5d47-4432-a9a8-207197ec298f.png",
+      "prompt": "Use case: stylized-concept. Generate a portrait mobile game environment background, 2:3 tall composition. Match the attached brand reference exactly in materials and visual style: brilliant electric blue sky, snowy blue alpine mountain peaks, fluffy white clouds, pine trees, cyan waterfalls, white futuristic glass vial-shaped castle towers with silver rims and blue accents on the right, clear glass short vials in foreground corners, winding illuminated cyan path through pale rocky stepped platforms from bottom center toward top right. Premium high-end 3D casual game illustration, vibrant, crisp, spectacular rich world. Lower two thirds have clearly readable light rocky platforms for overlaying game level buttons. Top-left has open sky for title. No mascot, no letters, no numbers, no user-interface, no logos, no smartphone frame.",
+      "tool": "built-in image_gen",
+      "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+    },
+    {
+      "file": "collectible-vials.webp",
+      "source": "exec-547cba5c-a773-4603-8874-aaacfdef0ddc.png",
+      "prompt": "Use case: stylized-concept. Production game sprite sheet of SIX bottles, ONE horizontal row of six equally sized cells, landscape 3:1. Match attached brand library: short squat realistic cylindrical clear glass vial with reflective silver cap and broad wraparound label. All bottles upright front view, same height, same width, full objects with enough separation, centered one per cell. Label variants from left to right: deep navy with white arrow/molecule logo, bright cyan with blue molecule shapes, royal blue with dark blue hexagon pattern, pale ice blue with cyan molecule shapes, golden yellow with raised yellow star, violet with pink molecule shapes. Crisp premium 3D collectible render with dimensional glass reflections and visible glass base. TRUE transparent background, no platform, no text, no extra object. Labels fully encircle bottle. Ratio bottle width to height approx 0.48 as in reference, no elongated test tubes. Strict horizontal evenly spaced row.",
+      "tool": "built-in image_gen",
+      "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+    },
+    {
+      "file": "arcade-covers.webp",
+      "source": "exec-2f596cb3-5214-49bb-8744-1e85dadd31a5.png",
+      "prompt": "Use case: stylized-concept. Generate landscape sprite sheet THREE equal square panels horizontal row, no borders or text. Match attached polished PH Arcade 3D world. LEFT: five realistic short clear glass silver-capped vials with blue green pink and yellow broad labels stacked in a playful tower in alpine castle setting; CENTRE: bright blue and golden silver-capped short glass vials tilted toward one another in an energetic purple electric magical merge burst; RIGHT: three tall glass test tubes filled cyan yellow pink liquid on sleek blue metallic laboratory platform, mountain lab scene. Premium collectible game visuals with bold electric blue lighting, vivid cyan, beautiful reflections, dramatic readable large subjects filling each panel. No mascot, no logos or letters, no phone frame.",
+      "tool": "built-in image_gen",
+      "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+    },
+    {
+      "file": "reward-chest.webp",
+      "source": "exec-e2a542b9-457c-4ec2-a02b-2ea9be3d2a92.png",
+      "prompt": "Use case: stylized-concept. Generate one production game cutout sprite using attached board as style reference. A spectacular OPEN futuristic reward chest, glossy royal-blue panels with silver metallic bands, chunky gold latch, filled with luminous cyan faceted gems and gold star coins exploding gently upward. A white Peak Haven arrow/molecule symbol on the blue front panel matching supplied brand. Premium adorable polished 3D game render. Full object visible centered, true transparent background. No text, no phone frame, no background.",
+      "tool": "built-in image_gen",
+      "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+    },
+    {
+      "file": "ph-arcade-logo.webp",
+      "source": "exec-2162da2e-a247-49cd-ac22-a47255139724.png",
+      "prompt": "Use case: background-extraction. Edit target: the supplied PH Arcade brand board. Extract ONLY the exact white PRIMARY LOGO in the top-left panel: white Peak Haven arrow/molecule symbol on the left, exact wide geometric PH on the upper right and exact ARCADE word directly beneath PH. Preserve original letterforms, stylized P and H, spacing, and logo proportions from the reference. Remove the blue rectangular panel, headings, mascot, all other contents. Return the single isolated white PH ARCADE lockup on a genuinely transparent background, tightly framed with 5% padding, wide landscape aspect. Keep its soft icy cyan dimensional highlights and very subtle blue edge glow. No new logo design, no extra text or objects. Exact text PH ARCADE.",
+      "tool": "built-in image_gen",
+      "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+    }
+  ],
+  "gameplay": [
+    {
+      "name": "tower-scene",
+      "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A snowy alpine valley with steep waterfalls and mountains, glowing blue glass vial towers at left and right edges, a circular chrome and cyan stone pedestal at bottom center, clear open sky/valley in center. Do not include floating bottles or mascot. Preserve environment and materials of reference.",
+      "ref": "codex-clipboard-f610059c-0cff-4784-b6e4-c7565ecce658.png",
+      "path": "exec-f6c7a923-522d-4df4-899c-0142990312f1.png"
+    },
+    {
+      "name": "garden-scene",
+      "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A bright botanical glasshouse laboratory with tall arched glass ceiling, white metal silver columns, green vines and white flowers framing edges. Snowy blue peaks visible through center window. Empty large circular polished chrome tabletop across lower third. No test tubes or tiles on tabletop; actual game draws them. Match environmental background of reference.",
+      "ref": "codex-clipboard-0bfd1f1d-6d47-4480-b007-51bcf0259d0b.png",
+      "path": "exec-b4a00e87-9523-4501-a52a-0f45cceee732.png"
+    },
+    {
+      "name": "crystal-scene",
+      "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A glittering blue crystal cave opening onto snowy alpine mountains, chrome science vial towers at far edges, cobalt quartz crystal clusters bordering bottom and sides. Empty center with softly lit clear blue valley, and circular futuristic silver platform across lower third. No block board, no pieces, no text. Match environment in reference.",
+      "ref": "codex-clipboard-c2ad3cd7-e6bf-41e4-b573-76fe777c9900.png",
+      "path": "exec-e5ed1179-c242-441d-a816-3648ad3cc5c5.png"
+    },
+    {
+      "name": "happy-vials",
+      "prompt": "Create a transparent-background GAME SPRITE SHEET. Exactly SIX small broad clear glass vials in ONE horizontal row, equally spaced same size each, front-on upright, no perspective. Silver reflective metal caps, polished realistic 3D glass, adorable happy tiny black eyes/smiling mouth and pink cheeks above deep navy lower label with white Peak Haven arrow/molecule emblem. Liquid colors left to right cyan, pink, yellow, purple, green, cobalt. Match vial character from supplied image but WITHOUT arms legs or accessories. Transparent space, no ground/shadow plate, no text outside labels, full bottles visible uncropped. Each bottle broad ratio width:height 0.55, all six same proportions. Premium 3D mobile game art. Make sheet wide 3:1.",
+      "path": "exec-e55c4ef2-abfa-4440-8088-fc68d0224051.png"
+    },
+    {
+      "name": "game-tiles",
+      "prompt": "Transparent game sprite sheet for Peak Haven, exactly FIVE equal square objects in one horizontal row with generous clear spacing, front-facing no perspective, all straight-on and same size. 1: vivid cobalt blue glass cube with glossy white Peak Haven arrow/molecule mark from reference. 2: translucent cyan glass cube with white diamond embossed in face. 3: polished yellow gold cube with raised bright five-point star. 4: luminous frosted icy white glass cube. 5: white polished ceramic mahjong tile, rounded rectangular square, blank face with beveled silver-grey edges. Premium detailed dimensional 3D mobile casual game sprites matching supplied reference. No words, no shadows beyond objects, no frame, no background. Wide sheet 5:1. Tiles must fill each cell equally and be uncropped.",
+      "path": "exec-e1c05a82-349c-4c06-bc63-96c36090bdea.png"
+    }
+  ],
+  "materials": [
+    {
+      "name": "sort-glass",
+      "tool": "OpenAI image_gen.imagegen",
+      "source": "exec-8cb30f20-fed0-4ba9-9fb2-7fb45a0c1dde.png",
+      "source_sha256": "5561c75c417dca3524757e43bf7318431a30576ee063762842ad665752e12c6c",
+      "prompt_summary": "One transparent empty cylindrical glass tube with polished silver elliptical rim and foot, transparent live-liquid interior; premium 3D mobile game material.",
+      "reference": "codex-clipboard-0bfd1f1d-6d47-4480-b007-51bcf0259d0b.png",
+      "derived": "WebP format conversion and transparent outer-margin crop; original retained. Alpha and object proportions preserved.",
+      "crop": [
+        175,
+        2,
+        767,
+        1656
+      ],
+      "prompt": "Produce ONE isolated transparent GAME ASSET: empty upright open-topped cylindrical laboratory glass tube matching the bottom five glass tubes in the reference. NO liquid, NO lettering, NO background, NO platform. Front view with very slight elevated perspective only to show elliptical mouth. Thin polished silver/chrome elliptical rim on top and silver chrome circular foot at bottom, straight parallel transparent glass walls with narrow realistic white/cyan refraction/specular streaks at edges. Interior must remain fully transparent alpha for live colored liquid to show behind it; no opaque white fill inside. Tube silhouette width:height about 1:3.2, large centered uncropped with minimal transparent margin. Crisp premium 3D mobile game asset, glowing cyan highlights restrained. This is a sprite frame to overlay real-time liquid; use true alpha through the interior, not checkerboard or grey."
+    },
+    {
+      "name": "merge-chamber",
+      "tool": "OpenAI image_gen.imagegen",
+      "source": "exec-50d0fa4f-6426-4dc1-a741-f57b847a3525.png",
+      "source_sha256": "aaa6b9528a6509a6fb97121f4a8c61c9ceed801100e3c2d19b023d9f4b2dd667",
+      "prompt_summary": "One transparent empty sci-fi glass containment chamber, broad chrome top ring, glass walls, substantial segmented blue and chrome base, cyan illumination; interior alpha for live game contents.",
+      "reference": "codex-clipboard-1bc60612-3acb-4418-88ee-55ce3a56d546.png",
+      "derived": "WebP format conversion and transparent outer-margin crop; original retained. Alpha and object proportions preserved.",
+      "crop": [
+        6,
+        10,
+        1204,
+        1299
+      ],
+      "prompt": "Generate one isolated empty sci-fi glass containment jar GAME FRAME sprite matching the full cylinder in the reference. Transparent background and transparent inside glass chamber, NO bottles or liquids or illustrations. Front-facing with slight elevated camera. Broad polished chrome elliptical top ring and substantial detailed chrome circular bottom pedestal with cobalt blue mechanical segments and luminous cyan light strips, narrow glass walls at sides; premium tangible 3D modeled metal/glass material. Jar silhouette width:height 0.93. Opening/body occupy roughly80% of height so it can overlay live falling vial gameplay. VERY IMPORTANT empty inside is alpha transparent, no opaque fill, no background through jar, no scenery, no words, no logo, no HUD. Whole object uncropped, centered minimal transparent margin, restrained bloom crispy readable chrome. This sprite will be composited around live game objects."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "file": "bottle-mascot.webp",
+  "source": "exec-e99faeeb-4f65-43db-a406-a07a910fa92d.png",
+  "prompt": "Use case: stylized-concept. Generate one production game sprite using the attached brand board only as visual reference. Exactly the SAME adorable glass vial mascot: squat clear glass cylindrical bottle, shiny silver metal cap, smiling open red mouth, one shiny black eye and one winking eye, pink cheeks, glossy blue mitten hands and blue shoes, deep navy wrap label with the white Peak Haven arrow/molecule symbol as shown. Dynamic cheerful waving pose, slight tilt, full body fully visible, premium polished toy-like 3D render. Genuine transparent background. No text, no scene, no frame. Match the reference mascot closely, retain realistic bottle proportions. Centered with narrow transparent padding.",
+  "tool": "built-in image_gen",
+  "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+}

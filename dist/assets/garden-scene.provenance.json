@@ -1,0 +1,8 @@
+{
+  "tool": "OpenAI image_gen.imagegen",
+  "source": "exec-b4a00e87-9523-4501-a52a-0f45cceee732.png",
+  "source_sha256": "83c30352ec75acb56ae6944ebbf7a6aeef74aa1035b0ef3e9eb8dd1890e14fca",
+  "prompt": "Create a premium 3D mobile casual game BACKGROUND PLATE in portrait 9:16. Match the supplied reference's polished glass, silver metal, vibrant cobalt cyan, lush alpine fantasy. NO text, NO UI, NO buttons, NO game pieces in central play area. This will be behind real interactive game elements. Beautiful finished high detail physically rendered illustration, not flat vector. Keep middle 65% relatively uncluttered and clear, with framing detail at edges. A bright botanical glasshouse laboratory with tall arched glass ceiling, white metal silver columns, green vines and white flowers framing edges. Snowy blue peaks visible through center window. Empty large circular polished chrome tabletop across lower third. No test tubes or tiles on tabletop; actual game draws them. Match environmental background of reference.",
+  "reference": "codex-clipboard-0bfd1f1d-6d47-4480-b007-51bcf0259d0b.png",
+  "derived": "Converted to WebP preserving original dimensions and alpha; original retained."
+}

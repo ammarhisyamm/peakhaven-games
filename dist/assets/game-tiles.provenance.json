@@ -1,0 +1,7 @@
+{
+  "tool": "OpenAI image_gen.imagegen",
+  "source": "exec-e1c05a82-349c-4c06-bc63-96c36090bdea.png",
+  "source_sha256": "43fdbac5eafedd155b757c9819f026424bbd6e0491a1bf5b447d0c697fcd41f6",
+  "prompt": "Transparent game sprite sheet for Peak Haven, exactly FIVE equal square objects in one horizontal row with generous clear spacing, front-facing no perspective, all straight-on and same size. 1: vivid cobalt blue glass cube with glossy white Peak Haven arrow/molecule mark from reference. 2: translucent cyan glass cube with white diamond embossed in face. 3: polished yellow gold cube with raised bright five-point star. 4: luminous frosted icy white glass cube. 5: white polished ceramic mahjong tile, rounded rectangular square, blank face with beveled silver-grey edges. Premium detailed dimensional 3D mobile casual game sprites matching supplied reference. No words, no shadows beyond objects, no frame, no background. Wide sheet 5:1. Tiles must fill each cell equally and be uncropped.",
+  "derived": "WebP conversion, original dimensions and alpha preserved, original retained."
+}

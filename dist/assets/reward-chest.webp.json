@@ -1,0 +1,7 @@
+{
+  "file": "reward-chest.webp",
+  "source": "exec-e2a542b9-457c-4ec2-a02b-2ea9be3d2a92.png",
+  "prompt": "Use case: stylized-concept. Generate one production game cutout sprite using attached board as style reference. A spectacular OPEN futuristic reward chest, glossy royal-blue panels with silver metallic bands, chunky gold latch, filled with luminous cyan faceted gems and gold star coins exploding gently upward. A white Peak Haven arrow/molecule symbol on the blue front panel matching supplied brand. Premium adorable polished 3D game render. Full object visible centered, true transparent background. No text, no phone frame, no background.",
+  "tool": "built-in image_gen",
+  "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+}

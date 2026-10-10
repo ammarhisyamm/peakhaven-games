@@ -1,0 +1,15 @@
+export const SKINS=[
+{id:'classic',name:'PH Original',requirement:'Your first bottle. Always yours.'},
+{id:'cyan',name:'Sky Molecule',xp:40,requirement:'Earn 40 XP to unlock.'},
+{id:'hex',name:'Deep Hex',coins:150,requirement:'Unlock with 150 game coins.'},
+{id:'ice',name:'Ice Flow',missions:3,requirement:'Complete 3 missions to unlock.'},
+{id:'gold',name:'Golden Peak',streak:7,requirement:'Collect your daily reward 7 days in a row.'},
+{id:'violet',name:'Violet Bloom',gems:10,requirement:'Unlock with 10 game gems.'}];
+export const boostCost=60;
+export function normalizeCollection(input){const d={coins:0,gems:0,skins:['classic'],skin:'classic',claimDay:'',claimStreak:0,spinDay:'',boostRuns:0,playerName:'HavenPlayer',mergeToday:0,mergeDay:'',...input};for(const k of ['coins','gems','claimStreak','boostRuns','mergeToday'])d[k]=Number.isFinite(d[k])?Math.max(0,Math.floor(d[k])):0;d.skins=Array.isArray(d.skins)?[...new Set(['classic',...d.skins.filter(id=>SKINS.some(s=>s.id===id))])]:['classic'];if(!d.skins.includes(d.skin))d.skin='classic';d.playerName=typeof d.playerName==='string'&&d.playerName.trim()?d.playerName.slice(0,20):'HavenPlayer';return d;}
+function previousDay(day){const [y,m,d]=day.split('-').map(Number),date=new Date(y,m-1,d);date.setDate(date.getDate()-1);return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
+export function claimDaily(input,day){const d=normalizeCollection(input);if(d.claimDay===day)return {ok:false,data:d};const streak=d.claimDay===previousDay(day)?d.claimStreak+1:1;const coins=Math.min(50+(streak-1)*10,110);return {ok:true,coins,data:{...d,claimDay:day,claimStreak:streak,lastDailyCoins:coins,coins:d.coins+coins,gems:d.gems+1,xp:d.xp+10}};}
+export function claimSpin(input,day,random){const d=normalizeCollection(input);if(d.spinDay===day)return {ok:false,data:d};const slot=Math.min(5,Math.max(0,Math.floor(random*6))),amount=[20,40,1,60,2,30][slot],currency=slot===2||slot===4?'gems':'coins';return {ok:true,slot,amount,currency,data:{...d,spinDay:day,[currency]:d[currency]+amount}};}
+export function skinUnlocked(d,s){return !(s.xp&&d.xp<s.xp||s.missions&&d.completed.length<s.missions||s.streak&&d.claimStreak<s.streak);}
+export function buySkin(input,id){const d=normalizeCollection(input),s=SKINS.find(x=>x.id===id);if(!s)return {ok:false,data:d,reason:'Bottle not found.'};if(d.skins.includes(id))return {ok:true,data:d};if(!skinUnlocked(d,s))return {ok:false,data:d,reason:s.requirement};if(s.coins&&d.coins<s.coins||s.gems&&d.gems<s.gems)return {ok:false,data:d,reason:'Earn more rewards through play to unlock this bottle.'};return {ok:true,data:{...d,coins:d.coins-(s.coins||0),gems:d.gems-(s.gems||0),skins:[...d.skins,id]}};}
+export function runLoot(input,won,firstWin=false){const d=normalizeCollection(input);if(!won)return {data:d,coins:0,gems:0};const coins=d.boostRuns?40:20,gems=firstWin?1:0;return {coins,gems,data:{...d,coins:d.coins+coins,gems:d.gems+gems,boostRuns:Math.max(0,d.boostRuns-1)}};}

@@ -1,0 +1,44 @@
+[
+  {
+    "file": "bottle-mascot.webp",
+    "source": "exec-e99faeeb-4f65-43db-a406-a07a910fa92d.png",
+    "prompt": "Use case: stylized-concept. Generate one production game sprite using the attached brand board only as visual reference. Exactly the SAME adorable glass vial mascot: squat clear glass cylindrical bottle, shiny silver metal cap, smiling open red mouth, one shiny black eye and one winking eye, pink cheeks, glossy blue mitten hands and blue shoes, deep navy wrap label with the white Peak Haven arrow/molecule symbol as shown. Dynamic cheerful waving pose, slight tilt, full body fully visible, premium polished toy-like 3D render. Genuine transparent background. No text, no scene, no frame. Match the reference mascot closely, retain realistic bottle proportions. Centered with narrow transparent padding.",
+    "tool": "built-in image_gen",
+    "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+  },
+  {
+    "file": "alpine-world.webp",
+    "source": "exec-8e60a823-5d47-4432-a9a8-207197ec298f.png",
+    "prompt": "Use case: stylized-concept. Generate a portrait mobile game environment background, 2:3 tall composition. Match the attached brand reference exactly in materials and visual style: brilliant electric blue sky, snowy blue alpine mountain peaks, fluffy white clouds, pine trees, cyan waterfalls, white futuristic glass vial-shaped castle towers with silver rims and blue accents on the right, clear glass short vials in foreground corners, winding illuminated cyan path through pale rocky stepped platforms from bottom center toward top right. Premium high-end 3D casual game illustration, vibrant, crisp, spectacular rich world. Lower two thirds have clearly readable light rocky platforms for overlaying game level buttons. Top-left has open sky for title. No mascot, no letters, no numbers, no user-interface, no logos, no smartphone frame.",
+    "tool": "built-in image_gen",
+    "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+  },
+  {
+    "file": "collectible-vials.webp",
+    "source": "exec-547cba5c-a773-4603-8874-aaacfdef0ddc.png",
+    "prompt": "Use case: stylized-concept. Production game sprite sheet of SIX bottles, ONE horizontal row of six equally sized cells, landscape 3:1. Match attached brand library: short squat realistic cylindrical clear glass vial with reflective silver cap and broad wraparound label. All bottles upright front view, same height, same width, full objects with enough separation, centered one per cell. Label variants from left to right: deep navy with white arrow/molecule logo, bright cyan with blue molecule shapes, royal blue with dark blue hexagon pattern, pale ice blue with cyan molecule shapes, golden yellow with raised yellow star, violet with pink molecule shapes. Crisp premium 3D collectible render with dimensional glass reflections and visible glass base. TRUE transparent background, no platform, no text, no extra object. Labels fully encircle bottle. Ratio bottle width to height approx 0.48 as in reference, no elongated test tubes. Strict horizontal evenly spaced row.",
+    "tool": "built-in image_gen",
+    "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+  },
+  {
+    "file": "arcade-covers.webp",
+    "source": "exec-2f596cb3-5214-49bb-8744-1e85dadd31a5.png",
+    "prompt": "Use case: stylized-concept. Generate landscape sprite sheet THREE equal square panels horizontal row, no borders or text. Match attached polished PH Arcade 3D world. LEFT: five realistic short clear glass silver-capped vials with blue green pink and yellow broad labels stacked in a playful tower in alpine castle setting; CENTRE: bright blue and golden silver-capped short glass vials tilted toward one another in an energetic purple electric magical merge burst; RIGHT: three tall glass test tubes filled cyan yellow pink liquid on sleek blue metallic laboratory platform, mountain lab scene. Premium collectible game visuals with bold electric blue lighting, vivid cyan, beautiful reflections, dramatic readable large subjects filling each panel. No mascot, no logos or letters, no phone frame.",
+    "tool": "built-in image_gen",
+    "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+  },
+  {
+    "file": "reward-chest.webp",
+    "source": "exec-e2a542b9-457c-4ec2-a02b-2ea9be3d2a92.png",
+    "prompt": "Use case: stylized-concept. Generate one production game cutout sprite using attached board as style reference. A spectacular OPEN futuristic reward chest, glossy royal-blue panels with silver metallic bands, chunky gold latch, filled with luminous cyan faceted gems and gold star coins exploding gently upward. A white Peak Haven arrow/molecule symbol on the blue front panel matching supplied brand. Premium adorable polished 3D game render. Full object visible centered, true transparent background. No text, no phone frame, no background.",
+    "tool": "built-in image_gen",
+    "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+  },
+  {
+    "file": "ph-arcade-logo.webp",
+    "source": "exec-2162da2e-a247-49cd-ac22-a47255139724.png",
+    "prompt": "Use case: background-extraction. Edit target: the supplied PH Arcade brand board. Extract ONLY the exact white PRIMARY LOGO in the top-left panel: white Peak Haven arrow/molecule symbol on the left, exact wide geometric PH on the upper right and exact ARCADE word directly beneath PH. Preserve original letterforms, stylized P and H, spacing, and logo proportions from the reference. Remove the blue rectangular panel, headings, mascot, all other contents. Return the single isolated white PH ARCADE lockup on a genuinely transparent background, tightly framed with 5% padding, wide landscape aspect. Keep its soft icy cyan dimensional highlights and very subtle blue edge glow. No new logo design, no extra text or objects. Exact text PH ARCADE.",
+    "tool": "built-in image_gen",
+    "reference": "codex-clipboard-5f891d86-0a63-4a5c-b874-ba439f9462cb.png"
+  }
+]
