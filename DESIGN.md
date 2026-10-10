@@ -33,6 +33,38 @@ colors:
   liquid-purple: "#a63eff"
   liquid-green: "#20cf7d"
   liquid-blue: "#3572ff"
+  nav-pill: "#0c2a5b"
+  nav-rim: "#7dbcfb"
+  nav-shadow: "#001638"
+  nav-highlight: "#c4e7ff"
+  nav-label-muted: "#9aaccb"
+  nav-active-blue: "#0b3978"
+  nav-cyan: "#08c7ff"
+  nav-cyan-highlight: "#7bf1ff"
+  nav-active-glow: "#008dff"
+  nav-icon-rim-glow: "#28b9ff"
+  nav-icon-cyan: "#72ecff"
+  nav-icon-glow: "#00c5ff"
+  hud-rim: "#bceeff"
+  hud-cyan: "#22e1f1"
+  hud-blue: "#078ef0"
+  hud-deep-blue: "#0755dc"
+  hud-shadow: "#002c8d"
+  hud-glow: "#007bd3"
+  hud-glass: "#e8ffff"
+  hud-star: "#ffdf69"
+  hud-gold: "#ffc629"
+  hud-star-rim: "#fff5a8"
+  hud-icon-shadow: "#00438a"
+  hud-glyph-ice: "#e2ffff"
+  hud-glyph-gold: "#ffe28c"
+  hud-flame: "#ff9b31"
+  hud-flame-rim: "#fff0ab"
+  game-tile-rim: "#c6dff6"
+  game-tile-shadow: "#28648b"
+  game-tile-ink: "#102e61"
+  game-tile-hover: "#72d9ff"
+  game-tile-hover-glow: "#087eb2"
 typography:
   display:
     fontFamily: "Anybody, Inter, sans-serif"
@@ -85,17 +117,22 @@ typography:
     lineHeight: 1.4
   nav-label:
     fontFamily: "Inter, sans-serif"
-    fontSize: "11px"
+    fontSize: "10px"
     fontWeight: 650
+    lineHeight: 1.4
+  nav-label-compact:
+    fontFamily: "Inter, sans-serif"
+    fontSize: "9px"
+    fontWeight: 700
     lineHeight: 1.4
   hud-value:
     fontFamily: "Inter, sans-serif"
-    fontSize: "25px"
+    fontSize: "clamp(18px, 6.4vw, 29px)"
     fontWeight: 850
-    lineHeight: 1.1
+    lineHeight: 1.12
   hud-label:
     fontFamily: "Inter, sans-serif"
-    fontSize: "9px"
+    fontSize: "clamp(9px, 2.8vw, 11px)"
     fontWeight: 750
     lineHeight: 1.4
     letterSpacing: ".35px"
@@ -106,11 +143,14 @@ rounded:
   nav-item: "14px"
   cover: "15px"
   board: "17px"
-  hud: "18px"
+  hud: "20px"
+  game-tile: "18px"
   module: "19px"
   card: "20px"
   sheet: "21px"
   nav: "22px"
+  nav-pill: "28px"
+  nav-active-indicator: "4px"
   chip: "23px"
   currency: "24px"
   home-sheet: "25px"
@@ -266,7 +306,7 @@ Monument Extended was unavailable; Anybody with the observed wide axis is the ex
 
 The centered shell is `width:min(100%,480px)` and fills the mobile viewport. Non-game pages reserve `84px + env(safe-area-inset-bottom)` for fixed bottom navigation. The current header is an absolute 100px overlay, with a responsive logo width and real 44px-minimum currency and settings actions. The home text remains on the left with a bright legibility wash; the bottle mascot occupies the right.
 
-The game shelf is a horizontally scrollable column-flow grid with 142px items, 12px gaps, and proximity scroll snapping. Its covers are 167px high. Recent games also scroll horizontally. The map retains three chapters of six missions, a cyan winding path, numbered or locked platforms, a selected-level preview, and the large play action. Those map positions are a surface composition, not a reusable page grid.
+The game shelf is a horizontally scrolling row of 120–126px tiles with 10px gaps and proximity scroll snapping. Each tile pairs one proportional, transparent game illustration with its title; the home shelf does not repeat a large cover, description, and play badge for every game. The larger free-play cards retain their full scene art. Recent games also scroll horizontally. The map retains three chapters of six missions, a cyan winding path, numbered or locked platforms, a selected-level preview, and the large play action. Those map positions are a surface composition, not a reusable page grid.
 
 Gameplay and loading omit the site header and bottom navigation. Game worlds fill the viewport, use 16px top and 14px side insets, and apply a navy gradient veil behind header, HUD, and lower controls. Tower uses an alpine valley; Merge and Peak Blocks use the crystal cave; Lab Sort and Bottle Mahjong use the botanical glasshouse. These are full scene backgrounds behind separate boards and controls.
 
@@ -319,11 +359,11 @@ The profile-name field is a native input with a pale-blue stroke, white backgrou
 
 ### Navigation
 
-Five icon-and-text tabs: Home, Arcade, Rewards, Bottles, and Profile. Each tab uses a 60px minimum height and the nav-label role. On light surfaces, selection adds an ice background, blue icon/text, and a bottom marker. The Arcade map uses a navy nav variant with a luminous selected rim. `aria-current="page"` exposes the actual selected route. Gameplay and loading focus on their own close, help, pause, and recovery controls.
+Five icon-and-text tabs: Home, Arcade, Rewards, Bottles, and Profile. Each tab uses a 60px minimum height and the nav-label role inside the same inset navy pill, with 16px horizontal screen clearance and a safe-area-aware bottom offset. All pages share the dark surface, muted inactive items, and luminous cyan-edged active item. Icons use fixed square dimensions so the gamepad, gift, bottle, and profile marks keep their intended proportions. `aria-current="page"` exposes the actual selected route. Gameplay and loading focus on their own close, help, pause, and recovery controls.
 
 ### Live Gameplay and Loading
 
-The shared game header precedes a three-metric navy HUD, objective, and board. Tower and Merge use keyboard-enabled canvas with external HUD and status. Lab Sort exposes tube contents bottom-to-top, selected state, numbered liquid colors, legend, Undo, Hint, and Reset; rendering restores tube focus. Its transparent raster glass is an inert overlay over the live fluid cylinder, so pouring changes the liquid state rather than a prepainted bottle. Merge similarly keeps real falling, collision, and tier-matching vials inside its raster chamber. Peak Blocks uses a labeled 8×8 grid with roving arrow-key focus, real occupied cells, shape selection, placement previews, and finite tools. Mahjong exposes tile names, layer or availability, and selected state, with genuine matching and open-side rules. Tools show remaining uses and disable when unavailable.
+The shared game header precedes three matching glossy blue stat cards, objective, and board. Each 72px card uses the same cyan-to-blue face, pale glass rim, white label, tabular value, and softly offset blue shadow as the selected primary-button treatment. Its three columns stay proportional; icon glyphs retain a fixed square aspect ratio and values shrink or ellipsize rather than distorting the artwork. Tower and Merge use keyboard-enabled canvas with external HUD and status. Lab Sort exposes tube contents bottom-to-top, selected state, numbered liquid colors, legend, Undo, Hint, and Reset; rendering restores tube focus. Its transparent raster glass is an inert overlay over the live fluid cylinder, so pouring changes the liquid state rather than a prepainted bottle. Merge similarly keeps real falling, collision, and tier-matching vials inside its raster chamber. Peak Blocks uses a labeled 8×8 grid with roving arrow-key focus, real occupied cells, shape selection, placement previews, and finite tools. Mahjong exposes tile names, layer or availability, and selected state, with genuine matching and open-side rules. Tools show remaining uses and disable when unavailable.
 
 Loading uses the alpine scene, white logo, mascot, actual asset-progress bar, cancel, and load-failure retry. Sort glass and the Merge chamber are included in their respective game preload lists. Result views retain the bottle mascot, actual score, XP, run details, earned local currency, and relevant replay or next-mission actions. The original 18 missions remain sequential; the two newer puzzle games extend free play rather than altering that progression.
 
