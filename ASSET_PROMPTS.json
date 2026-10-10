@@ -1,0 +1,75 @@
+[
+  {
+    "name": "home",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-156b12d6-683e-44bc-a79b-5efa178a9b53.png",
+    "prompt": "Text-free full-bleed 9:16 polished 3D Peak Haven Arcade home environment, silver-cap bottle world, no typography, UI, phone frame or borders. Distinct alpine waterfalls and underwater crystal scene with happy bottle mascot.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "484a60c741a287a73161d45697c9c703131a630a1754ab482d89689d34e68d30",
+    "prompt_record": "Reconstructed scene brief; source image and hash are exact."
+  },
+  {
+    "name": "arcade",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-e08b4163-a5ab-4f96-9c4b-050a33b9b166.png",
+    "prompt": "Text-free full-bleed 9:16 polished 3D Peak Haven Arcade arcade environment, silver-cap bottle world, no typography, UI, phone frame or borders. Distinct alpine winding cyan mountain trail.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "c91c43467b80fcc353681f348db5fcdf7921d8a12691599a002a0c1700c3339f",
+    "prompt_record": "Reconstructed scene brief; source image and hash are exact."
+  },
+  {
+    "name": "journey",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-9649f270-bf2d-418f-ba14-010fc69f8e7a.png",
+    "prompt": "Text-free full-bleed 9:16 polished 3D Peak Haven Arcade journey environment, silver-cap bottle world, no typography, UI, phone frame or borders. Distinct alpine golden treasury and open reward chest.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "0b73b755d3bfc424ec4929e841d1f7c68920bd220f85d89e5d4c3ccb4b445543",
+    "prompt_record": "Reconstructed scene brief; source image and hash are exact."
+  },
+  {
+    "name": "collection",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-582ac86a-dec6-4206-b2f4-90ce20f6fd42.png",
+    "prompt": "Use case: stylized-concept. Full-bleed portrait 9:16 environment asset for Peak Haven Arcade, polished high-quality 3D casual game illustration, dimensional chrome, crystal, glass vials with silver caps and cyan/electric-blue/navy colors. Original scene, consistent with attached mascot reference. Absolutely no typography, letters, numerals, logos, UI, game boards, frames, buttons or phone mockups. Fill all edges with detailed environment; no white borders or blank page areas. Upper 12% calmer for live header. MENU background: a premium futuristic glass bottle archive in an alpine glacier. Cyan illuminated glass alcoves and silver-capped small bottle collectibles across upper central shelves, reflective blue chrome, snow mountains through immense curved glass windows. Strong bottle collection focal point in upper 20\u201342%, calm deep-blue library floor and light rays below. No large mascot.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "539e334194c7bbce9b27509b75e5bc931e5e6116c065df5f54e8f6c70690428a"
+  },
+  {
+    "name": "profile",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-fe157dbd-abc7-4bfd-97fa-f45cb4501197.png",
+    "prompt": "Use case: stylized-concept. Full-bleed portrait 9:16 environment asset for Peak Haven Arcade, polished high-quality 3D casual game illustration, dimensional chrome, crystal, glass vials with silver caps and cyan/electric-blue/navy colors. Original scene, consistent with attached mascot reference. Absolutely no typography, letters, numerals, logos, UI, game boards, frames, buttons or phone mockups. Fill all edges with detailed environment; no white borders or blank page areas. Upper 12% calmer for live header. MENU background: a cozy celestial mountain observatory, deep starry cobalt twilight, astronomical glass dome, cyan glowing bottle laboratory equipment and delicate blue constellations. Small cheerful silver-capped bottle mascot sitting comfortably in upper centre, expressive eyes and blue gloves/boots, not dominating. Calm deep blue lower observatory, soft magical lighting.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "09704c1b321a412fb3f79aac63608dccb9292ff4509d476841be10e57e4c53ee"
+  },
+  {
+    "name": "game-tower",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-40eb5996-9c65-4ada-a71d-fdc77c24b3d3.png",
+    "prompt": "Use case: stylized-concept. Full-bleed portrait 9:16 environment asset for Peak Haven Arcade, polished high-quality 3D casual game illustration, dimensional chrome, crystal, glass vials with silver caps and cyan/electric-blue/navy colors. Original scene, consistent with attached mascot reference. Absolutely no typography, letters, numerals, logos, UI, game boards, frames, buttons or phone mockups. Fill all edges with detailed environment; no white borders or blank page areas. Upper 12% calmer for live header. GAME background: soaring sunny alpine sky terraces above cascading waterfalls and snowy peaks. Tall glass vial towers ONLY at far left and right edges, a silver-and-blue circular platform low near bottom. Vast open central area across middle 65% for a live moving vial stack. No foreground bottles, no mascot, no stack already rendered. Epic height, sunlit snowy-blue scene.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "4ed4213481d4e6de7532a1fdac423f0ceccecd73e8d9cfb9a289a648e08a9ecf"
+  },
+  {
+    "name": "game-merge",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-7da4c5a3-8ab2-4c94-9de3-5dfef32963a6.png",
+    "prompt": "Use case: stylized-concept. Full-bleed portrait 9:16 environment asset for Peak Haven Arcade, polished high-quality 3D casual game illustration, dimensional chrome, crystal, glass vials with silver caps and cyan/electric-blue/navy colors. Original scene, consistent with attached mascot reference. Absolutely no typography, letters, numerals, logos, UI, game boards, frames, buttons or phone mockups. Fill all edges with detailed environment; no white borders or blank page areas. Upper 12% calmer for live header. GAME background: luminous underwater aqua laboratory inside a vast curved glass dome. Deep-blue ocean, floating jellyfish lights, pink/cyan corals at the side edges, chrome machinery and colorful distant bubble tubes. CENTRAL 65% deliberately clear, soft blue watery depth for a live glass merge chamber. Empty circular chrome stage near bottom. No existing pile, no bottles in middle, no mascot.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "3c136c56ba0d8cb6227e03e1982c3848ab0540b73e5b1421c1206cef4f3eeb37"
+  },
+  {
+    "name": "game-sort",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-4aa2f0ff-a857-4b5d-b976-658815155e5d.png",
+    "prompt": "Use case: stylized-concept. Full-bleed portrait 9:16 environment asset for Peak Haven Arcade, polished high-quality 3D casual game illustration, dimensional chrome, crystal, glass vials with silver caps and cyan/electric-blue/navy colors. Original scene, consistent with attached mascot reference. Absolutely no typography, letters, numerals, logos, UI, game boards, frames, buttons or phone mockups. Fill all edges with detailed environment; no white borders or blank page areas. Upper 12% calmer for live header. GAME background: sunny lush botanical greenhouse with towering arched windows, white flowers and green vines on the far side edges, waterfalls and distant snow peaks. Silver and blue laboratory platforms at the bottom edge. MIDDLE 60% open calm pale cyan air and light for interactive liquid sorting tubes, no foreground tubes, no mascot.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "b316a8ddd8f1b4e16d5801913dda4b50174684430fdee401732508435f159060"
+  },
+  {
+    "name": "game-blocks",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-ac3f7160-c26a-4188-bf0b-8af8a714e689.png",
+    "prompt": "Use case: stylized-concept. Full-bleed portrait 9:16 environment asset for Peak Haven Arcade, polished high-quality 3D casual game illustration, dimensional chrome, crystal, glass vials with silver caps and cyan/electric-blue/navy colors. Original scene, consistent with attached mascot reference. Absolutely no typography, letters, numerals, logos, UI, game boards, frames, buttons or phone mockups. Fill all edges with detailed environment; no white borders or blank page areas. Upper 12% calmer for live header. GAME background: electric-blue and violet crystalline cavern, faceted cyan stalactites, glowing minerals, chrome-and-blue machinery at outer left/right. Distant snowy mountains through cave opening. MIDDLE 65% uncluttered deep blue for an interactive square crystal board. Low metallic platform. No grid, no blocks placed, no mascot.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "413c695bad0380aa835b093627ceec13d94c5b348ab270cc61b8546ad24f0252"
+  },
+  {
+    "name": "game-mahjong",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-2a0da45b-dc2d-46e4-b8d5-89de60501608.png",
+    "prompt": "Use case: stylized-concept. Full-bleed portrait 9:16 environment asset for Peak Haven Arcade, polished high-quality 3D casual game illustration, dimensional chrome, crystal, glass vials with silver caps and cyan/electric-blue/navy colors. Original scene, consistent with attached mascot reference. Absolutely no typography, letters, numerals, logos, UI, game boards, frames, buttons or phone mockups. Fill all edges with detailed environment; no white borders or blank page areas. Upper 12% calmer for live header. GAME background: serene moonlit alpine garden temple with soft blue marble arches, warm little gold lanterns, flowering vines and white blossoms framing far edges, reflective cyan water below, mountains and a crescent moon. MIDDLE 65% clear softly shaded blue space for live layered tile puzzle. Empty circular stone platform low near bottom, no tiles, no mascot.",
+    "tool": "image_gen.imagegen",
+    "source_sha256": "261d8848ce952e167dc4d37a4f4c1a37e43d112d3ce7d11252d25ed3d18caee3"
+  }
+]

@@ -22,7 +22,7 @@ function vial(ctx,x,y,width,height,tier=0,rotation=0,character=false) {
 function labBackdrop(ctx){ctx.clearRect(0,0,W,H);}
 class CanvasEngine {
   constructor(canvas,callbacks,options={}) {
-    this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=callbacks;this.motion=options.motion;this.paused=false;this.ended=false;this.alive=true;this.time=0;this.last=0;this.particles=[];this.rings=[];
+    this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=callbacks;this.motion=options.motion;this.level=options.level||1;this.paused=false;this.ended=false;this.alive=true;this.time=0;this.last=0;this.particles=[];this.rings=[];
     const dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=W*dpr;canvas.height=H*dpr;this.ctx.scale(dpr,dpr);
     this.pointer=e=>{const rect=canvas.getBoundingClientRect();return (e.clientX-rect.left)/rect.width*W;};
     this.frame=this.frame.bind(this);this.raf=requestAnimationFrame(this.frame);
@@ -39,15 +39,15 @@ class CanvasEngine {
   destroy(){this.alive=false;cancelAnimationFrame(this.raf);this.canvas.removeEventListener('pointerdown',this.onDown);this.canvas.removeEventListener('pointermove',this.onMove);this.canvas.removeEventListener('pointerup',this.onUp);this.canvas.removeEventListener('pointercancel',this.onCancel);}
 }
 export class TowerEngine extends CanvasEngine {
-  constructor(canvas,callbacks,options){super(canvas,callbacks,options);this.skin=options.skin||0;this.stack=[{x:240,y:475}];this.x=80;this.dir=1;this.score=0;this.perfects=0;this.combo=0;this.camera=0;this.inputReady=true;this.drop=null;this.failure=0;this.tip='Tap when the vial is above the stack.';this.onDown=()=>this.action();canvas.addEventListener('pointerdown',this.onDown);this.cb.hud(0,0,'0');}
-  action(){if(this.paused||this.ended||this.drop||!this.inputReady)return;const top=this.stack.at(-1);const offset=this.x-top.x;const landingX=Math.abs(offset)<74?top.x+offset*.4:this.x;this.drop={x:landingX,y:top.y-TOWER_DROP,vy:0};this.inputReady=false;this.cb.ready?.(false);this.cb.message('');this.cb.aligned?.(false);}
+  constructor(canvas,callbacks,options){super(canvas,callbacks,options);this.skin=options.skin||0;this.placementWidth=74-Math.min(18,Math.log2(this.level)*3);this.speedMultiplier=1+Math.min(1.2,(this.level-1)*.025);this.stack=[{x:240,y:475}];this.x=80;this.dir=1;this.score=0;this.perfects=0;this.combo=0;this.camera=0;this.inputReady=true;this.drop=null;this.failure=0;this.tip='Tap when the vial is above the stack.';this.onDown=()=>this.action();canvas.addEventListener('pointerdown',this.onDown);this.cb.hud(0,0,'0');}
+  action(){if(this.paused||this.ended||this.drop||!this.inputReady)return;const top=this.stack.at(-1);const offset=this.x-top.x;const landingX=Math.abs(offset)<this.placementWidth?top.x+offset*.4:this.x;this.drop={x:landingX,y:top.y-TOWER_DROP,vy:0};this.inputReady=false;this.cb.ready?.(false);this.cb.message('');this.cb.aligned?.(false);}
   update(dt){
     const top=this.stack.at(-1);const target=Math.max(0,320-top.y);this.camera+=(target-this.camera)*Math.min(1,dt*8);
     if(this.failure){this.failure+=dt;this.drop.y+=this.drop.vy*dt;this.drop.vy+=650*dt;if(this.failure>1)this.finish();return;}
-    if(!this.drop){const ready=target-this.camera<10;if(ready!==this.inputReady){this.inputReady=ready;this.cb.ready?.(ready);}if(!ready)return;this.x+=this.dir*(110+Math.min(160,(this.stack.length-1)*6))*dt;if(this.x>428){this.x=428;this.dir=-1;}if(this.x<52){this.x=52;this.dir=1;}const aligned=Math.abs(this.x-top.x)<40;if(aligned!==this.aligned){this.aligned=aligned;this.cb.aligned?.(aligned);}return;}
+    if(!this.drop){const ready=target-this.camera<10;if(ready!==this.inputReady){this.inputReady=ready;this.cb.ready?.(ready);}if(!ready)return;this.x+=this.dir*(110+Math.min(160,(this.stack.length-1)*6))*this.speedMultiplier*dt;if(this.x>428){this.x=428;this.dir=-1;}if(this.x<52){this.x=52;this.dir=1;}const aligned=Math.abs(this.x-top.x)<40;if(aligned!==this.aligned){this.aligned=aligned;this.cb.aligned?.(aligned);}return;}
     this.drop.vy+=1000*dt;this.drop.y+=this.drop.vy*dt;
     if(this.drop.y>=top.y-TOWER_STEP){
-      const result=towerPlacement(top.x,this.drop.x,74);const candidate=[...this.stack,{x:this.drop.x,y:top.y-TOWER_STEP}];
+      const result=towerPlacement(top.x,this.drop.x,this.placementWidth);const candidate=[...this.stack,{x:this.drop.x,y:top.y-TOWER_STEP}];
       let stable=result.safe;
       // Every supporting vial must contain the centre of mass above it.
       for(let i=0;i<candidate.length-1;i++){const above=candidate.slice(i+1);const com=above.reduce((a,b)=>a+b.x,0)/above.length;if(Math.abs(com-candidate[i].x)>33)stable=false;}
@@ -67,7 +67,7 @@ export class TowerEngine extends CanvasEngine {
 export class MergeEngine extends CanvasEngine {
   constructor(canvas,callbacks,options){super(canvas,callbacks,options);this.bodies=[];this.score=0;this.merges=0;this.highest=0;this.x=240;this.next=0;this.preview=1;this.cooldown=0;this.danger=0;this.chain=0;this.lastMerge=0;this.onMove=e=>{this.x=Math.max(MERGE_LEFT+MERGE_RADII[this.next],Math.min(MERGE_RIGHT-MERGE_RADII[this.next],this.pointer(e)));};this.onDown=e=>{this.onMove(e);this.dragging=true;canvas.setPointerCapture?.(e.pointerId);};this.onUp=e=>{if(this.dragging){this.onMove(e);this.action();}this.dragging=false;};this.onCancel=()=>{this.dragging=false;};canvas.addEventListener('pointermove',this.onMove);canvas.addEventListener('pointerdown',this.onDown);canvas.addEventListener('pointerup',this.onUp);canvas.addEventListener('pointercancel',this.onCancel);this.cb.hud(0,1,'1');}
   move(direction){this.x=Math.max(MERGE_LEFT+MERGE_RADII[this.next],Math.min(MERGE_RIGHT-MERGE_RADII[this.next],this.x+direction*18));}
-  action(){if(this.paused||this.ended||this.cooldown>0)return;const r=MERGE_RADII[this.next];this.bodies.push({x:Math.max(MERGE_LEFT+r,Math.min(MERGE_RIGHT-r,this.x)),y:74,r,tier:this.next,vx:(Math.random()-.5)*22,vy:0,age:0});this.next=this.preview;this.preview=Math.floor(Math.random()*3);this.cooldown=.65;this.cb.ready?.(false);this.cb.sound('drop');this.cb.message('Match two of the same colour and number.');}
+  action(){if(this.paused||this.ended||this.cooldown>0)return;const r=MERGE_RADII[this.next];this.bodies.push({x:Math.max(MERGE_LEFT+r,Math.min(MERGE_RIGHT-r,this.x)),y:74,r,tier:this.next,vx:(Math.random()-.5)*22,vy:0,age:0});this.next=this.preview;this.preview=Math.floor(Math.random()*Math.min(5,3+Math.floor((this.level-1)/8)));this.cooldown=.65;this.cb.ready?.(false);this.cb.sound('drop');this.cb.message('Match two of the same colour and number.');}
   update(dt){const previousCooldown=this.cooldown;this.cooldown=Math.max(0,this.cooldown-dt);if(previousCooldown>0&&this.cooldown===0)this.cb.ready?.(true);
     // Fixed substeps and several contact passes keep the pile stable on slow frames.
     const step=dt/3;for(let sub=0;sub<3;sub++){

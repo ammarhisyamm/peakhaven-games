@@ -84,3 +84,91 @@ dialog{width:min(420px,calc(100% - 32px));max-height:calc(100dvh - 36px);padding
 @media(hover:hover){.popular-game:hover{border-color:#72d9ff;box-shadow:0 5px 13px #087eb233}.bottom-nav button:hover{color:#e5faff}}
 @media(max-width:370px){.bottom-nav{width:min(calc(100% - 32px),448px);padding-right:5px;padding-left:5px}.bottom-nav button{font-size:9px}.bottom-nav button .icon{inline-size:23px;block-size:23px;flex-basis:23px}.hud{gap:7px}.hud>div{gap:4px;padding-right:4px;padding-left:4px}.hud>div>.icon{inline-size:20px;block-size:20px;flex-basis:20px}.hud strong{font-size:clamp(18px,6vw,21px)}.popular-row{grid-auto-columns:120px}.game-icon-frame{width:78px;height:78px;flex-basis:78px}.game-icon{width:72px;height:72px;flex-basis:72px}}
 @media(prefers-reduced-motion:reduce){.bottom-nav button,.popular-game{transition:none}}
+
+/* Continuous illustrated worlds: the scene belongs to the viewport, not a card. */
+html{min-height:100%;background:#041d4c}
+body{position:relative;min-height:100dvh;margin:0;padding:0;background:#041d4c;color:#fff;isolation:isolate}
+body::before{content:"";position:fixed;inset:0;z-index:-2;background-image:linear-gradient(180deg,#031b4c14 20%,#02153766 100%),var(--world-art);background-position:center top;background-size:cover;background-repeat:no-repeat;pointer-events:none}
+body::after{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(90deg,#02153630,transparent 35%,transparent 65%,#02153630);pointer-events:none}
+.phone-app{width:100%;max-width:none;min-height:100dvh;margin:0;padding:0 0 calc(112px + env(safe-area-inset-bottom));border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+.phone-app main{width:100%;max-width:480px;margin:0 auto;background:transparent}
+.phone-app.in-game{padding-bottom:0}
+.app-header{top:calc(16px + env(safe-area-inset-top));left:50%;right:auto;width:100%;max-width:480px;padding:0 16px;transform:translateX(-50%);z-index:8}
+.bottom-nav{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));width:min(calc(100% - 32px),448px);transform:translateX(-50%);z-index:20}
+.scene-banner,.home-hero,.profile-backdrop,.rewards-hero,.collection-hero{position:relative;height:430px;min-height:0;margin:0;padding:0;background:none;border:0;border-radius:0;overflow:visible}
+.scene-banner .hero-play{position:absolute;left:20px;right:20px;bottom:20px;width:calc(100% - 40px);height:64px;min-height:64px;z-index:2;margin:0}
+.profile-backdrop{height:340px}
+.home-content,.collection-body,.rewards-content{position:relative;margin:0;padding:16px;background:none;border-radius:0}
+.home-content{padding-top:4px}
+.phone-app h1,.phone-app h2,.phone-app h3,.phone-app strong,.phone-app .best,.phone-app .text-button,.device-note{color:#f4fcff}
+.phone-app p,.phone-app small,.phone-app .section-heading>span{color:#cbeaff}
+.section-heading h2{font-size:20px;text-shadow:0 2px 8px #031536}
+.button{border:3px solid #d5ebff;background:linear-gradient(180deg,#00e0ff 0%,#039fff 35%,#0061ff 86%);box-shadow:inset 0 2px 3px #fff,inset 0 -4px 8px #00258d88,0 4px 0 #0258b5,0 8px 24px #007be759;min-height:56px;color:#fff;text-shadow:0 2px 2px #03439577}
+.button.secondary,.button.ghost{background:linear-gradient(180deg,#145b9b,#0b2e65);color:#fff;border-color:#8dc9f4;text-shadow:none}
+.button.gold-button{background:linear-gradient(#ffe776,#ffce38 45%,#ffaa00);color:#102852;border-color:#fff3ab;text-shadow:none}
+.button:active{transform:translateY(3px) scale(.98);box-shadow:inset 0 2px 3px #f4ffffa8,inset 0 -3px 7px #00258d55,0 1px 0 #0258b5}
+.button:disabled{background:linear-gradient(#577b9d,#2c4b72);color:#d0e2f1;box-shadow:none;border-color:#7fa9ce}
+.button:focus-visible,.icon-button:focus-visible{outline:3px solid #ffdf69;outline-offset:4px}
+.popular-game,.game-card,.content-module,.profile-sheet,.progress-module,.streak-module,.collection-current,.level-preview,.next-mission,.daily-pick,.daily-chest,.help-content,.help-tip,.profile-actions,.boost-module{background:linear-gradient(145deg,#0a3d78ed,#051d48ed);border:1px solid #77cdff66;box-shadow:0 8px 24px #02132b45;color:#fff}
+.popular-game h3{color:#fff}
+.game-icon-frame,.game-icon,.avatar{aspect-ratio:1;object-fit:contain;flex-shrink:0}
+.category-tabs button,.help-tabs button,.profile-actions button,.profile-stats>div,.bottle-tile,.badge-item,.calendar-row button,.next-reward{background:#0b376ddb;border:1px solid #88caff44;color:#fff}
+.category-tabs button.active,.help-tabs button.active{background:linear-gradient(#00d8ff,#0061ff);color:#fff}
+.profile-sheet{margin:0 16px 16px;padding:16px;border-radius:20px}
+.content-module{margin:0 16px 16px;padding:16px;border-radius:20px}
+.rewards-content .content-module{margin:0 0 16px}
+.profile-level span,.badge-item p,.bottle-tile small,.recent-row small,.profile-stats span{color:#cbeaff}
+.bottle-tile strong,.calendar-row strong{color:#fff}
+.calendar-row .today{background:linear-gradient(160deg,#326481,#0a2a5a);border-color:#ffe37f}
+.profile-actions{margin:16px;padding:8px;border-radius:20px}
+.daily-chest{display:grid;grid-template-columns:1fr 82px;gap:12px;padding:16px;margin:16px 0;border-radius:20px;min-height:0}
+.daily-chest>div,.daily-chest>img,.daily-chest>.button{position:static;width:auto;height:auto;transform:none}
+.daily-chest>img{width:82px;height:82px;object-fit:contain;align-self:center}
+.daily-chest h2{font-size:20px;line-height:1.1}.daily-chest p{margin:8px 0 0}
+.daily-chest>.button{grid-column:1/-1;width:100%;min-height:56px}
+.progress-module,.streak-module{border-radius:20px}.streak-module{margin:16px 0;padding:16px}
+.streak-module b,.progress-module h2{color:#fff}.streak-calendar span{background:#103e79;color:#fff}
+.reward-bottom{gap:12px}.boost-module{padding:16px;border-radius:20px}
+.collection-body{scroll-margin-top:16px}.collection-current h2{color:#fff}
+.world-map{padding:138px 0 0;min-height:0;background:none;overflow:visible}
+.map-track{height:620px;margin-top:20px}
+.map-actions{left:16px;top:145px;gap:10px;z-index:4}
+.map-actions button{width:54px;height:74px;font-size:10px;line-height:1.05}.map-actions .icon{width:26px;height:26px}
+.map-node{width:70px;height:70px;border-radius:50%;transform:translateX(-50%);flex-shrink:0}
+.map-node.current,.map-node.selected{width:84px;height:84px;border-radius:50%}
+.map-node-0{bottom:20px;left:50%}.map-node-1{bottom:122px;left:72%}.map-node-2{bottom:224px;left:43%}.map-node-3{bottom:326px;left:68%}.map-node-4{bottom:428px;left:47%}.map-node-5{bottom:530px;left:58%}
+.map-node .node-stars{bottom:-13px}.map-node .node-stars .icon{width:23px;height:23px}
+.path-line{inset:0;width:100%;height:100%;opacity:.8}
+.map-loot{width:46px;height:64px}.loot-one{left:20%;bottom:68px}.loot-two{left:19%;bottom:340px}
+.map-bottom{position:relative;inset:auto;margin:16px 16px 0;padding:0;background:none}
+.level-preview{min-height:124px;padding:16px;border-radius:20px;gap:12px}
+.level-preview h2{font-size:21px;line-height:1.15;margin:8px 0}.level-preview p{margin:0}.level-preview-art{width:88px;height:88px;flex:0 0 88px}
+.big-play{width:100%;height:64px;min-height:64px;margin-top:16px;font-size:28px}
+.chapter-switch{display:flex;gap:12px;min-height:68px;margin:24px 0 0;padding:8px;background:#052553e6;border:1px solid #72caff55;border-radius:20px;color:#fff}
+.chapter-switch>span{display:grid;gap:3px;text-align:center;font-size:13px;line-height:1.2;color:#fff}.chapter-switch small{display:block;font-size:11px}
+.chapter-switch .icon-button{width:44px;height:44px;min-width:44px;aspect-ratio:1;border-radius:50%}
+.game-world,.game-loading,.result-screen{min-height:100dvh;background:none;border-radius:0;margin:0;width:100%;padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.game-world::before{background:linear-gradient(180deg,#031945f2 0%,#0319458a 25%,transparent 45%,#02153666 100%)}
+.game-loading{display:flex;flex-direction:column;justify-content:space-between;gap:20px;padding:32px 24px;position:relative}
+.game-loading .mascot{width:min(65%,260px);height:auto;aspect-ratio:1;object-fit:contain;position:static;margin:auto}
+.loading-copy{position:relative;inset:auto;transform:none;width:100%;padding:20px;background:#041d4cdb;border-radius:20px}
+.game-head .icon-button,.mission-objective .icon-button{aspect-ratio:1;flex-shrink:0}
+.game-world .play-panel{background:transparent}.game-message{background:#042353e6;padding:10px;border-radius:12px;color:#ecfcff;min-height:40px}
+.mission-objective{background:#031f4bdf;border-radius:16px;padding:8px 10px}
+.mission-progress{margin:10px 0}.mission-progress i{transition:transform .3s ease}
+.scene-tower,.scene-merge,.scene-sort,.scene-blocks,.scene-mahjong{background:none}
+.cover-tower{background-image:url('assets/worlds/game-tower.webp')}.cover-merge{background-image:url('assets/worlds/game-merge.webp')}.cover-sort{background-image:url('assets/worlds/game-sort.webp')}.cover-blocks{background-image:url('assets/worlds/game-blocks.webp')}.cover-mahjong{background-image:url('assets/worlds/game-mahjong.webp')}
+.mahjong-board.dense .mahjong-tile{top:calc(var(--y)*17.5% - var(--z)*1.2%);height:20%}
+.result-screen{background:#031e4bbd;padding-right:20px;padding-left:20px}.result-details,.unlock-note,.result-loot{background:#0d396fdf;color:#fff}.result-screen h1{font-size:30px;line-height:1.1}
+.view-title,.subpage-heading{padding:128px 20px 20px}.help-content{margin:16px;padding:20px;border-radius:20px}
+@media(min-width:650px){body{padding:0}.phone-app{margin:0;max-width:none;border-radius:0}.bottom-nav{bottom:calc(12px + env(safe-area-inset-bottom))}.game-world,.game-loading{min-height:100dvh}}
+@media(max-height:730px){.scene-banner,.home-hero,.rewards-hero,.collection-hero{height:380px}.profile-backdrop{height:280px}.game-world{min-height:100dvh}}
+@media(prefers-reduced-motion:reduce){.mission-progress i{transition:none}}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.bottle-tile.equipped{background:#0868a0;box-shadow:inset 0 0 0 2px #84eaff;outline-color:#00d8ff}
+.in-game .result-screen::before{display:none}
+.result-details .earned-xp strong,.result-details .earned-xp small{color:#423200}
+body{scrollbar-color:#4aa9e7 #071f42}::selection{background:#ffd24d;color:#0a1b3d}
+.hud strong{font-size:clamp(13px,calc(34px - var(--digits,1)*3px),29px)}
+.app-header{background:none}
+@media(min-width:650px){body::before{filter:blur(24px) brightness(.65);transform:scale(1.06)}body::after{left:50%;right:auto;width:480px;transform:translateX(-50%);background-image:linear-gradient(180deg,#031b4c14 20%,#02153766 100%),var(--world-art);background-size:cover;background-position:center top}}

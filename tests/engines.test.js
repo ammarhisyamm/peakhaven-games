@@ -31,3 +31,4 @@ test('large Tower sprite stays within the viewport as the camera follows repeate
     assert.ok(stagedCentre-85>=0,'entire 170px vial is visible');
   }e.destroy();
 });
+test('higher Tower levels drift faster and tighten placement while centred drops remain valid',()=>{const a=harness(),b=harness(),easy=new TowerEngine(a.canvas,a.cb,{motion:false,level:1}),hard=new TowerEngine(b.canvas,b.cb,{motion:false,level:40});easy.update(.1);hard.update(.1);assert.ok(hard.x>easy.x);assert.ok(hard.placementWidth<easy.placementWidth);hard.x=240;hard.action();for(let i=0;i<100;i++)hard.update(.01);assert.equal(hard.stack.length,2);easy.destroy();hard.destroy();});

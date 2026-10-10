@@ -65,6 +65,17 @@ colors:
   game-tile-ink: "#102e61"
   game-tile-hover: "#72d9ff"
   game-tile-hover-glow: "#087eb2"
+  world-panel-top: "#0a3d78"
+  world-panel-base: "#051d48"
+  world-copy: "#f4fcff"
+  world-muted-copy: "#cbeaff"
+  world-edge: "#77cdff"
+  world-control-cyan: "#00e0ff"
+  world-control-blue: "#039fff"
+  world-control-base: "#0061ff"
+  world-control-rim: "#d5ebff"
+  world-secondary-top: "#145b9b"
+  world-secondary-base: "#0b2e65"
 typography:
   display:
     fontFamily: "Anybody, Inter, sans-serif"
@@ -248,11 +259,11 @@ components:
 
 Peak Haven Arcade is a luminous alpine game world: blue castles and winding cyan paths, a happy silver-capped glass bottle companion, collectible short vials, and silver, blue, and gold reward chests. The supplied October 10 reference images and later gameplay references establish its visual authority. This approved identity supersedes the former robot and Nunito system.
 
-A narrow mobile shell combines full raster environments with live game pieces, legible navy information surfaces, and glowing glass-and-metal controls. Anybody supplies the wide geometric display voice; Inter carries instructions, labels, and saved statistics. Physical highlights belong to glass, metal, and actions. Illustration supplies atmosphere while boards, scores, progress, and reward states remain interactive and truthful.
+A mobile content column over edge-to-edge viewport scenes combines full raster environments with live game pieces, legible navy information surfaces, and glowing glass-and-metal controls. Anybody supplies the wide geometric display voice; Inter carries instructions, labels, and saved statistics. Physical highlights belong to glass, metal, and actions. Illustration supplies atmosphere while boards, scores, progress, and reward states remain interactive and truthful.
 
 **Key Characteristics:**
 
-- A centered mobile shell with five visible navigation labels outside gameplay.
+- A mobile content column with five visible navigation labels outside gameplay; backgrounds fill every viewport edge.
 - White PH Arcade logo, official Peak Haven symbol, and one glass bottle mascot.
 - Illustrated alpine, crystal-cave, and botanical-glasshouse environments behind live games.
 - Navy information, electric blue actions, cyan glass edges, and gold reward or selection feedback.
@@ -306,13 +317,13 @@ Monument Extended was unavailable; Anybody with the observed wide axis is the ex
 
 The centered shell is `width:min(100%,480px)` and fills the mobile viewport. Non-game pages reserve `84px + env(safe-area-inset-bottom)` for fixed bottom navigation. The current header is an absolute 100px overlay, with a responsive logo width and real 44px-minimum currency and settings actions. The home text remains on the left with a bright legibility wash; the bottle mascot occupies the right.
 
-The game shelf is a horizontally scrolling row of 120–126px tiles with 10px gaps and proximity scroll snapping. Each tile pairs one proportional, transparent game illustration with its title; the home shelf does not repeat a large cover, description, and play badge for every game. The larger free-play cards retain their full scene art. Recent games also scroll horizontally. The map retains three chapters of six missions, a cyan winding path, numbered or locked platforms, a selected-level preview, and the large play action. Those map positions are a surface composition, not a reusable page grid.
+The game shelf is a horizontally scrolling row of 120–126px tiles with 10px gaps and proximity scroll snapping. Each tile pairs one proportional, transparent game illustration with its title; the home shelf does not repeat a large cover, description, and play badge for every game. The larger free-play cards retain their full scene art. Recent games also scroll horizontally. The map preserves the original three chapters of six missions and procedurally continues with six-step chapters that rotate all five games, a cyan winding path, numbered or locked platforms, a selected-level preview, and the large play action. Those map positions are a surface composition, not a reusable page grid.
 
-Gameplay and loading omit the site header and bottom navigation. Game worlds fill the viewport, use 16px top and 14px side insets, and apply a navy gradient veil behind header, HUD, and lower controls. Tower uses an alpine valley; Merge and Peak Blocks use the crystal cave; Lab Sort and Bottle Mahjong use the botanical glasshouse. These are full scene backgrounds behind separate boards and controls.
+Gameplay and loading omit the site header and bottom navigation. Game worlds fill the viewport, use 16px top and 14px side insets, and apply a navy gradient veil behind header, HUD, and lower controls. Tower uses sunlit alpine terraces; Merge uses a submerged coral lab; Lab Sort uses a botanical glasshouse; Peak Blocks uses a violet crystal cavern; Bottle Mahjong uses a moonlit temple garden. These are full scene backgrounds behind separate boards and controls.
 
 Tower and Merge have transparent 480:580 canvas frames sized from the remaining viewport height. Tower fits individual bottle crops into a logical 124×170 maximum, with 164px stack spacing and a camera target that holds the top bottle around y=320. This keeps the active bottle large and readable rather than shrinking the whole stack. Merge places its dimensional chamber at x=12, y=72 with a logical 456×490 footprint; the live vial physics occupy its transparent interior. Lab Sort wraps tubes, widening the hit area into three columns when there are more than five tubes and four columns when there are more than six. Peak Blocks has an 8×8 square board with 3px cell gaps, three piece slots, and tool controls. Mahjong has a positioned 6:5 layered board. Game actions and puzzle tools follow the board; instructions remain in a polite status region.
 
-At 650px and wider, the body gains 20px vertical inset, the shell gains rounded corners, the nav rises by 20px, and gameplay height accounts for the inset. At 370px and narrower, header and game side insets reduce to 10px, the logo is 100px wide, and pieces and tubes adjust. At viewport heights of 730px and below, HUD, action, tool, and board spacing compress to leave room for live play. At heights of 900px and above, the map path grows. No breakpoint introduces a desktop sidebar.
+At every width, illustrations fill the viewport without a rounded outer shell or page gutters. Live content stays within 480px; the floating nav is inset 16px and stays above the safe area. At 370px and narrower, header and game side insets reduce to 10px, the logo is 100px wide, and pieces and tubes adjust. At viewport heights of 730px and below, HUD, action, tool, and board spacing compress to leave room for live play. At heights of 900px and above, the map path grows. No breakpoint introduces a desktop sidebar.
 
 ## Elevation & Depth
 
@@ -399,3 +410,13 @@ Progress, personal records, tutorial state, local currency, and preferences stay
 - Don’t remove essential game movement when decorative effects are off.
 - Don’t promise accounts, cross-device sync, cash value, or store rewards for local game currency.
 - Don’t claim the canvas games provide an equivalent nonvisual spatial experience.
+
+## Continuous world update — October 11
+
+The ten generated portrait assets in `dist/assets/worlds/` are text-free environment images. Home, Arcade, Rewards, Bottles and Profile each use a distinct world; gameplay and loading share the appropriate game environment. Provenance and generation scene briefs are recorded in ASSET_PROMPTS.json. A fixed body scene fills scrolling content; transparent page surfaces and navy panels prevent white sheets and abrupt image endings. Informational headings remain live and banner headings are screen-reader-only. Banner actions use a separate 64px area.
+
+Supporting panels use a translucent navy face with an ice-blue edge; the bottle selected state uses cyan-blue. Primary actions share the cyan/electric-blue face, pale outer rim, inner highlights and tactile pressed state. Gameplay HUD values shrink according to their actual digit count. Circular controls and level nodes use equal width and height.
+
+Progress is unlimited by chapter count. Original mission IDs and device saves remain valid. After level 18, generated chapters rotate Tower, Sort, Merge, Blocks and Mahjong. Per-game wins unlock the next free-play level; failed runs retain the current level. Goals rise, Tower drift grows faster and its landing window narrows, Merge introduces more spawn tiers, Blocks starts with a fuller board and bigger trays, Sort introduces more colours, and Mahjong expands its layered layouts and symbols. Board sizes and difficulty parameters eventually cap for playability; fresh puzzles and rotating goals continue.
+
+Detector interpretation: Inter is the body face explicitly established by the supplied brand reference. Chrome tube rims and liquid meniscus/specular strips are material cues on game pieces, not accent borders on information cards. Retired CSS tube walls are overridden by the clear-glass asset. These narrow material and typography choices are intentional. On wide viewports, a sharp 480px portrait world sits over a blurred extension of the same scene, preserving the full-height artwork and covering the outer viewport without white gutters.
