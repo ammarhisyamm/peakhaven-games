@@ -28,7 +28,9 @@ Profile: bottle avatar attached to the player terminal, actual stats, bottle rac
 
 Game chooser: two-column physical pedestal displays for all nine distinct game objects, names, truthful best score or puzzle level, and a launch action. No repeated generic picture cards.
 
-Gameplay: real interactive board, compact readable HUD, proportional game sprites, mounted control dock. Distinct game background per game. Generated textures never include score, board state, label or button.
+Gameplay: occupy a full-viewport modal layer with no document scrolling or framed outer arena. Remove visible game titles, header slabs, instruction slabs and repeated launch CTAs. Keep one 48px back arrow plus three compact live stats above the playable area. The back arrow pauses and opens a menu containing resume, sound toggle, instructions and exit. A first-visit tutorial is the only pre-game launch step. Tap/drag on the actual board or canvas to play; retain keyboard controls. Puzzle tools remain compact and separate from primary gameplay input. Brief live status sits at the safe bottom edge, with no interaction blocked by it.
+
+Canvas dimensions follow the viewport with uniform scaling, never stretched pixels. Tower/Merge keep their calibrated physics coordinates centered in the available area; the four new games adapt their geometry to the visible play area. Distinct game background per game; no baked title, score, button or board state in scenery. Orbit is a ballistic pull/aim/release ball-to-hoop game with three misses; it is distinct from Bond's timed attachment mechanic. Ridge Run uses a proportional rendered glass vial. Sequence uses distinct crystal silhouettes and animated swaps, clears and gravity. All new glass vial labels carry the supplied Peak Haven mark in white. Ambient particles and trails respect reduced motion; essential physics stays on.
 
 ## Interaction and accessibility
 

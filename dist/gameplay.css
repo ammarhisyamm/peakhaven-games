@@ -1,0 +1,59 @@
+/* Full-screen game layer. The world stays edge-to-edge; only essential HUD floats. */
+body.game-open{overflow:hidden;overscroll-behavior:none}
+body.game-open #app{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;margin:0;z-index:30}
+.phone-app.in-game.world-interface{width:100%;max-width:none;height:100dvh;min-height:0;border:0;border-radius:0;overflow:hidden;margin:0;box-shadow:none}
+.phone-app.in-game main{width:100%;max-width:none;height:100%;min-height:0;padding:0;margin:0;overflow:hidden}
+.in-game .game-world{position:relative;width:100%;height:100%;min-height:0;padding:0;overflow:hidden;border:0;border-radius:0;background:linear-gradient(#03173344,#03173310 42%,#03173344),var(--world-art) center/cover no-repeat}
+.in-game .game-world::before,.in-game .game-world::after{display:none}
+.in-game .game-back{position:absolute;left:max(16px,env(safe-area-inset-left));top:max(16px,env(safe-area-inset-top));z-index:6;width:48px;height:48px;min-width:48px;min-height:48px;flex:none;aspect-ratio:1;border:2px solid #a4f1ff;border-radius:50%;background:linear-gradient(#075183,#052755);box-shadow:inset 0 2px 8px #7ee9ff44,0 4px 12px #00133370;display:grid;place-items:center;padding:10px}
+.in-game .game-back .icon{width:24px;height:24px;stroke:#fff;color:#fff;fill:none}
+.in-game .hud{position:absolute;top:max(16px,env(safe-area-inset-top));left:max(76px,calc(env(safe-area-inset-left) + 62px));right:max(16px,env(safe-area-inset-right));max-width:470px;margin:0 0 0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;z-index:5;pointer-events:none}
+.in-game .hud>div{position:relative;min-height:54px;min-width:0;padding:7px 9px;border:1.5px solid #a0ecff;border-radius:16px;background:linear-gradient(145deg,#13cdeb,#0068d9 54%,#003c9b);box-shadow:inset 0 2px 2px #ffffff66,0 4px 9px #00265666;display:flex;align-items:center;justify-content:center;gap:6px;overflow:hidden}
+.in-game .hud>div::before,.in-game .hud>div::after{display:none}
+.in-game .hud>div>.icon{width:22px;height:22px;min-width:22px;flex:none}
+.in-game .hud span{min-width:0}
+.in-game .hud small{font-size:9px;letter-spacing:.3px;line-height:1.3;white-space:nowrap;color:#e8ffff;text-shadow:0 1px 2px #00326d}
+.in-game .hud strong{font-size:clamp(12px,calc(26px - var(--digits,1)*2px),24px);line-height:1.1;font-weight:850;letter-spacing:0;white-space:nowrap;text-shadow:0 2px 2px #003b8a;font-family:Inter,sans-serif}
+.in-game .mission-progress{position:absolute;top:84px;left:76px;right:16px;height:4px;z-index:4;margin:0;max-width:470px;margin-left:auto;background:#042350aa;pointer-events:none}
+.in-game .play-panel{position:absolute;inset:0;width:100%;height:100%;min-height:0;padding:0;margin:0;display:block;background:none;border:0;border-radius:0;box-shadow:none}
+.in-game .canvas-wrap{position:absolute;inset:0;width:100%;height:100%;max-width:none;aspect-ratio:auto;margin:0;padding:0;background:none;border:0;border-radius:0;box-shadow:none;overflow:hidden}
+.in-game .canvas-wrap::before,.in-game .canvas-wrap::after{display:none}
+.in-game canvas{display:block;width:100%;height:100%;border:0;border-radius:0;touch-action:none}
+.in-game canvas:focus-visible{outline:none}
+.in-game .game-message{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:16px;right:16px;z-index:3;width:fit-content;max-width:calc(100% - 32px);margin:0 auto;min-height:0;padding:8px 12px;background:#041a3ed9;border:1px solid #8cecff55;border-radius:12px;color:#eefaff;font:600 12px/1.4 Inter,sans-serif;text-align:center;pointer-events:none;box-shadow:none}
+.in-game .game-message:empty{display:none}
+.in-game .alignment-cue{top:24%;pointer-events:none}
+.in-game .impact-label{top:42%;pointer-events:none;font-size:clamp(22px,5vw,36px)}
+.in-game .scene-sort .play-panel,.in-game .scene-blocks .play-panel,.in-game .scene-mahjong .play-panel{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:110px max(18px,env(safe-area-inset-right)) 68px;max-width:640px;left:50%;right:auto;transform:translateX(-50%)}
+.in-game .puzzle-stage{width:100%;flex:0 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}
+.in-game .block-board{width:min(100%,calc(100dvh - 330px));max-width:480px;flex:none}
+.in-game .block-tray{width:min(100%,480px);flex:none;margin:0;padding:8px;min-height:74px;gap:8px;display:flex;align-items:center;justify-content:center;background:#041e48dc;border:1px solid #77d9ff77;border-radius:16px;box-shadow:inset 0 1px 8px #66e6ff20}
+.in-game .block-tray::before,.in-game .game-tools::before,.in-game .sort-controls::before{display:none}
+.in-game .block-tray .shape-slot{min-height:62px;padding:5px;flex:1}
+.in-game .shape-preview{grid-template-columns:repeat(var(--cols),19px);grid-template-rows:repeat(var(--rows),19px)}
+.in-game .shape-preview i{width:19px;height:19px}
+.in-game .game-tools,.in-game .sort-controls{flex:none;width:min(100%,480px);height:52px;min-height:0;padding:0;margin:0;display:flex;align-items:center;justify-content:space-evenly;gap:8px;background:none;border:0;box-shadow:none;border-radius:0}
+.in-game .tool-button{width:auto;flex:1;min-height:48px;height:48px;min-width:44px;border-radius:14px;display:flex;flex-direction:row;gap:6px;padding:7px 8px}
+.in-game .tool-button>.icon{width:20px;height:20px;flex:none}
+.in-game .tool-button>span{font-size:11px}
+.in-game .tool-button>b{width:20px;min-width:20px;height:20px;font-size:10px;top:-5px;right:-3px}
+.in-game .mahjong-board{margin:0;width:min(100%,calc((100dvh - 244px)*1.2));max-width:540px;flex:none}
+.in-game .sort-board{width:100%;flex:0 1 auto;min-height:0;gap:20px 10px;padding:18px 4px 6px;align-content:center;overflow:visible}
+.in-game .scene-sort .tube-button{width:calc((100% - 20px)/3);min-height:44px}
+.in-game .scene-sort .many-tubes .tube-button{width:calc((100% - 30px)/4)}
+.in-game .scene-sort .tube,.in-game .scene-sort .many-tubes .tube{height:clamp(70px,calc((100dvh - 410px)/2),215px);width:auto;aspect-ratio:73/210;flex:none}
+.in-game .tube-label{flex:none;aspect-ratio:1;width:24px;height:24px;font-size:11px;margin-top:7px}
+.in-game .sort-key{width:100%;flex:none;margin:0;padding:6px 8px;font-size:11px;gap:5px 12px;background:#041e48d9}
+.in-game .sort-controls .button{min-height:48px;height:48px;font-size:13px;padding:8px 10px;flex:1;border-radius:24px}
+.in-game .result-screen{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px 20px calc(24px + env(safe-area-inset-bottom))}
+.in-game .game-loading{height:100%;min-height:0}
+#pause-instructions{margin:12px auto;min-height:44px;justify-content:center}
+@media(max-width:370px){.in-game .hud{gap:4px;left:71px;right:12px}.in-game .hud>div{padding:6px 5px;gap:3px}.in-game .hud>div>.icon{width:16px;min-width:16px;height:16px}.in-game .hud small{font-size:8px}.in-game .hud strong{font-size:clamp(12px,calc(25px - var(--digits,1)*2px),22px)}.in-game .tool-button{gap:3px;padding:6px 4px}.in-game .tool-button>span{font-size:10px}}
+@media(max-height:540px){.in-game .hud{max-width:380px}.in-game .scene-sort .play-panel,.in-game .scene-blocks .play-panel,.in-game .scene-mahjong .play-panel{padding-top:82px;padding-bottom:42px;gap:6px}.in-game .block-board{width:min(100%,calc(100dvh - 225px))}.in-game .block-tray{min-height:54px;padding:4px;position:absolute;width:110px;right:12px;top:105px;bottom:90px;flex-direction:column}.in-game .block-tray .shape-slot{width:100%;min-height:44px}.in-game .shape-preview{grid-template-columns:repeat(var(--cols),12px);grid-template-rows:repeat(var(--rows),12px)}.in-game .shape-preview i{width:12px;height:12px}.in-game .mahjong-board{width:min(100%,calc((100dvh - 174px)*1.2))}.in-game .scene-sort .tube,.in-game .scene-sort .many-tubes .tube{height:clamp(46px,calc((100dvh - 225px)/2),110px)}.in-game .sort-key{display:none}.in-game .game-message{font-size:10px;padding:4px 8px;bottom:6px}.in-game .mission-progress{top:76px}}
+
+.in-game .puzzle-stage.mahjong{max-height:calc(100dvh - 244px);overflow-y:auto;overscroll-behavior:contain;align-items:flex-start;padding:8px 4px}
+.in-game .sort-board[data-tube-count="4"] .tube-button{width:calc((100% - 30px)/4)}
+.in-game .scene-sort .sort-board[data-tube-count="4"] .tube{height:min(260px,calc(100dvh - 315px),calc((100vw - 70px)*.65))}
+@media(max-height:540px){.in-game .puzzle-stage.mahjong{max-height:calc(100dvh - 174px)}.in-game .scene-sort .sort-board[data-tube-count="4"] .tube{height:min(170px,calc(100dvh - 205px))}}
+
+.tutorial-object .game-icon{display:block;width:116px;height:116px;object-fit:contain;margin:auto}

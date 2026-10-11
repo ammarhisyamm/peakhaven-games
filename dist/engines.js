@@ -23,10 +23,11 @@ function labBackdrop(ctx){ctx.clearRect(0,0,W,H);}
 class CanvasEngine {
   constructor(canvas,callbacks,options={}) {
     this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=callbacks;this.motion=options.motion;this.level=options.level||1;this.paused=false;this.ended=false;this.alive=true;this.time=0;this.last=0;this.particles=[];this.rings=[];
-    const dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=W*dpr;canvas.height=H*dpr;this.ctx.scale(dpr,dpr);
-    this.pointer=e=>{const rect=canvas.getBoundingClientRect();return (e.clientX-rect.left)/rect.width*W;};
+    this.resize();this.observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(()=>this.resize());this.observer?.observe(canvas);
+    this.pointer=e=>{const rect=canvas.getBoundingClientRect();return (e.clientX-rect.left-this.offsetX)/this.scale;};
     this.frame=this.frame.bind(this);this.raf=requestAnimationFrame(this.frame);
   }
+  resize(){const r=this.canvas.getBoundingClientRect?.()||{width:480,height:720},width=r.width||480,height=r.height||720,dpr=Math.min(2,window.devicePixelRatio||1),top=110,bottom=48;this.scale=Math.min(width/W,(height-top-bottom)/H);this.offsetX=(width-W*this.scale)/2;this.offsetY=top+(height-top-bottom-H*this.scale)/2;this.canvas.width=Math.round(width*dpr);this.canvas.height=Math.round(height*dpr);if(this.ctx.setTransform)this.ctx.setTransform(dpr*this.scale,0,0,dpr*this.scale,this.offsetX*dpr,this.offsetY*dpr);else this.ctx.scale(dpr*this.scale,dpr*this.scale);}
   frame(now) {
     if(!this.alive)return;const dt=Math.min(.025,(now-(this.last||now))/1000);this.last=now;
     if(!this.paused&&!this.ended){this.time+=dt;this.update(dt);this.particles=this.particles.filter(p=>(p.life-=dt)>0);for(const p of this.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=180*dt;}}
@@ -36,7 +37,7 @@ class CanvasEngine {
   drawParticles(){const c=this.ctx;this.rings=this.rings.filter(r=>this.time-r.start<.55);for(const r of this.rings){const t=(this.time-r.start)/.55;c.globalAlpha=1-t;c.strokeStyle=r.color;c.lineWidth=4*(1-t);c.beginPath();c.ellipse(r.x,r.y,12+t*50,5+t*18,0,0,Math.PI*2);c.stroke();}for(const p of this.particles){c.globalAlpha=p.life/.8;c.fillStyle=p.color;c.fillRect(p.x,p.y,4,4);}c.globalAlpha=1;}
   end(result){if(this.ended)return;this.ended=true;this.cb.end(result);}
   pause(value=true){this.paused=value;}
-  destroy(){this.alive=false;cancelAnimationFrame(this.raf);this.canvas.removeEventListener('pointerdown',this.onDown);this.canvas.removeEventListener('pointermove',this.onMove);this.canvas.removeEventListener('pointerup',this.onUp);this.canvas.removeEventListener('pointercancel',this.onCancel);}
+  destroy(){this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();this.canvas.removeEventListener('pointerdown',this.onDown);this.canvas.removeEventListener('pointermove',this.onMove);this.canvas.removeEventListener('pointerup',this.onUp);this.canvas.removeEventListener('pointercancel',this.onCancel);}
 }
 export class TowerEngine extends CanvasEngine {
   constructor(canvas,callbacks,options){super(canvas,callbacks,options);this.skin=options.skin||0;this.placementWidth=74;this.speedMultiplier=1;this.stack=[{x:240,y:475}];this.x=80;this.dir=1;this.score=0;this.perfects=0;this.combo=0;this.camera=0;this.inputReady=true;this.drop=null;this.failure=0;this.tip='Tap when the vial is above the stack.';this.onDown=()=>this.action();canvas.addEventListener('pointerdown',this.onDown);this.cb.hud(0,0,'0');}

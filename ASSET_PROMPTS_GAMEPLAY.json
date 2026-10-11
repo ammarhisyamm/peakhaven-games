@@ -1,0 +1,41 @@
+{
+  "mode": "built-in image_gen",
+  "assets": {
+    "sprite-atlas": "Use case: stylized-concept. Asset type: production transparent sprite atlas for Peak Haven Arcade mobile games. Create ONE landscape image, 4 columns by 3 rows, 12 equally sized isolated cells on genuinely transparent background, no grid lines. Premium polished 3D mobile game render, sapphire blue/cyan glass, chrome silver highlights, playful arcade realism. Top row: FOUR upright individual short pharmaceutical glass vials, each with chrome silver cap, clear rounded glass body, deep royal-blue wrap band with a simple white angled chevron mark (no letters), filled respectively cyan, magenta, emerald green and warm gold liquid with bubbles. The vials must look like real beautifully rendered vials, no faces or arms, full silhouette uncropped. Second row: FOUR faceted beveled crystal tokens with distinct shapes, respectively sapphire blue square diamond, cyan teardrop, gold five-point star, violet hexagonal amethyst. Third row: emerald rounded-square crystal, pink heart crystal, opalescent white eight-point crystal, then one luminous white baseball-like round orb with two subtle curved sapphire seams. Each token is one single object with clean highlights and restrained rim glow. Every object centered in its own equal cell, consistent scale, 20% transparent breathing room all around each cell so separate sprites can be cropped cleanly. Front view, crisp silhouettes readable at 48px. No text, words, numbers, UI buttons, arena, backgrounds, pedestal, shadows spreading to another cell or additional objects.",
+    "vial-brand-edit": "Use case: precise-object-edit. Image 1 is the edit target, a transparent 4-column by 3-row game sprite atlas. Image 2 is the exact Peak Haven brand mark reference. Change ONLY the logos on the dark blue label bands of the FOUR glass vials in the TOP ROW: replace their generic chevron with an accurately reproduced WHITE version of Image 2's silhouette (angled right chevron plus two connected round nodes on the left). Preserve the distinctive negative spaces and proportions of the reference, clearly legible on every band. Keep vial chrome caps, glass, liquid colors, bubble positions and sizes, grid layout, all seven crystal sprites and the baseball sprite completely unchanged. Preserve actual transparent background and sprite isolation. No text, no extra logos, no other changes.",
+    "game-orbit-v2": "Use case: stylized-concept. Asset type: FULL SCREEN portrait mobile game backdrop, Peak Haven Arcade Orbit. Cinematic premium playful 3D arcade world, a sapphire-and-silver rooftop ball arena above alpine clouds at blue twilight, snow mountains distant, cyan light rails at extreme sides, dark blue playing airspace in the central 70% for a freely moving ball and hoop rendered separately. Camera straight ahead, vertical 9:16, atmospheric depth, blue and cyan light with tiny gold accents. Keep center visually quiet with soft gradient blue sky, no huge foreground bottle, no rings in playing area, no courts' text, no UI, buttons, lettering, or characters. Full bleed and no frame. Distinctive twilight sports playground atmosphere.",
+    "game-ridge-v2": "Use case: stylized-concept. Asset type: FULL SCREEN portrait mobile game backdrop, Peak Haven Arcade Ridge Run. Beautiful premium 3D side-scrolling alpine flight route at bright dawn: layers of snow-capped ridges and pine forest across lower third, turquoise clouds and waterfall mist, suspended glass laboratory bridges small and distant near extreme side edges. Central 70% open air, blue sky gradient, clear silhouettes, a flying glass vial and obstacles will be overlaid separately. Camera horizontal side view, vertical 9:16, saturated cyan/sapphire palette, gentle golden morning rim light. Full bleed. No dominant huge architecture, rings, foreground vial, UI, text, numbers, button or frame.",
+    "game-bond-v2": "Use case: stylized-concept. Asset type: full bleed portrait mobile game background for Peak Haven Arcade Bond. Premium playful 3D sapphire laboratory inside a dark cobalt spherical reactor hall high in snowy mountains. Large curved chrome ribs and slim cyan electric conduits ONLY along the left and right edges, dim glowing crystalline energy chamber lower background, subtle star-like particles and deep navy softly lit atmospheric space through the central 70 percent. A separate rotating molecular wheel will be rendered in the clear central area. Vertical 9:16 composition, strong depth, teal/cobalt/purple science lab lighting with silver accents. No large ring drawn in center, no foreground vials or characters, no text, button, UI, logo or frame. Distinct from bright garden and outdoor mountain scenes.",
+    "game-sequence-v2": "Use case: stylized-concept. Asset type: full bleed portrait mobile game background for Peak Haven Arcade Sequence crystal match game. Premium cheerful 3D alpine crystal workshop at golden afternoon. Dark sapphire polished tabletop occupies central 75 percent and remains QUIET and softly shaded so colorful game tiles can be placed over it. Beautiful clusters of ice blue and amethyst crystals and small gold laboratory tools at extreme side edges, snowy mountain window glimpse at top, faint cyan reflections and light dust motes. Vertical 9:16, top-down-ish tabletop with distant background, rich navy/cyan/violet/gold palette, full bleed. No drawn board, grid, tiles, tokens, lettering, interface, buttons or logos. Distinct from the garden and flight scene.",
+    "orbit-hoop": "Use case: stylized-concept. Asset type: one transparent gameplay hoop sprite for Peak Haven Arcade Orbit ball toss game. Premium 3D silver chrome and luminous cyan target hoop seen from the front at a slight downward viewing angle, an open horizontal ellipse with width about twice height. Elegant beveled chrome tubing, cyan inner light strip, a short transparent blue holographic net underneath (net small and subtle, no backboard or mount). Clear empty hole, bright readable metallic ring edges, isolated centered in landscape canvas with generous margins on genuine transparency. No sphere, background, text, button, logo, UI or pedestal. This will be rendered at about 130px wide in an actual game."
+  },
+  "outputs": {
+    "vials": [
+      "dist/assets/gameplay/vial-cyan.webp",
+      "dist/assets/gameplay/vial-pink.webp",
+      "dist/assets/gameplay/vial-green.webp",
+      "dist/assets/gameplay/vial-gold.webp"
+    ],
+    "crystals": [
+      "dist/assets/gameplay/crystal-blue.webp",
+      "dist/assets/gameplay/crystal-cyan.webp",
+      "dist/assets/gameplay/crystal-gold.webp",
+      "dist/assets/gameplay/crystal-purple.webp",
+      "dist/assets/gameplay/crystal-green.webp",
+      "dist/assets/gameplay/crystal-pink.webp",
+      "dist/assets/gameplay/crystal-white.webp"
+    ],
+    "orbit": [
+      "dist/assets/gameplay/orbit-ball.webp",
+      "dist/assets/gameplay/orbit-hoop.webp"
+    ],
+    "backgrounds": [
+      "dist/assets/worlds/game-orbit-v2.webp",
+      "dist/assets/worlds/game-ridge-v2.webp",
+      "dist/assets/worlds/game-bond-v2.webp",
+      "dist/assets/worlds/game-sequence-v2.webp"
+    ]
+  },
+  "derivation": "Transparent atlas sprites cropped per 4\u00d73 cell using alpha > 10 bounding boxes; WebP quality 93\u201394. Backgrounds resized within 1080\u00d71920 and saved as WebP quality 87. Vial labels edited against supplied peak-haven-mark.png. No generative pixels added during cropping or encoding.",
+  "audio": "Eight original synthesized WAV effects in dist/assets/audio, reproducible with tools/generate-game-audio.py."
+}
