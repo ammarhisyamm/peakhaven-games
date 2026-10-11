@@ -1,0 +1,15 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: portrait game-world background for a Peak Haven Arcade mini-game, behind a live playable board. Primary request: create an original polished 3D alpine setting for Ridge Run, a vial flying through successive gaps between clean laboratory crystal obstacles. Scene/backdrop: a vertical mountain-pass skyway, distant dramatic snowy alpine peaks and waterfalls, clear glass track structures and chrome-and-cyan gate supports along the edges. Subject: an open aerial route with a safe central flight lane; no characters. Style/medium: family-friendly premium collectible mobile-game environment, cohesive with Peak Haven\u2019s alpine glass-vial laboratory. Composition/framing: vertical portrait with an uncluttered central corridor so a live vial and moving obstacle gates remain legible; detailed structures frame the far sides. Lighting/mood: bright high-altitude daylight, clean blues, energetic and inviting. Color palette: deep navy, electric blue, sky cyan, ice white, small warm gold glints. Materials: clear glass, faceted snow and ice, silver chrome, luminous cyan crystal. Constraints: background illustration only; no UI, no text, no logo, no characters, no obstacles crossing the center, no labels, no border, no watermark.",
+  "createdAt": "2026-10-11T06:41:40.491936+00:00",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-8c6fea50-4044-4105-ba8f-dadcdaff0aed.png",
+  "sourceSha256": "33b153b6dfca4412c837fa781c1fae5f74aa122aedeb28cda5095607e012294c",
+  "derivation": "sips JPEG conversion, quality 88; original remains in generated_images",
+  "purpose": "PH Arcade Alpine Lab gameplay environment. All game state, targets, labels, pieces and controls are live canvas/interface rendering.",
+  "output": "game-ridge.jpg",
+  "outputSha256": "d67d9837ec31029e4e5504d8301c69b0f98082cfd7905d41dc4db4700c6c44df",
+  "dimensions": {
+    "pixelWidth": 1086,
+    "pixelHeight": 1448
+  }
+}

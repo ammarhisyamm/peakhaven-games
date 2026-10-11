@@ -217,6 +217,10 @@ body::after{content:none}
 .endless-game{min-height:67px;display:flex;align-items:center;gap:11px;padding:8px 12px;border:1px solid #7ccfff66;border-radius:17px;background:linear-gradient(145deg,#0a3d78ed,#051d48ed);box-shadow:0 6px 17px #00132b55;color:#fff;text-align:left;}
 .endless-game-icon{width:48px;height:48px;flex:0 0 48px;display:grid;place-items:center;background:#0759a3;border:1px solid #76dcff88;border-radius:14px;}
 .endless-game-icon img{width:43px;height:43px;}
+.game-world.scene-orbit{background-image:url('assets/worlds/game-orbit.jpg')}
+.game-world.scene-ridge{background-image:url('assets/worlds/game-ridge.jpg')}
+.game-world.scene-bond{background-image:url('assets/worlds/game-bond.jpg')}
+.game-world.scene-sequence{background-image:url('assets/worlds/game-sequence.jpg')}
 .endless-game>span:nth-child(2){display:grid;gap:4px;flex:1;min-width:0;}
 .endless-game b{font-size:14px;}
 .endless-game small{font-size:11px;color:#bfe7ff;}

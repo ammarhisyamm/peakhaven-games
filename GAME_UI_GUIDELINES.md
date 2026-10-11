@@ -1,6 +1,6 @@
 # PH Arcade — Alpine Lab interface
 
-The interface belongs to the bottle laboratory. A game selection is a bottle on a display pedestal; a reward is an object in a treasury tray; a collection is a rack of real vials. Keep the existing PH identity, five games, inset navigation, and device-local progress.
+The interface belongs to the bottle laboratory. A game selection is a bottle on a display pedestal; a reward is an object in a treasury tray; a collection is a rack of real vials. Keep the existing PH identity, nine games, inset navigation, and device-local progress.
 
 ## Scene and camera
 
@@ -16,9 +16,9 @@ Each route is one continuous illustrated location. The sharp portrait environmen
 
 ## Menu composition
 
-Home: keep the mascot as an illustration above the game grid; do not overlay a Play Now banner button. Each game object launches its own game. Use a three-column grid of five game objects plus daily rewards, then a daily challenge terminal. All five games are visible without a sideways hidden item. Filter controls expose selected state.
+Home: keep the mascot as an illustration above the game grid; do not overlay a Play Now banner button. Each game object launches its own game. Use a three-column grid of all nine game objects plus daily rewards, then a daily challenge terminal. Let the grid scroll vertically with page content. Filter controls expose selected state.
 
-Arcade: two puzzle tabs, a level console with circular nodes and a selected-level launch action, then three endless game displays. Sort and Mahjong retain levels. Tower, Merge, and Blocks show high scores and become harder during a run.
+Arcade: three puzzle tabs, a level console with circular nodes and a selected-level launch action, then six endless game displays. Sort, Mahjong and Sequence retain levels. Tower, Merge, Blocks, Orbit, Ridge Run and Bond show high scores and become harder during a run.
 
 Rewards: daily chest on a pedestal is the focal action, gold treasury material for rewards, a readable XP console, streak, reward calendar and tools.
 
@@ -26,7 +26,7 @@ Bottles: equipped vial on its own display, then a rack of six bottles. Ownership
 
 Profile: bottle avatar attached to the player terminal, actual stats, bottle rack, achievement tray, settings. No Your Games section. Frame Settings, Customize and Help as three related quick actions inside a slim chrome console. At 370px and narrower, the name and XP use a full-width second row below avatar/edit controls.
 
-Game chooser: two-column physical pedestal displays for five distinct game objects, names, truthful best score or puzzle level, and a launch action. No repeated generic picture cards.
+Game chooser: two-column physical pedestal displays for all nine distinct game objects, names, truthful best score or puzzle level, and a launch action. No repeated generic picture cards.
 
 Gameplay: real interactive board, compact readable HUD, proportional game sprites, mounted control dock. Distinct game background per game. Generated textures never include score, board state, label or button.
 

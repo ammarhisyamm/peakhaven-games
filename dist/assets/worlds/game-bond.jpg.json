@@ -1,0 +1,15 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: portrait game-world background for a Peak Haven Arcade mini-game, behind a live playable board. Primary request: create an original premium 3D alpine laboratory arena for Bond, a skill game where players attach incoming glass vials to a rotating circular ring without hitting existing vials. Scene/backdrop: a clear-glass and brushed-silver circular apparatus suspended in a high-altitude alpine lab, crystalline waterfalls and snowy peaks in the distance, illuminated blue floor platform below. Subject: an open circular target mechanism integrated into the room, arranged to frame a live rotating ring drawn by the game. Style/medium: polished family-friendly collectible mobile-game 3D illustration, matching Peak Haven\u2019s alpine bottle-world. Composition/framing: portrait, centered open play area with the circular hardware toward mid-frame but breathing room; architectural detail at edges and lower platform. Lighting/mood: blue daylight with cyan glows and slight warm silver highlights, focused yet welcoming. Color palette: deep navy, royal electric blue, cyan, ice white, small gold accents. Materials: polished chrome, clear glass, translucent ice and crystalline light. Constraints: environmental background only; no UI, no text, no symbols, no characters, no playable vials, no score, no border, no watermark.",
+  "createdAt": "2026-10-11T06:41:40.534888+00:00",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-19e398b8-3d77-41aa-8e58-d281304f3322.png",
+  "sourceSha256": "b255e99a7edd27a22becba5cae64f01f213c19ea89cb9f3971ecf7a182feea4e",
+  "derivation": "sips JPEG conversion, quality 88; original remains in generated_images",
+  "purpose": "PH Arcade Alpine Lab gameplay environment. All game state, targets, labels, pieces and controls are live canvas/interface rendering.",
+  "output": "game-bond.jpg",
+  "outputSha256": "311145fa5202742bf4f013ecb1bede0ae98fc37771b00e65db78ef9fa65632e1",
+  "dimensions": {
+    "pixelWidth": 1086,
+    "pixelHeight": 1448
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: portrait game-world background for a Peak Haven Arcade mini-game, displayed behind a live playable board. Primary request: create an original, premium-quality 3D alpine arcade environment themed around Orbit, a precision game where small luminous vials are launched toward a rotating ring. Scene/backdrop: a high mountain observatory with suspended circular orbital rails, distant snowy peaks, sapphire ice, and a clean glass landing platform. Subject: the empty luminous circular orbit mechanism integrated into the environment; no characters. Style/medium: polished family-friendly collectible mobile-game 3D illustration, cohesive with a premium glass-vial alpine laboratory, rich material detail, believable perspective. Composition/framing: vertical portrait, wide readable central play field with a clear, low-detail center for live game objects; scene details frame the play area at edges and lower foreground. Lighting/mood: bright crisp daylight and soft cyan emitters, playful precision challenge. Color palette: Peak Haven deep navy, electric blue, sky cyan, ice white, restrained warm gold glints. Materials/textures: polished ice, silver chrome, clear glass, luminous cyan crystal. Constraints: background art only; no UI, no text, no logo, no labels, no borders, no panels, no visible score, no grid, no watermarks. Designed to stay legible under overlaid HTML/canvas game objects.",
+  "createdAt": "2026-10-11T06:41:40.452230+00:00",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-335712ef-5994-402a-a158-c2989433ec78.png",
+  "sourceSha256": "8715423d27994018a33b041be998fdb90a1dfb83415442bdbbe9bc5fd4ce5f1c",
+  "derivation": "sips JPEG conversion, quality 88; original remains in generated_images",
+  "purpose": "PH Arcade Alpine Lab gameplay environment. All game state, targets, labels, pieces and controls are live canvas/interface rendering.",
+  "output": "game-orbit.jpg",
+  "outputSha256": "ac497695148faf95d735b256d52696d01e491323f2831888136487394540d0c9",
+  "dimensions": {
+    "pixelWidth": 1086,
+    "pixelHeight": 1448
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: portrait game-world background for a Peak Haven Arcade mini-game, behind a live match-three puzzle board. Primary request: create an original premium 3D alpine garden laboratory setting for Sequence, where the live game uses colorful glowing crystal vials arranged in a match-three grid. Scene/backdrop: a bright glass-roofed alpine conservatory with waterfalls, frosted peaks, ice-blue botanicals, polished floor, and crystal shelves near the sides. Subject: empty garden lab with inviting depth and no giant focal prop. Style/medium: polished family-friendly collectible mobile-game 3D illustration cohesive with the Peak Haven alpine bottle world. Composition/framing: portrait, visually distinct from other scenes, broad central zone softly atmospheric and uncluttered behind a live puzzle grid; scenic details around edges. Lighting/mood: bright diffused daylight with cyan glass highlights and gentle warm gold glints. Color palette: Peak Haven navy, electric blue, cyan, ice-white, limited gold. Materials/textures: detailed glass and polished crystal, chrome trim, alpine snow, natural garden leaves. Constraints: background only; no UI, no text, no title, no logo, no characters, no game pieces, no grid, no score, no border, no watermark.",
+  "createdAt": "2026-10-11T06:41:40.572102+00:00",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-76e704f9-a16c-4a01-9ff3-2503777d9bc0.png",
+  "sourceSha256": "db4b3137b897975a0c84e1fba255ae0bb49574b1b20793d072c418eef91caf65",
+  "derivation": "sips JPEG conversion, quality 88; original remains in generated_images",
+  "purpose": "PH Arcade Alpine Lab gameplay environment. All game state, targets, labels, pieces and controls are live canvas/interface rendering.",
+  "output": "game-sequence.jpg",
+  "outputSha256": "62014d40e4cb1afa522ce2a71db11d98363cdc7f1aa64c2594e04222397176a4",
+  "dimensions": {
+    "pixelWidth": 1086,
+    "pixelHeight": 1448
+  }
+}
