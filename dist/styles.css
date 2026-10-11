@@ -231,3 +231,18 @@ body{scrollbar-color:#4aa9e7 #071f42}::selection{background:#ffd24d;color:#0a1b3
 .tool-button>.icon{width:24px;height:24px}
 .tool-button>span{font-size:10px;line-height:1.1}
 .in-game canvas{display:block;object-fit:contain}
+
+/* Keep section labels legible and separate from the full-screen artwork. */
+.levels-heading,.endless-heading{padding:14px 16px;border:1px solid #85d8ff80;border-radius:18px;background:linear-gradient(145deg,#07366feF,#041b43f2);box-shadow:0 8px 22px #00132b55}
+.levels-heading h1{margin:0 0 7px;font-size:27px;line-height:1.12;text-shadow:none}
+.levels-heading p,.endless-heading p{color:#e5f3ff;font-size:13px;line-height:1.5}
+.endless-heading h2{margin:0 0 7px}
+.daily-chest{grid-template-columns:minmax(0,1fr) 82px;align-items:center}
+.daily-chest>div{min-width:0}
+.daily-chest>img{grid-column:2;grid-row:1;width:82px;height:82px;aspect-ratio:1;}
+.daily-chest h2{font-size:clamp(16px,4.5vw,20px);line-height:1.2;overflow-wrap:anywhere}
+.daily-chest p{max-width:30ch;font-size:13px;line-height:1.45}
+.daily-chest>.button{grid-column:1/-1;justify-self:stretch;align-self:stretch;width:100%;min-width:0;max-width:100%;min-height:56px;margin:0;padding:10px 16px;box-sizing:border-box;white-space:normal;line-height:1.2}
+@media(max-width:380px){.daily-chest{grid-template-columns:minmax(0,1fr) 68px;gap:10px;padding:12px}.daily-chest>img{width:68px;height:68px}.daily-chest>.button{min-height:52px;font-size:15px}.levels-heading,.endless-heading{padding:12px 14px}}
+.app-header{background:linear-gradient(180deg,#031b4ceb 0%,#031b4c88 64%,transparent 100%)}
+.rewards-hero.scene-banner{height:300px}
