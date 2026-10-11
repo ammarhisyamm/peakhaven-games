@@ -7,7 +7,7 @@ Peak Haven customers aged 30–50, approximately 65% female per the user.
 ## Product Purpose
 Mobile casual games with a procedural sequential trail and level-based free play. Vial Tower, Vial Merge, Lab Sort, Peak Blocks and Bottle Mahjong. English UI, local progress, no customer account.
 ## Capabilities and Constraints
-Coins and gems are local in-game currency, earned through play and free daily rewards. Six collectible bottle skins equip in Tower. Daily free spin and a five-game coin boost. No payment or store value. Existing Site audience stays private. Progress and personal bests migrate from the prior version.
+Coins and gems are local in-game currency, earned through play and free daily rewards. Six collectible bottle skins equip in Tower. Daily free spin and a five-game coin boost. No payment or store value. Existing Site audience stays private. Progress and personal bests migrate from the prior version. Gentle synthesized sound effects cover all five games, start on by default, and can be switched off from Settings or the in-game pause sheet; the preference saves on device.
 ## Brand Commitments
 The five latest supplied reference images replace all prior visual authority. PH ARCADE white geometric wordmark, official Peak Haven arrow/molecule symbol, happy silver-capped glass vial mascot, 3D alpine castles and winding cyan map, collectible short glass vials, silver/blue/gold reward chests. Palette #0A1B3D #0EA5FF #38BDF8 #E6F4FF #FFD24D #F8FAFC. Extended geometric display and Inter body.
 ## Product Principles

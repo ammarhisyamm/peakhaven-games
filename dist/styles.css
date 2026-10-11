@@ -221,3 +221,13 @@ body{scrollbar-color:#4aa9e7 #071f42}::selection{background:#ffd24d;color:#0a1b3
 .mahjong-board{aspect-ratio:6/5;}
 .mahjong-tile{top:calc(var(--y)*var(--tile-row,20%) - var(--z)*var(--tile-lift,1.5%));height:var(--tile-height,23%);}
 @media(max-width:360px){.arcade-levels{padding-right:12px;padding-left:12px}.level-grid{gap:8px 5px}.puzzle-level-node{min-height:50px;font-size:16px}.level-game-tabs button{font-size:11px;padding:7px}.level-game-tabs img{width:36px;height:36px}}
+
+/* Keep game art and circular controls at their intended proportions. */
+#app .vial{height:auto;aspect-ratio:1/2}
+#app .happy-vial{width:auto;height:92%;aspect-ratio:1/2;flex:0 0 auto}
+.puzzle-level-node{width:100%;height:auto;min-height:0;padding:0;aspect-ratio:1;align-self:center;justify-self:center}
+.game-tools{max-width:100%;gap:5px}
+.tool-button{width:clamp(60px,18vw,70px);height:auto;min-height:0;flex:0 0 clamp(60px,18vw,70px);aspect-ratio:1;padding:7px 2px 6px;gap:3px}
+.tool-button>.icon{width:24px;height:24px}
+.tool-button>span{font-size:10px;line-height:1.1}
+.in-game canvas{display:block;object-fit:contain}
