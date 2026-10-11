@@ -175,12 +175,12 @@ body{scrollbar-color:#4aa9e7 #071f42}::selection{background:#ffd24d;color:#0a1b3
 
 /* Keep the content readable while the illustrated world drifts gently with page scroll. */
 body::before{content:none}
-#scene-backdrop,#scene-art{position:fixed;pointer-events:none;background-image:linear-gradient(180deg,#031b4c14 20%,#02153766 100%),var(--world-art);background-position:center top;background-size:cover;background-repeat:no-repeat;will-change:transform}
+#scene-backdrop,#scene-art{position:fixed;pointer-events:none;background-image:var(--world-art);background-position:center top;background-size:cover;background-repeat:no-repeat}
 #scene-backdrop{inset:-10vh -5vw;z-index:-2;transform:translate3d(0,0,0) scale(1.04)}
-body::after{background:linear-gradient(90deg,#02153630,transparent 35%,transparent 65%,#02153630)}
 #scene-art{display:none}
+#scene-tint{position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:linear-gradient(180deg,#031b4c14 20%,#02153766 100%),linear-gradient(90deg,#02153630,transparent 35%,transparent 65%,#02153630)}
+body::after{content:none}
 @media(min-width:650px){#scene-backdrop{filter:blur(24px) brightness(.65)}#scene-art{display:block;top:-10vh;bottom:-10vh;left:50%;width:480px;z-index:-1;transform:translate3d(-50%,0,0)}}
-@media(prefers-reduced-motion:reduce){#scene-backdrop,#scene-art{will-change:auto}}
 
 /* Puzzle progression is reserved for the two finite-board games. */
 .arcade-levels{display:grid;gap:15px;padding:122px 16px 34px;}
@@ -255,3 +255,14 @@ body::after{background:linear-gradient(90deg,#02153630,transparent 35%,transpare
 @media(max-width:380px){.daily-chest{grid-template-columns:minmax(0,1fr) 68px;gap:10px;padding:12px}.daily-chest>img{width:68px;height:68px}.daily-chest>.button{min-height:52px;font-size:15px}.levels-heading,.endless-heading{padding:12px 14px}}
 .app-header{background:linear-gradient(180deg,#031b4ceb 0%,#031b4c88 64%,transparent 100%)}
 .rewards-hero.scene-banner{height:300px}
+
+/* Give the wallet controls room to breathe without crowding the PH mark. */
+.app-header{gap:10px}
+.brand{width:132px;flex:0 1 132px}
+.player-pills{gap:8px}
+.currency{min-width:78px;min-height:46px;gap:8px;padding:8px 12px;font-size:12px}
+.currency>.icon{width:22px;height:22px}
+.currency b{min-width:2ch;text-align:center}
+.settings-button{width:44px;height:44px;flex:0 0 44px}
+@media(max-width:420px){.app-header{gap:6px;padding-right:14px;padding-left:14px}.brand{width:124px;flex-basis:124px}.player-pills{gap:6px}.currency{min-width:74px;min-height:44px;gap:6px;padding-right:9px;padding-left:9px}.currency>.icon{width:21px;height:21px}.settings-button{width:42px;height:42px;flex-basis:42px}}
+@media(max-width:370px){.app-header{gap:5px;padding-right:10px;padding-left:10px}.brand{width:90px;flex:0 0 90px}.player-pills{gap:5px}.currency{min-width:61px;min-height:40px;gap:4px;padding-right:7px;padding-left:7px;font-size:10.5px}.currency>.icon{width:19px;height:19px}.settings-button{width:40px;height:40px;flex-basis:40px}}
