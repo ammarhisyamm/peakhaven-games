@@ -241,7 +241,38 @@ dialog p{color:#d2eaff}
 .scene-sort .many-tubes .tube-button{width:calc((100% - 33px)/4)}
 .scene-sort .sort-controls{padding:15px 13px}
 .mahjong-board{margin:10px auto;max-width:min(100%,calc((100dvh - 404px)*1.2));flex:none}
+
+/* Shared breathing room for world content and the profile action console. */
+.app-header{padding-inline:20px}
+.home-hero.scene-banner{height:clamp(225px,30dvh,280px);padding:0 20px 14px}
+.lobby-mascot{height:228px}
+.lobby-mascot>.mascot{height:220px;width:220px}
+.home-content{padding:14px 20px 10px}
+.game-picker{padding:16px 20px 12px}
+.arcade-levels{padding:16px 20px 24px;gap:20px}
+.collection-body{padding:8px 20px 16px}
+.rewards-content{padding:8px 20px 16px;gap:20px}
+.profile-sheet,.content-module{margin-inline:20px}
+.profile-actions.lab-console{margin:8px 20px 0;padding:20px 16px;gap:10px}
+.profile-actions.lab-console button{min-height:64px;padding:10px 5px;border:1px solid #86d5ff99;border-radius:14px;background:linear-gradient(180deg,#10538d,#082b5a);box-shadow:inset 0 1px 2px #d3f5ff30,0 3px 8px #00152a55;font-size:12px;gap:7px}
+.profile-actions.lab-console button>.icon{width:22px;height:22px}
+.profile-actions.lab-console button>.icon:last-child{display:none}
+.game-world{padding:12px 20px 20px}
+.help-content.lab-console{margin:14px 20px 20px;padding:26px 24px}
+.help-tabs{margin-inline:20px}
+@media(max-width:420px){.home-content{padding-inline:18px}.game-picker,.arcade-levels,.collection-body,.rewards-content{padding-inline:18px}.profile-sheet,.content-module{margin-inline:18px}.profile-actions.lab-console{margin-inline:18px}.game-world{padding-inline:16px}.help-tabs{margin-inline:18px}.help-content.lab-console{margin-inline:18px}}
 @media(max-width:370px){
+  .app-header{padding-inline:16px}
+  .home-hero.scene-banner{height:225px}
+  .lobby-mascot{height:200px}
+  .lobby-mascot>.mascot{height:192px;width:192px}
+  .home-content{padding-inline:16px}
+  .game-picker,.arcade-levels,.collection-body,.rewards-content{padding-inline:16px}
+  .profile-sheet,.content-module{margin-inline:16px}
+  .profile-actions.lab-console{margin-inline:16px;padding-inline:13px}
+  .game-world{padding-inline:14px}
+  .help-tabs{margin-inline:16px}
+  .help-content.lab-console{margin-inline:16px;padding-inline:20px}
   .profile-identity{display:grid;grid-template-columns:63px minmax(0,1fr);gap:12px}
   .profile-identity>.avatar{grid-column:1;grid-row:1}
   .profile-identity>div{grid-column:1/-1;grid-row:2;min-width:0}

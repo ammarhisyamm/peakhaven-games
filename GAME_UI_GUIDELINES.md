@@ -16,7 +16,7 @@ Each route is one continuous illustrated location. The sharp portrait environmen
 
 ## Menu composition
 
-Home: compact separate mascot above a real Play Now action, a three-column grid of five game objects plus daily rewards, then a daily challenge terminal. All five games are visible without a sideways hidden item. Filter controls expose selected state.
+Home: keep the mascot as an illustration above the game grid; do not overlay a Play Now banner button. Each game object launches its own game. Use a three-column grid of five game objects plus daily rewards, then a daily challenge terminal. All five games are visible without a sideways hidden item. Filter controls expose selected state.
 
 Arcade: two puzzle tabs, a level console with circular nodes and a selected-level launch action, then three endless game displays. Sort and Mahjong retain levels. Tower, Merge, and Blocks show high scores and become harder during a run.
 
@@ -24,7 +24,7 @@ Rewards: daily chest on a pedestal is the focal action, gold treasury material f
 
 Bottles: equipped vial on its own display, then a rack of six bottles. Ownership, equipment and availability use labels and icons alongside colour.
 
-Profile: bottle avatar attached to the player terminal, actual stats, bottle rack, achievement tray, settings. No Your Games section. At 370px and narrower, the name and XP use a full-width second row below avatar/edit controls.
+Profile: bottle avatar attached to the player terminal, actual stats, bottle rack, achievement tray, settings. No Your Games section. Frame Settings, Customize and Help as three related quick actions inside a slim chrome console. At 370px and narrower, the name and XP use a full-width second row below avatar/edit controls.
 
 Game chooser: two-column physical pedestal displays for five distinct game objects, names, truthful best score or puzzle level, and a launch action. No repeated generic picture cards.
 
@@ -32,7 +32,7 @@ Gameplay: real interactive board, compact readable HUD, proportional game sprite
 
 ## Interaction and accessibility
 
-Minimum action target 44px, including dialog close. Fixed-square icons and circular controls use aspect-ratio 1. Preserve 16–20px screen gutters and safe areas. Menu body instructions use at least 13px with 1.45–1.5 line height on a navy reading surface; the shipped compact gameplay status uses 12px/1.5. Auxiliary 7–11px captions are inherited density debt rather than an instruction-text standard; large headings stay at 3:1 contrast and body copy at 4.5:1. Long names wrap, number values are tabular, selected controls have aria-pressed or aria-selected, and keyboard focus is a gold outline.
+Minimum action target 44px, including dialog close. Fixed-square icons and circular controls use aspect-ratio 1. Use 20px page gutters, 18px at 420px and narrower, and 16px at 370px and narrower; include top and bottom breathing room around controls and sections. Preserve safe areas. Menu body instructions use at least 13px with 1.45–1.5 line height on a navy reading surface; the shipped compact gameplay status uses 12px/1.5. Auxiliary 7–11px captions are inherited density debt rather than an instruction-text standard; large headings stay at 3:1 contrast and body copy at 4.5:1. Long names wrap, number values are tabular, selected controls have aria-pressed or aria-selected, and keyboard focus is a gold outline.
 
 The shipped scene entrance is 260ms with cubic-bezier(.16,1,.3,1); keep one entrance. Pedestal press moves down 2px. No moving hit targets, no idle motion on every object, and no ornamental parallax on scroll. Respect reduced-motion and the player's motion setting. Sound remains optional and its saved preference continues to apply to every game.
 

@@ -1020,18 +1020,18 @@
       "revealLight": "radial-gradient(#d9f5ff,transparent 70%)",
       "vialSprites": "Tight individual bounds, proportional crop fitting; atlas sprites 1:2.",
       "collectionStates": "Owned check, available unlock arrow, unavailable lock, equipment separately labeled.",
-      "dialogClose": "44×44px, aspect-ratio:1, final world-ui.css override."
+      "dialogClose": "44\u00d744px, aspect-ratio:1, final world-ui.css override."
     },
     "sceneCamera": {
       "sharp": "Absolute document layer, centered min(100%,480px), cover, center top.",
       "perimeter": "Fixed, inset -20px, blur(24px) brightness(.55).",
       "tint": "Fixed viewport gradient; no ornamental target parallax.",
       "worldAsset": "Home uses dist/assets/worlds/home-lobby.webp.",
-      "menuHeader": "Relative 92px header; 44px settings, currency minimum 44–46px."
+      "menuHeader": "Relative 92px header; 44px settings, currency minimum 44\u201346px."
     },
     "motionPolicy": "Both the local motion setting and system reduced-motion preference gate decoration; essential game physics remain.",
     "notCanonized": [
-      "Inherited 7–11px auxiliary captions are density debt, not body instructions.",
+      "Inherited 7\u201311px auxiliary captions are density debt, not body instructions.",
       "Legacy #4a729b36 shell shadow is overridden; retired light sheets and map styling do not define the new world.",
       "Canvas games do not establish equivalent nonvisual spatial gameplay."
     ]
@@ -1041,8 +1041,8 @@
       "name": "Primary Action",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Live play now action with the shipped material and interaction states.",
-      "html": "<button class=\"ds-action\">Play Now</button>",
+      "description": "Glossy cyan-blue primary action for the section\u2019s main task.",
+      "html": "<button class=\"ds-action\">Continue</button>",
       "css": ".ds-action{min-height:56px;padding:12px 20px;border:3px solid #d5ebff;border-radius:30px;background:linear-gradient(180deg,#00e0ff 0%,#039fff 35%,#0061ff 86%);box-shadow:inset 0 2px 3px #fff,inset 0 -4px 8px #00258d88,0 4px 0 #0258b5,0 8px 24px #007be759;color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:10px;font:850 17px/1.4 Inter,sans-serif;text-shadow:0 2px 2px #03439577;transition:transform 150ms var(--ease,cubic-bezier(.16,1,.3,1)),filter 150ms;cursor:pointer}.ds-action:hover:not(:disabled){filter:brightness(1.1)}.ds-action:focus-visible{outline:3px solid #ffdf69;outline-offset:4px}.ds-action:active{transform:translateY(3px) scale(.98);filter:brightness(.94);box-shadow:inset 0 2px 3px #f4ffffa8,inset 0 -3px 7px #00258d55,0 1px 0 #0258b5}.ds-action:disabled{background:linear-gradient(#577b9d,#2c4b72);color:#d0e2f1;box-shadow:none;border-color:#7fa9ce}@media(prefers-reduced-motion:reduce){.ds-action{transition:none}}"
     },
     {
@@ -1158,14 +1158,14 @@
       "Do retain real loading progress, cancel/retry and device-local save feedback."
     ],
     "donts": [
-      "Don’t restore the robot identity, Nunito typography, white page sheets or desktop dashboard shell.",
-      "Don’t stretch full console artwork, the logo, mascot, game icons or short vial sprites.",
-      "Don’t bake labels, buttons, scores, board state or reward claims into scene artwork.",
-      "Don’t introduce decorative kickers, glyph icons or hard offset type shadows as reusable house styles.",
-      "Don’t put small instructions directly on scenery without a navy reading surface.",
-      "Don’t move interactive targets with ornamental scroll parallax.",
-      "Don’t promise accounts, cross-device sync, real payments or cash value for local currency.",
-      "Don’t claim equivalent nonvisual spatial gameplay for the canvas games."
+      "Don\u2019t restore the robot identity, Nunito typography, white page sheets or desktop dashboard shell.",
+      "Don\u2019t stretch full console artwork, the logo, mascot, game icons or short vial sprites.",
+      "Don\u2019t bake labels, buttons, scores, board state or reward claims into scene artwork.",
+      "Don\u2019t introduce decorative kickers, glyph icons or hard offset type shadows as reusable house styles.",
+      "Don\u2019t put small instructions directly on scenery without a navy reading surface.",
+      "Don\u2019t move interactive targets with ornamental scroll parallax.",
+      "Don\u2019t promise accounts, cross-device sync, real payments or cash value for local currency.",
+      "Don\u2019t claim equivalent nonvisual spatial gameplay for the canvas games."
     ]
   }
 }
