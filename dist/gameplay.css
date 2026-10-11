@@ -1,8 +1,8 @@
-/* Full-screen game layer. The world stays edge-to-edge; only essential HUD floats. */
+/* Full mobile game screen. Desktop retains the same portrait camera. */
 body.game-open{overflow:hidden;overscroll-behavior:none}
-body.game-open #app{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;margin:0;z-index:30}
+body.game-open #app{position:fixed;inset:0;width:min(100%,480px);height:100dvh;max-width:480px;margin:0 auto;z-index:30;box-shadow:0 0 60px #00142a80}
 .phone-app.in-game.world-interface{width:100%;max-width:none;height:100dvh;min-height:0;border:0;border-radius:0;overflow:hidden;margin:0;box-shadow:none}
-.phone-app.in-game main{width:100%;max-width:none;height:100%;min-height:0;padding:0;margin:0;overflow:hidden}
+.phone-app.in-game main{width:100%;max-width:none;height:100%;min-height:0;padding:0;margin:0;overflow:hidden;animation:none}
 .in-game .game-world{position:relative;width:100%;height:100%;min-height:0;padding:0;overflow:hidden;border:0;border-radius:0;background:linear-gradient(#03173344,#03173310 42%,#03173344),var(--world-art) center/cover no-repeat}
 .in-game .game-world::before,.in-game .game-world::after{display:none}
 .in-game .game-back{position:absolute;left:max(16px,env(safe-area-inset-left));top:max(16px,env(safe-area-inset-top));z-index:6;width:48px;height:48px;min-width:48px;min-height:48px;flex:none;aspect-ratio:1;border:2px solid #a4f1ff;border-radius:50%;background:linear-gradient(#075183,#052755);box-shadow:inset 0 2px 8px #7ee9ff44,0 4px 12px #00133370;display:grid;place-items:center;padding:10px}
@@ -46,14 +46,26 @@ body.game-open #app{position:fixed;inset:0;width:100%;height:100dvh;max-width:no
 .in-game .sort-key{width:100%;flex:none;margin:0;padding:6px 8px;font-size:11px;gap:5px 12px;background:#041e48d9}
 .in-game .sort-controls .button{min-height:48px;height:48px;font-size:13px;padding:8px 10px;flex:1;border-radius:24px}
 .in-game .result-screen{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px 20px calc(24px + env(safe-area-inset-bottom))}
-.in-game .game-loading{height:100%;min-height:0}
+.in-game .game-loading{height:100%;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;justify-content:initial;align-items:center;justify-items:center;gap:16px;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));overflow:hidden}
+.in-game .loading-brand{width:min(65%,240px);align-self:start}
+.in-game .game-loading>.mascot{width:100%;height:100%;min-height:0;max-height:320px;max-width:280px;object-fit:contain;aspect-ratio:auto;margin:0;animation:none}
+.in-game .loading-copy{width:100%;min-width:0;padding:26px 22px 18px;align-self:end}
+.in-game .loading-copy h1{font-size:21px;line-height:1.25;margin:14px 0 8px;overflow-wrap:anywhere}
+.in-game .loading-copy p{font-size:13px;line-height:1.5}
+.in-game .loading-track{width:100%;height:20px;position:relative;isolation:isolate;overflow:hidden;contain:paint}
+.in-game .loading-track i{width:100%;height:100%;max-width:100%;will-change:transform}
+.in-game .loading-copy .text-button{display:flex;justify-content:center;max-width:100%;margin:12px auto 0;min-height:44px}
 #pause-instructions{margin:12px auto;min-height:44px;justify-content:center}
 @media(max-width:370px){.in-game .hud{gap:4px;left:71px;right:12px}.in-game .hud>div{padding:6px 5px;gap:3px}.in-game .hud>div>.icon{width:16px;min-width:16px;height:16px}.in-game .hud small{font-size:8px}.in-game .hud strong{font-size:clamp(12px,calc(25px - var(--digits,1)*2px),22px)}.in-game .tool-button{gap:3px;padding:6px 4px}.in-game .tool-button>span{font-size:10px}}
 @media(max-height:540px){.in-game .hud{max-width:380px}.in-game .scene-sort .play-panel,.in-game .scene-blocks .play-panel,.in-game .scene-mahjong .play-panel{padding-top:82px;padding-bottom:42px;gap:6px}.in-game .block-board{width:min(100%,calc(100dvh - 225px))}.in-game .block-tray{min-height:54px;padding:4px;position:absolute;width:110px;right:12px;top:105px;bottom:90px;flex-direction:column}.in-game .block-tray .shape-slot{width:100%;min-height:44px}.in-game .shape-preview{grid-template-columns:repeat(var(--cols),12px);grid-template-rows:repeat(var(--rows),12px)}.in-game .shape-preview i{width:12px;height:12px}.in-game .mahjong-board{width:min(100%,calc((100dvh - 174px)*1.2))}.in-game .scene-sort .tube,.in-game .scene-sort .many-tubes .tube{height:clamp(46px,calc((100dvh - 225px)/2),110px)}.in-game .sort-key{display:none}.in-game .game-message{font-size:10px;padding:4px 8px;bottom:6px}.in-game .mission-progress{top:76px}}
 
 .in-game .puzzle-stage.mahjong{max-height:calc(100dvh - 244px);overflow-y:auto;overscroll-behavior:contain;align-items:flex-start;padding:8px 4px}
 .in-game .sort-board[data-tube-count="4"] .tube-button{width:calc((100% - 30px)/4)}
-.in-game .scene-sort .sort-board[data-tube-count="4"] .tube{height:min(260px,calc(100dvh - 315px),calc((100vw - 70px)*.65))}
+.in-game .scene-sort .sort-board[data-tube-count="4"] .tube{height:min(260px,calc(100dvh - 315px),calc((min(100vw,480px) - 70px)*.65))}
 @media(max-height:540px){.in-game .puzzle-stage.mahjong{max-height:calc(100dvh - 174px)}.in-game .scene-sort .sort-board[data-tube-count="4"] .tube{height:min(170px,calc(100dvh - 205px))}}
 
 .tutorial-object .game-icon{display:block;width:116px;height:116px;object-fit:contain;margin:auto}
+.in-game .block-tray{touch-action:none}
+.block-drag-preview{position:fixed;z-index:8;pointer-events:none;grid-template-columns:repeat(var(--cols),var(--cell));grid-template-rows:repeat(var(--rows),var(--cell));filter:drop-shadow(0 5px 8px #001b4a88)}
+.block-drag-preview i{width:var(--cell);height:var(--cell)}
+@media(max-height:540px){.in-game .game-loading{gap:8px;padding:16px 24px;grid-template-columns:1fr 1.3fr;grid-template-rows:auto 1fr}.in-game .loading-brand{width:min(100%,140px)}.in-game .game-loading>.mascot{grid-column:1;grid-row:2;max-height:190px}.in-game .loading-copy{grid-column:2;grid-row:1/3;align-self:center;padding:22px 18px 14px}.in-game .loading-copy h1{font-size:17px}}

@@ -15,11 +15,16 @@ export function sequenceMatches(board,size=SEQUENCE_SIZE){
   return matches;
 }
 
-export function sequenceSwap(board,a,b,size=SEQUENCE_SIZE){
+export function sequenceExchange(board,a,b,size=SEQUENCE_SIZE){
   const ar=Math.floor(a/size),ac=a%size,br=Math.floor(b/size),bc=b%size;
   if(a<0||b<0||a>=size*size||b>=size*size||Math.abs(ar-br)+Math.abs(ac-bc)!==1)return null;
   const next=board.slice();[next[a],next[b]]=[next[b],next[a]];
-  return sequenceMatches(next,size).size?next:null;
+  return next;
+}
+
+export function sequenceSwap(board,a,b,size=SEQUENCE_SIZE){
+  const next=sequenceExchange(board,a,b,size);
+  return next&&sequenceMatches(next,size).size?next:null;
 }
 
 export function hasSequenceMove(board,size=SEQUENCE_SIZE){

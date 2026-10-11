@@ -49,12 +49,38 @@ test('Canvas sizing keeps uniform scale and maps pointer positions at mobile and
 
 test('Ridge Run tightens its gate course and reports a fall',()=>{
  const h=harness(),game=new RidgeEngine(h.canvas,h.cb,{motion:false});const initial=game.gap;game.score=20;game.action();game.update(.01);assert.equal(game.speed,212);assert.ok(game.gap<initial);
- game.y=70;game.update(.02);assert.deepEqual(h.result(),{score:20,gates:20});game.destroy();
+ game.y=70;game.vy=0;game.update(.02);assert.equal(h.result(),null,'no invisible ceiling below the screen edge');game.y=20;game.update(.02);assert.deepEqual(h.result(),{score:20,gates:20});game.destroy();
+});
+
+test('Ridge bottles fill both screen edges and a gate keeps its original opening',()=>{
+ const h=harness(390,844),game=new RidgeEngine(h.canvas,h.cb,{motion:false});game.action();tick(game,.02);const gate=game.gates[0],gap=gate.gap;game.score=40;
+ const s=game.gateSegments(gate);assert.equal(s.bottom-s.top,gap);assert.equal(game.floor,game.h);assert.ok(s.top>0&&s.bottom<game.h);game.y=game.h-20;game.vy=0;tick(game,.02);assert.ok(h.result());game.destroy();
 });
 
 test('Bond awards clean placements and ends once on a occupied gap',()=>{
  const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.pins=[];game.action();game.update(.37);assert.equal(game.score,100);assert.equal(game.bonds,1);assert.ok(game.speed>.5);
  game.pins=Array.from({length:100},(_,i)=>i*Math.PI*2/100);game.cooldown=0;game.action();game.update(.37);assert.deepEqual(h.result(),{score:100,bonds:1});game.destroy();
+});
+
+test('Bond accepts a second fast tap while the first vial is still in flight',()=>{
+ const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.pins=[];game.action();tick(game,.07);game.action();assert.equal(game.flights.length,2);assert.equal(h.sounds.filter(s=>s==='launch').length,2);
+ tick(game,.06);assert.equal(game.bonds,1,'first impact occurs after 120ms');assert.equal(game.flights.length,1);game.pause();game.action();assert.equal(game.flights.length,1,'pause blocks new shots');game.destroy();
+});
+
+test('Bond starts with a clear lane and supports two well-timed rapid throws',()=>{
+ const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.action();tick(game,.12);assert.equal(game.bonds,1);game.action();tick(game,.12);assert.equal(game.bonds,2);assert.equal(game.score,200);assert.equal(h.result(),null);game.destroy();
+});
+
+test('Sequence animates any neighbour swap back without spending a move if it makes no match',()=>{
+ const h=harness(),game=new SequenceEngine(h.canvas,h.cb,{motion:true});game.board=Array.from({length:49},(_,i)=>(i%7+Math.floor(i/7))%4);const original=game.board.slice();
+ for(const [from,to] of [[24,23],[24,25],[24,17],[24,31]]){game.choose(from,to);assert.equal(game.phase,'swap');assert.equal(game.moves,25);tick(game,.17);assert.equal(game.phase,'return');assert.notDeepEqual(game.board,original);game.choose(0,1);assert.equal(game.phase,'return','return animation locks duplicate input');tick(game,.17);assert.deepEqual(game.board,original);assert.equal(game.moves,25);assert.equal(game.score,0);assert.equal(game.pending,0);}
+ assert.ok(h.messages.includes('Try another pair. No move used.'));game.destroy();
+});
+
+test('Sequence long swipes choose one adjacent crystal and cancel never exchanges the board',()=>{
+ const h=harness(),game=new SequenceEngine(h.canvas,h.cb,{motion:true}),g=game.geometry(),x=g.x+g.cell*3.5,y=g.y+g.cell*3.5;
+ h.events.get('pointerdown')({clientX:x,clientY:y,pointerId:1});h.events.get('pointerup')({clientX:x+g.cell*2.4,clientY:y});assert.equal(game.swap.from,24);assert.equal(game.swap.to,25);
+ tick(game,1);const original=game.board.slice();h.events.get('pointerdown')({clientX:x,clientY:y,pointerId:1});h.events.get('pointercancel')();h.events.get('pointerup')({clientX:x-g.cell,clientY:y});assert.deepEqual(game.board,original);game.destroy();
 });
 
 test('Sequence resolves one animated swap and settles before returning the winning result',()=>{

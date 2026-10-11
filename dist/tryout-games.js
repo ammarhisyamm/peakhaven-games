@@ -1,5 +1,5 @@
-import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceSwap,settleSequence,sequenceTarget,SEQUENCE_MOVES} from './sequence-rules.js';
-import {drawSprite,crystalSprites,vialSprites} from './gameplay-art.js';
+import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,SEQUENCE_MOVES} from './sequence-rules.js';
+import {drawSprite,drawBottleObstacle,crystalSprites,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 
 const TAU=Math.PI*2;
@@ -77,39 +77,39 @@ export class OrbitEngine extends MiniEngine{
 export class RidgeEngine extends MiniEngine{
  constructor(canvas,cb,options){super(canvas,cb,options);this.y=this.top+(this.h-this.top-this.bottom)*.5;this.vy=0;this.started=false;this.gates=[];this.speed=148;this.spawn=0;this.trail=[];this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
  get playerX(){return Math.min(170,this.w*.28);}
- get floor(){return this.h-this.bottom;}
+ get floor(){return this.h;}
  get gap(){return Math.max(140,Math.min(245,(this.floor-this.top)*.36)-this.score*2.8);}
  action(){if(this.paused||this.ended)return;this.started=true;this.vy=-Math.sqrt((this.floor-this.top)/430)*282;this.cb.sound('flap');this.cb.message('');}
  update(dt){
   if(!this.started)return;this.speed=Math.min(300,148+this.score*3.2);this.vy+=640*dt;this.y+=this.vy*dt;this.spawn-=dt;
-  if(this.spawn<=0){const margin=this.gap/2+38,center=this.top+margin+Math.random()*Math.max(1,this.floor-this.top-margin*2);this.gates.push({x:this.w+30,center,passed:false});this.spawn=Math.max(1.02,1.9-this.score*.014);}
-  for(const g of this.gates){g.x-=this.speed*dt;if(!g.passed&&g.x+27<this.playerX-18){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.playerX,this.y,'#8fffff',12);}
-   if(g.x-27<this.playerX+17&&g.x+27>this.playerX-17&&(this.y-29<g.center-this.gap/2||this.y+29>g.center+this.gap/2)){this.crash();return;}}
-  this.gates=this.gates.filter(g=>g.x>-60);if(this.y-28<this.top||this.y+28>this.floor)this.crash();
+  if(this.spawn<=0){const margin=this.gap/2+38,center=this.top+margin+Math.random()*Math.max(1,this.floor-this.top-margin*2);this.gates.push({x:this.w+40,center,gap:this.gap,passed:false});this.spawn=Math.max(1.02,1.9-this.score*.014);}
+  for(const g of this.gates){const gap=g.gap??this.gap;g.x-=this.speed*dt;if(!g.passed&&g.x+35<this.playerX-18){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.playerX,this.y,'#8fffff',12);}
+   if(g.x-35<this.playerX+17&&g.x+35>this.playerX-17&&(this.y-29<g.center-gap/2||this.y+29>g.center+gap/2)){this.crash();return;}}
+  this.gates=this.gates.filter(g=>g.x>-60);if(this.y-28<0||this.y+28>this.floor)this.crash();
   if(this.motion){this.trail.push({x:this.playerX,y:this.y});for(const p of this.trail)p.x-=this.speed*dt;if(this.trail.length>24)this.trail.shift();}
  }
  crash(){if(this.ended)return;this.burst(this.playerX,this.y,'#ffd383');this.cb.sound('miss');this.end({score:this.score,gates:this.score});}
  onResize(oldW,oldH){this.y*=this.h/oldH;for(const g of this.gates){g.x*=this.w/oldW;g.center*=this.h/oldH;}}
- drawGate(x,y,h){if(h<=0)return;const c=this.ctx,g=c.createLinearGradient(x-27,0,x+27,0);g.addColorStop(0,'#f0fcffdd');g.addColorStop(.12,'#096dcbbf');g.addColorStop(.5,'#19c9ef80');g.addColorStop(.82,'#096dcbbf');g.addColorStop(1,'#bafaffee');c.fillStyle=g;rounded(c,x-27,y,54,h,9);c.fill();c.strokeStyle='#a8f6ff';c.lineWidth=2;c.stroke();c.fillStyle='#d0ecff';rounded(c,x-31,y+h-8,62,8,3);c.fill();}
- draw(){const c=this.ctx;c.save();if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.28;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.16,0,TAU);c.fill();}c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=12;for(const g of this.gates){const top=g.center-this.gap/2,bottom=g.center+this.gap/2;this.drawGate(g.x,this.top,top-this.top);this.drawGate(g.x,bottom,this.floor-bottom);c.fillStyle='#edfdff';rounded(c,g.x-31,bottom,62,8,3);c.fill();}c.shadowColor='#8fffff';c.shadowBlur=16;const bob=this.started?0:Math.sin(this.time*2.8)*6;drawSprite(c,'vial-cyan',this.playerX,this.y+bob,48,80,clamp(this.vy*.0011,-.28,.6));c.restore();}
+ gateSegments(g){const gap=g.gap??this.gap;return{top:g.center-gap/2,bottom:g.center+gap/2};}
+ draw(){const c=this.ctx;c.save();if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.28;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.16,0,TAU);c.fill();}c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;for(const g of this.gates){const{top,bottom}=this.gateSegments(g);drawBottleObstacle(c,g.x,top,top,70,true);drawBottleObstacle(c,g.x,bottom,this.h-bottom,70,false);}c.shadowColor='#8fffff';c.shadowBlur=16;const bob=this.started?0:Math.sin(this.time*2.8)*6;drawSprite(c,'vial-cyan',this.playerX,this.y+bob,48,80,clamp(this.vy*.0011,-.28,.6));c.restore();}
  finish(){this.crash();}
 }
 
 export class BondEngine extends MiniEngine{
- constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.speed=.5;this.bonds=0;this.pins=[0,Math.PI/2,Math.PI,Math.PI*1.5];this.flight=null;this.cooldown=0;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,this.pins.length,'1×');cb.message('Tap anywhere to send a vial into a clear gap.');}
+ constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.speed=2.1;this.bonds=0;this.pins=[Math.PI*.25,Math.PI*.75,Math.PI*1.25,Math.PI*1.75];this.flights=[];this.cooldown=0;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,this.pins.length,'1×');cb.message('Tap anywhere to send a vial into a clear gap.');}
  geometry(){const room=this.h-this.top-this.bottom;return{x:this.w/2,y:this.top+room*.37,r:Math.min(155,room*.26,this.w*.31),launch:this.h-this.bottom-60};}
- action(){if(this.paused||this.ended||this.flight||this.cooldown>0)return;this.flight={progress:0};this.cooldown=.18;this.cb.sound('launch');this.cb.message('');}
- update(dt){this.rotation+=this.speed*dt;this.cooldown=Math.max(0,this.cooldown-dt);if(!this.flight)return;this.flight.progress+=dt/.36;if(this.flight.progress<1)return;const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<.27);this.flight=null;if(collision){this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds});return;}this.pins.push(target);this.bonds++;this.score+=100;this.speed=Math.min(1.7,.5+this.pins.length*.035);const g=this.geometry();this.burst(g.x,g.y+g.r);this.cb.hud(this.score,this.pins.length,`${Math.min(9,1+Math.floor(this.score/300))}×`);this.cb.sound('bond');this.cb.effect?.('BONDED!','bond');}
+ action(){if(this.paused||this.ended||this.cooldown>0)return;this.flights.push({progress:0,sprite:vialSprites[(this.pins.length+this.flights.length)%4]});this.cooldown=.065;this.cb.sound('launch');this.cb.message('');}
+ update(dt){this.rotation+=this.speed*dt;this.cooldown=Math.max(0,this.cooldown-dt);for(const flight of this.flights){flight.progress+=dt/.12;if(flight.progress<1)continue;const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<.22);if(collision){this.flights=[];this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds});return;}this.pins.push(target);this.bonds++;this.score+=100;this.speed=Math.min(4.2,2.1+this.bonds*.04);const g=this.geometry();this.burst(g.x,g.y+g.r);this.cb.hud(this.score,this.pins.length,`${Math.min(9,1+Math.floor(this.score/300))}×`);this.cb.sound('bond');this.cb.effect?.('BONDED!','bond');}this.flights=this.flights.filter(f=>f.progress<1);}
  draw(){const c=this.ctx,g=this.geometry();ring(c,g.x,g.y,g.r,this.rotation);c.save();const glow=c.createRadialGradient(g.x,g.y,4,g.x,g.y,50);glow.addColorStop(0,'#dcffff');glow.addColorStop(.4,'#00c9ff');glow.addColorStop(1,'#024fc7');c.fillStyle=glow;c.shadowColor='#03d9ff';c.shadowBlur=24;c.beginPath();c.arc(g.x,g.y,47,0,TAU);c.fill();c.strokeStyle='#c1ffff';c.lineWidth=3;c.stroke();c.shadowBlur=0;
   for(let i=0;i<this.pins.length;i++){const a=this.pins[i]+this.rotation,px=g.x+Math.cos(a)*g.r,py=g.y+Math.sin(a)*g.r;c.strokeStyle='#a1ecffb0';c.lineWidth=3;c.beginPath();c.moveTo(g.x+Math.cos(a)*48,g.y+Math.sin(a)*48);c.lineTo(px,py);c.stroke();drawSprite(c,vialSprites[i%4],px,py,30,52,a-Math.PI/2);}
-  const y=this.flight?g.launch-(g.launch-g.y-g.r)*Math.min(1,this.flight.progress):g.launch;c.shadowColor='#8fffff';c.shadowBlur=18;drawSprite(c,vialSprites[this.pins.length%4],g.x,y,45,78);c.restore();}
+  c.shadowColor='#8fffff';c.shadowBlur=18;drawSprite(c,vialSprites[(this.pins.length+this.flights.length)%4],g.x,g.launch,45,78);for(const flight of this.flights){const y=g.launch-(g.launch-g.y-g.r)*Math.min(1,flight.progress);drawSprite(c,flight.sprite,g.x,y,45,78);}c.restore();}
  finish(){this.end({score:this.score,bonds:this.bonds});}
 }
 
 export class SequenceEngine extends MiniEngine{
  constructor(canvas,cb,options){
   super(canvas,cb,options);this.board=createSequenceBoard(this.level);this.palette=Math.min(7,4+Math.floor((this.level-1)/5));this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;
-  this.onpointerdown=e=>{this.keyboard=false;this.pointerStart=this.pointer(e);canvas.setPointerCapture?.(e.pointerId);};this.onpointerup=e=>{if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),end=this.cellAt(...this.pointer(e));this.pointerStart=null;if(start!==null&&end!==null&&end!==start)this.choose(start,end);else if(start!==null)this.choose(start);};this.onpointercancel=()=>{this.pointerStart=null;};for(const name of ['pointerdown','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
+  this.onpointerdown=e=>{this.keyboard=false;this.pointerStart=this.pointer(e);canvas.setPointerCapture?.(e.pointerId);};this.onpointerup=e=>{if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),[x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];this.pointerStart=null;if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10){this.choose(start);return;}const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointercancel=()=>{this.pointerStart=null;};for(const name of ['pointerdown','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
  }
  geometry(){const size=Math.min(this.w-36,this.h-this.top-this.bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:this.top+(this.h-this.top-this.bottom-size)/2,size,cell};}
  cellAt(x,y){const g=this.geometry();if(x<g.x||x>=g.x+g.size||y<g.y||y>=g.y+g.size)return null;return Math.floor((y-g.y)/g.cell)*7+Math.floor((x-g.x)/g.cell);}
@@ -117,9 +117,9 @@ export class SequenceEngine extends MiniEngine{
   if(this.paused||this.ended||this.pending)return;if(swapWith!==null)this.selection=index;
   if(this.selection===null){this.selection=index;this.cursor=index;this.cb.sound('select');this.cb.message(`Row ${Math.floor(index/7)+1}, column ${index%7+1} selected. Choose a neighbour.`);return;}
   if(this.selection===index&&swapWith===null){this.selection=null;return;}
-  const from=this.selection,to=swapWith??index,next=sequenceSwap(this.board,from,to);
+  const from=this.selection,to=swapWith??index,next=sequenceExchange(this.board,from,to);
   if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message('Swap neighbours to make a line of three.');return;}
-  this.selection=null;this.cursor=to;this.moves--;this.chain=0;this.swap={from,to,next};this.phase='swap';this.pending=this.motion?.16:.001;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
+  const matched=sequenceMatches(next).size>0;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=this.motion?.16:.001;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
  }
  resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();for(const i of matches)this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);this.board=this.board.map((v,i)=>matches.has(i)?-1:v);this.score+=matches.size*50*(1+this.chain);this.chain++;this.cb.sound('crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=this.motion?.24:.001;}
  finishMove(){
@@ -129,7 +129,8 @@ export class SequenceEngine extends MiniEngine{
  }
  update(dt){
   if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
-  if(this.phase==='swap'){this.board=this.swap.next;this.swap=null;this.resolveMatches();return;}
+  if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=this.motion?.16:.001;return;}this.swap=null;this.resolveMatches();return;}
+  if(this.phase==='return'){this.board=this.swap.original;this.swap=null;this.phase=null;this.pending=0;this.cb.sound('undo');this.cb.message('Try another pair. No move used.');return;}
   if(this.phase==='clear'){this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,Math.random,7,this.palette);this.phase='fall';this.pending=this.motion?.28:.001;return;}
   if(this.phase==='fall'){this.falls.clear();if(this.score>=this.target)this.finishMove();else this.resolveMatches();}
  }
@@ -138,7 +139,7 @@ export class SequenceEngine extends MiniEngine{
  draw(){
   const c=this.ctx,g=this.geometry();c.save();c.fillStyle='#03183de8';rounded(c,g.x-5,g.y-5,g.size+10,g.size+10,16);c.fill();c.strokeStyle='#8cefff77';c.lineWidth=2;c.stroke();c.save();rounded(c,g.x,g.y,g.size,g.size,12);c.clip();
   for(let i=0;i<this.board.length;i++){const row=Math.floor(i/7),col=i%7,v=this.board[i];let x=g.x+(col+.5)*g.cell,y=g.y+(row+.5)*g.cell;c.fillStyle='#123965a0';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();if(v<0)continue;
-   if(this.phase==='swap'&&(i===this.swap.from||i===this.swap.to)){const to=i===this.swap.from?this.swap.to:this.swap.from,t=1-clamp(this.pending/.16,0,1);x+=((to%7)-col)*g.cell*t;y+=(Math.floor(to/7)-row)*g.cell*t;}
+   if((this.phase==='swap'||this.phase==='return')&&(i===this.swap.from||i===this.swap.to)){const to=i===this.swap.from?this.swap.to:this.swap.from,t=1-clamp(this.pending/.16,0,1);x+=((to%7)-col)*g.cell*t;y+=(Math.floor(to/7)-row)*g.cell*t;}
    if(this.phase==='fall')y+=(this.falls.get(i)||0)*g.cell*(clamp(this.pending/.28,0,1)**2);drawSprite(c,crystalSprites[v],x,y,g.cell*.86,g.cell*.86);
    if(this.selection===i||(this.keyboard&&this.cursor===i)){c.strokeStyle=this.selection===i?'#ffe77a':'#e6ffff';c.lineWidth=3;rounded(c,g.x+col*g.cell+3,g.y+row*g.cell+3,g.cell-6,g.cell-6,9);c.stroke();}
   }c.restore();c.restore();
