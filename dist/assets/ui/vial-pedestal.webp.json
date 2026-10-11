@@ -1,0 +1,9 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: transparent isolated game selection pedestal sprite for PH Arcade alpine bottle laboratory. Primary request: one beautiful empty circular low silver chrome display platform, viewed slightly from above at 20 degree angle, elliptical in perspective, with a luminous cyan glass top and layered cobalt-blue and chrome base, matching premium 3D alpine casual bottle game art. Platform is wide, squat and symmetric. Leave the entire top empty: bottle icon will be placed live above it. Render sharp premium polished metal, subtle ice blue reflective surface, subtle contact shadow underneath, no large glow cloud. Composition: isolated pedestal fills lower middle of a 3:2 transparent canvas with generous empty space above and 6 percent margin. No text, logo, buttons, bottles, numbers, mountains or background. True transparent background.",
+  "createdAt": "2026-10-11T04:07:59.565Z",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-f54654d1-3ca2-47f0-a545-73c48bcceef2.png",
+  "sourceSha256": "7b3891ea0b4701654ce3fb50e53c283d00cf508d456858f0be550828ba6eaff5",
+  "derivation": "Proportional resize, WebP encoding; transparent UI alpha preserved",
+  "purpose": "PH Arcade Alpine Lab interface material. Live UI text and controls remain separate."
+}

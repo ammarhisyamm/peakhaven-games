@@ -1,6 +1,6 @@
 ---
 name: "Peak Haven Arcade"
-description: "An illustrated alpine bottle adventure with real, local casual games."
+description: "Alpine Lab: physical bottle displays and live local games in a continuous illustrated world."
 colors:
   ink: "#0a1b3d"
   muted: "#506a96"
@@ -10,80 +10,54 @@ colors:
   gold: "#ffd24d"
   white: "#f8fafc"
   pure-white: "#ffffff"
-  outer-sky: "#e6f0fa"
-  shell-ice: "#eff7ff"
-  panel-ice: "#f8fcff"
-  panel-shade: "#edf6ff"
   world-navy: "#041d4c"
-  hud-navy: "#03245dcf"
-  hud-label: "#aaeaff"
-  control-rim: "#94f7ff"
-  secondary-ink: "#12346b"
-  secondary-edge: "#bbd4f3"
-  nav-ink: "#526f98"
-  nav-active: "#0072ff"
-  chip-ice: "#e3effc"
-  chip-ink: "#173365"
-  disabled-surface: "#b9cbdf"
-  disabled-edge: "#d9e5f1"
-  disabled-ink: "#415675"
-  liquid-cyan: "#08bffc"
-  liquid-pink: "#fa35b6"
-  liquid-gold: "#ffd325"
-  liquid-purple: "#a63eff"
-  liquid-green: "#20cf7d"
-  liquid-blue: "#3572ff"
-  nav-pill: "#0c2a5b"
-  nav-rim: "#7dbcfb"
-  nav-shadow: "#001638"
-  nav-highlight: "#c4e7ff"
-  nav-label-muted: "#9aaccb"
-  nav-active-blue: "#0b3978"
-  nav-cyan: "#08c7ff"
-  nav-cyan-highlight: "#7bf1ff"
-  nav-active-glow: "#008dff"
-  nav-icon-rim-glow: "#28b9ff"
-  nav-icon-cyan: "#72ecff"
-  nav-icon-glow: "#00c5ff"
-  hud-rim: "#bceeff"
-  hud-cyan: "#22e1f1"
-  hud-blue: "#078ef0"
-  hud-deep-blue: "#0755dc"
-  hud-shadow: "#002c8d"
-  hud-glow: "#007bd3"
-  hud-glass: "#e8ffff"
-  hud-star: "#ffdf69"
-  hud-gold: "#ffc629"
-  hud-star-rim: "#fff5a8"
-  hud-icon-shadow: "#00438a"
-  hud-glyph-ice: "#e2ffff"
-  hud-glyph-gold: "#ffe28c"
-  hud-flame: "#ff9b31"
-  hud-flame-rim: "#fff0ab"
-  game-tile-rim: "#c6dff6"
-  game-tile-shadow: "#28648b"
-  game-tile-ink: "#102e61"
-  game-tile-hover: "#72d9ff"
-  game-tile-hover-glow: "#087eb2"
-  world-panel-top: "#0a3d78"
-  world-panel-base: "#051d48"
-  world-copy: "#f4fcff"
-  world-muted-copy: "#cbeaff"
-  world-edge: "#77cdff"
+  scene-copy: "#f4fcff"
+  scene-muted: "#cceaff"
+  console-navy: "#061e45"
+  display-navy: "#031a3dec"
+  category-navy: "#052959ed"
+  category-copy: "#d6f3ff"
+  category-rim: "#7ccfff6b"
+  category-cyan: "#00cffa"
+  category-blue: "#0878ef"
+  category-active-rim: "#b6f8ff"
   world-control-cyan: "#00e0ff"
   world-control-blue: "#039fff"
   world-control-base: "#0061ff"
   world-control-rim: "#d5ebff"
   world-secondary-top: "#145b9b"
   world-secondary-base: "#0b2e65"
+  secondary-rim: "#8dc9f4"
+  claim-top: "#ffe776"
+  claim-mid: "#ffce38"
+  claim-base: "#ffaa00"
+  claim-ink: "#102852"
+  claim-rim: "#fff3ab"
+  disabled-top: "#577b9d"
+  disabled-base: "#2c4b72"
+  disabled-copy: "#d0e2f1"
+  disabled-rim: "#7fa9ce"
+  nav-pill: "#0c2a5bfa"
+  nav-base: "#071b40fa"
+  nav-rim: "#7dbcfb55"
+  nav-label-muted: "#9aaccb"
+  nav-active-blue: "#0b3978"
+  nav-active-base: "#082451"
+  nav-cyan: "#08c7ff"
+  nav-icon-cyan: "#72ecff"
+  hud-cyan: "#22e1f1"
+  hud-blue: "#078ef0"
+  hud-deep-blue: "#0755dc"
+  hud-rim: "#bceeff"
+  hud-label: "#ecfcff"
+  hud-star: "#ffdf69"
+  liquid-cyan: "#08bffc"
+  liquid-pink: "#fa35b6"
+  liquid-gold: "#ffd325"
+  liquid-purple: "#a63eff"
+  liquid-green: "#20cf7d"
+  liquid-blue: "#3572ff"
 typography:
-  display:
-    fontFamily: "Anybody, Inter, sans-serif"
-    fontSize: "clamp(29px, 8.2vw, 35px)"
-    fontWeight: 850
-    lineHeight: 0.98
-    letterSpacing: "-1px"
-    fontVariation: "'wdth' 115"
   headline:
     fontFamily: "Anybody, Inter, sans-serif"
     fontSize: "30px"
@@ -91,26 +65,37 @@ typography:
     lineHeight: 1.05
     letterSpacing: "-.025em"
     fontVariation: "'wdth' 115"
+  page-title:
+    fontFamily: "Anybody, Inter, sans-serif"
+    fontSize: "25px"
+    fontWeight: 850
+    lineHeight: 1.15
+    letterSpacing: "-.025em"
+    fontVariation: "'wdth' 115"
   game-title:
     fontFamily: "Anybody, Inter, sans-serif"
-    fontSize: "clamp(23px, 6.9vw, 30px)"
+    fontSize: "clamp(20px,5.7vw,27px)"
     fontWeight: 850
-    lineHeight: 1.06
+    lineHeight: 1.1
     letterSpacing: "-.04em"
     fontVariation: "'wdth' 115"
   section-title:
     fontFamily: "Anybody, Inter, sans-serif"
-    fontSize: "21px"
+    fontSize: "20px"
     fontWeight: 850
     lineHeight: 1.2
     letterSpacing: "-.025em"
     fontVariation: "'wdth' 115"
-  card-title:
+  display-label:
+    fontFamily: "Inter, sans-serif"
+    fontSize: "12px"
+    fontWeight: 850
+    lineHeight: 1.25
+  picker-label:
     fontFamily: "Inter, sans-serif"
     fontSize: "15px"
     fontWeight: 850
-    lineHeight: 1.05
-    letterSpacing: "-.03em"
+    lineHeight: 1.25
   body:
     fontFamily: "Inter, sans-serif"
     fontSize: "14px"
@@ -120,16 +105,26 @@ typography:
     fontFamily: "Inter, sans-serif"
     fontSize: "13px"
     fontWeight: 500
-    lineHeight: 1.45
+    lineHeight: 1.5
+  game-status:
+    fontFamily: "Inter, sans-serif"
+    fontSize: "12px"
+    fontWeight: 500
+    lineHeight: 1.5
   label:
     fontFamily: "Inter, sans-serif"
     fontSize: "17px"
     fontWeight: 850
     lineHeight: 1.4
+  launch-label:
+    fontFamily: "Inter, sans-serif"
+    fontSize: "21px"
+    fontWeight: 850
+    lineHeight: 1.4
   nav-label:
     fontFamily: "Inter, sans-serif"
     fontSize: "10px"
-    fontWeight: 650
+    fontWeight: 700
     lineHeight: 1.4
   nav-label-compact:
     fontFamily: "Inter, sans-serif"
@@ -138,36 +133,28 @@ typography:
     lineHeight: 1.4
   hud-value:
     fontFamily: "Inter, sans-serif"
-    fontSize: "clamp(18px, 6.4vw, 29px)"
-    fontWeight: 850
+    fontSize: "clamp(13px,calc(34px - var(--digits,1)*3px),29px)"
+    fontWeight: 900
     lineHeight: 1.12
   hud-label:
     fontFamily: "Inter, sans-serif"
-    fontSize: "clamp(9px, 2.8vw, 11px)"
-    fontWeight: 750
+    fontSize: "clamp(9px,2.8vw,11px)"
+    fontWeight: 850
     lineHeight: 1.4
-    letterSpacing: ".35px"
+    letterSpacing: ".45px"
 rounded:
   cell: "6px"
+  display-label: "8px"
+  game-message: "10px"
   field: "12px"
-  collection: "13px"
-  nav-item: "14px"
-  cover: "15px"
+  tool: "14px"
   board: "17px"
-  hud: "20px"
-  game-tile: "18px"
-  module: "19px"
-  card: "20px"
-  sheet: "21px"
-  nav: "22px"
-  nav-pill: "28px"
-  nav-active-indicator: "4px"
+  console: "20px"
   chip: "23px"
   currency: "24px"
-  home-sheet: "25px"
   dialog: "27px"
+  nav-pill: "28px"
   control: "30px"
-  desktop-shell: "33px"
   circle: "50%"
   glass-tube: "0"
   fluid-cylinder: "0 0 11px 11px"
@@ -175,13 +162,14 @@ rounded:
 spacing:
   micro: "3px"
   small: "5px"
-  control-gap: "7px"
   compact: "8px"
   inline: "10px"
   gap: "12px"
   game-inset: "14px"
-  section-inset: "18px"
+  menu-inset: "16px"
+  section-gap: "18px"
   page-inset: "20px"
+  console-inset: "22px"
   dialog-inset: "24px"
 components:
   button-primary:
@@ -189,22 +177,21 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.control}"
     padding: "12px 20px"
-    height: "52px"
+    height: "56px"
   button-secondary:
-    textColor: "{colors.secondary-ink}"
+    textColor: "{colors.pure-white}"
     typography: "{typography.label}"
     rounded: "{rounded.control}"
     padding: "12px 20px"
-    height: "52px"
+    height: "56px"
   button-gold:
-    textColor: "#15305b"
+    textColor: "{colors.claim-ink}"
     typography: "{typography.label}"
     rounded: "{rounded.control}"
     padding: "12px 20px"
-    height: "52px"
+    height: "56px"
   button-disabled:
-    backgroundColor: "{colors.disabled-surface}"
-    textColor: "{colors.disabled-ink}"
+    textColor: "{colors.disabled-copy}"
     rounded: "{rounded.control}"
   name-input:
     backgroundColor: "{colors.pure-white}"
@@ -213,210 +200,199 @@ components:
     padding: "10px"
     height: "48px"
   navigation:
-    textColor: "{colors.nav-ink}"
+    textColor: "{colors.nav-label-muted}"
     typography: "{typography.nav-label}"
-    rounded: "{rounded.nav-item}"
+    rounded: "{rounded.console}"
     height: "60px"
   navigation-active:
-    backgroundColor: "{colors.ice}"
-    textColor: "{colors.nav-active}"
-    rounded: "{rounded.nav-item}"
+    textColor: "{colors.pure-white}"
+    rounded: "{rounded.console}"
   category-chip:
-    backgroundColor: "{colors.chip-ice}"
-    textColor: "{colors.chip-ink}"
+    backgroundColor: "{colors.category-navy}"
+    textColor: "{colors.category-copy}"
     rounded: "{rounded.chip}"
     padding: "9px 7px"
-    height: "46px"
-  game-card:
-    backgroundColor: "{colors.pure-white}"
-    rounded: "{rounded.card}"
-  game-hud:
-    backgroundColor: "{colors.hud-navy}"
+    height: "44px"
+  lab-console:
+    textColor: "{colors.scene-copy}"
+    rounded: "{rounded.console}"
+    padding: "22px"
+  game-display:
     textColor: "{colors.pure-white}"
-    rounded: "{rounded.hud}"
-    padding: "9px 5px"
-    height: "70px"
+    height: "150px"
+  game-hud:
+    textColor: "{colors.pure-white}"
+    rounded: "{rounded.console}"
+    padding: "8px 7px"
+    height: "64px"
   sort-tube:
     rounded: "{rounded.glass-tube}"
-    width: "73px"
-    height: "210px"
+    width: "auto"
+    height: "min(180px,calc((100dvh - 438px)*.48))"
   merge-chamber:
     width: "456px"
     height: "490px"
   game-tool:
     textColor: "{colors.pure-white}"
-    rounded: "{rounded.card}"
-    padding: "9px 5px 6px"
-    width: "70px"
-    height: "70px"
+    rounded: "{rounded.tool}"
+    padding: "5px 2px"
+    height: "56px"
 ---
 
 # Design System: Peak Haven Arcade
 
 ## Overview
 
-**Creative North Star: "The Alpine Bottle Adventure"**
+**Creative North Star: "The Alpine Lab"**
 
-Peak Haven Arcade is a luminous alpine game world: blue castles and winding cyan paths, a happy silver-capped glass bottle companion, collectible short vials, and silver, blue, and gold reward chests. The supplied October 10 reference images and later gameplay references establish its visual authority. This approved identity supersedes the former robot and Nunito system.
+PH Arcade is a luminous alpine bottle laboratory. A happy silver-capped glass bottle companion, collectible short vials, white PH Arcade logo and official Peak Haven symbol preserve the supplied brand identity. Chrome and cobalt consoles, cyan display pedestals, gold treasury trays and bottle racks give the interface physical places for its tasks. The approved bottle identity supersedes the former robot and Nunito system.
 
-A mobile content column over edge-to-edge viewport scenes combines full raster environments with live game pieces, legible navy information surfaces, and glowing glass-and-metal controls. Anybody supplies the wide geometric display voice; Inter carries instructions, labels, and saved statistics. Physical highlights belong to glass, metal, and actions. Illustration supplies atmosphere while boards, scores, progress, and reward states remain interactive and truthful.
+Environment, furniture, objects and live controls form one scene. The sharp portrait environment scrolls with the document and its displays; the peripheral blurred scenery and readability gradient stay fixed. Anybody supplies wide geometric headings and Inter carries practical reading. Artwork establishes atmosphere and material; live HTML, canvas and game state own every label, action, score, liquid, unlock and reward.
 
 **Key Characteristics:**
 
-- A mobile content column with five visible navigation labels outside gameplay; backgrounds fill every viewport edge.
-- White PH Arcade logo, official Peak Haven symbol, and one glass bottle mascot.
-- Illustrated alpine, crystal-cave, and botanical-glasshouse environments behind live games.
-- Navy information, electric blue actions, cyan glass edges, and gold reward or selection feedback.
-- Keyboard states, numbered or named pieces, local progress, and optional decorative motion.
+- A continuous illustrated world with a centered mobile content column and inset navy navigation.
+- White PH Arcade identity, one separate bottle mascot and proportional game objects.
+- Physical chrome consoles, cyan pedestals, gold reward trays and bottle racks.
+- Navy reading surfaces, electric blue actions, cyan glass edges and gold reward or selection feedback.
+- Actual local progress, keyboard states, named or numbered pieces and optional decorative motion.
 
 ## Colors
 
-The normative palette combines deep navy, electric blue, cyan glass highlights, icy information surfaces, and warm gold. All seven root color properties are recorded in the frontmatter under their source names, including the distinction between the root off-white and literal white content. Other listed colors are reused component or game-state values.
+Deep navy anchors the laboratory; electric blue and cyan illuminate controls and glass, with warm gold for rewards. The frontmatter records reused values from the final stylesheet cascade. Root colors retain their source names; translucent values retain their alpha. Raster material colors are governed by the supplied assets rather than invented CSS approximations.
 
 ### Primary
 
-- **Electric action blue:** `blue` drives the brand accent. The primary button uses a blue gradient, a `control-rim` edge, white text, and an inset highlight; the larger gameplay action strengthens the cyan top and glow.
-- **Glass cyan:** `sky` supplies luminous brand highlights, selection, and environmental continuity. It complements navy rather than replacing a readable text surface.
+- **Electric action blue:** `blue` and the `world-control-*` gradient build the main action face. The light control rim distinguishes a pressable object from the scene.
+- **Glass cyan:** `sky`, category selection and navbar cyan identify active controls and material highlights. HUD cards use their own glossy cyan-to-blue gradient.
 
 ### Secondary
 
-- **Game liquids:** `liquid-cyan`, `liquid-pink`, `liquid-gold`, `liquid-purple`, `liquid-green`, and `liquid-blue` are the six numbered Lab Sort colors and game feedback palette. They identify pieces; they do not define a second general-purpose interface palette.
+- **Game liquids:** the six `liquid-*` colors identify live numbered Lab Sort contents and game pieces. They remain a game-state palette rather than a general menu theme.
 
 ### Tertiary
 
-- **Reward gold:** `gold` identifies coins, stars, selection or hint outlines, and keyboard focus. Claim actions use a light-to-gold gradient with navy type. Reward meaning comes from labels and real state alongside color.
+- **Reward gold:** `gold`, the claim gradient and warm star color mark earned rewards, primary claim actions and keyboard or puzzle selection. Color always accompanies an actual label, icon or state.
 
 ### Neutral
 
-- **Mountain navy:** `ink` is the global foreground. `world-navy` is the gameplay base; `hud-navy` and `hud-label` preserve readability over scene art.
-- **Ice and white:** `ice`, `white`, `pure-white`, `shell-ice`, `panel-ice`, `panel-shade`, and `outer-sky` distinguish information planes from the illustrated world.
-- **Supporting copy and states:** `muted`, `nav-ink`, `secondary-ink`, and `chip-ink` provide dark copy on light surfaces. `nav-active` is the selected light-nav foreground. Disabled controls use their own surface, edge, and ink trio.
+- **Laboratory navy:** `world-navy`, `console-navy`, `display-navy` and category navy supply reading and object-label planes. Secondary controls use a dark blue gradient with white text.
+- **Ice-white copy:** `scene-copy` and `scene-muted` carry text on console furniture. The white name field retains dark `ink`; its light surface is a form treatment, not a page sheet.
+- **Navigation and disabled states:** muted navy-tab labels become white with a cyan active treatment. Disabled controls use a desaturated blue face and pale copy without action glow.
 
-**The Live World Rule.** Illustration establishes the environment; game boards, scores, loading progress, and earned states must be rendered from actual state.
+**The Live World Rule.** Illustration establishes the environment; game boards, scores, loading progress and earned states must be rendered from actual state.
 
-Sidecar tonal ramps are synthesized preview metadata, not additional production colors. No retired robot palette or superseded light canvas colors are normative.
+Sidecar tonal ramps are synthesized preview metadata, not additional production colors. Single-purpose material glints and veil gradients remain snippets, not an expanded general-purpose palette.
 
 ## Typography
 
 **Display Font:** locally hosted variable Anybody, followed by Inter and sans-serif.
 **Body Font:** locally hosted variable Inter, followed by sans-serif.
 
-Monument Extended was unavailable; Anybody with the observed wide axis is the explicit substitute. Both font files declare weights 100–900 and swap loading. The display voice is broad, confident, and compact; the body remains plain and readable.
+Anybody with its wide axis is the established substitute for unavailable Monument Extended. Both font files declare weights 100–900 with swap loading. Broad, compact headings contrast with plain instructions and tabular statistics. The PH Arcade wordmark stays artwork.
 
 ### Hierarchy
 
-- **Display:** the responsive home heading uses the frontmatter display clamp, tight line height, wide axis, and negative tracking. At the narrow breakpoint its inherited size may be overridden by the final responsive clamp; record the cascade, not an earlier fixed heading size.
-- **Headline:** standard page headings use the headline role. Game titles use their own responsive clamp and tighter tracking; section headings use the smaller section-title role.
-- **Card title:** the horizontally scrolling game shelf uses Inter at the card-title role; it does not inherit the display face.
-- **Body / description:** the global body role sets the interface; paragraphs commonly use the description role and a slightly more generous line height. Gameplay messages remain short and status-focused.
-- **Label / HUD:** primary actions use the label role. Navigation labels stay visible; HUD values use tabular numbers and the hud-value role, with the compact hud-label directly above. HUD values reduce to 23px on narrow screens.
+- **Headline / page title:** the default headline remains for results and general headings; current chooser and puzzle headings use the smaller page-title role.
+- **Game title / section title:** game titles respond to width; world section headings stay compact. Profile names wrap anywhere and use Anybody; at the narrow breakpoint the name occupies a full second row below the avatar and edit action.
+- **Display label / picker label:** home object labels use bold Inter. The two-column chooser uses the larger picker role. These labels sit on their own navy plaque beneath proportional objects.
+- **Body / description:** general interface text uses the body role; menu descriptions normally use the description role. Gameplay status has its own compact role with a navy backing.
+- **Action / navigation:** default actions use the label role; Play Now uses the larger launch label. Five navigation labels remain visible at both recorded sizes.
+- **HUD:** values use tabular numbers and shrink according to actual digit count. Labels use the compact responsive HUD role; neither values nor glyphs stretch to fill the card.
 
 **The Two Voices Rule.** Use Anybody for wide display headings and Inter for practical reading. Preserve the white PH Arcade logo artwork rather than reconstructing it with text.
 
+Existing 7–11px auxiliary calendar, achievement and stat captions are inherited density compromises, not a body-text scale to copy into new instructions.
+
 ## Layout
 
-The centered shell is `width:min(100%,480px)` and fills the mobile viewport. Non-game pages reserve `84px + env(safe-area-inset-bottom)` for fixed bottom navigation. The current header is an absolute 100px overlay, with a responsive logo width and real 44px-minimum currency and settings actions. The home text remains on the left with a bright legibility wash; the bottle mascot occupies the right.
+The live column is `width:min(100%,480px)`. Menus reserve `112px + env(safe-area-inset-bottom)` beneath content. The sharp central artwork is an absolute document layer centered at the same width, with cover sizing and top alignment. The fixed peripheral layer extends 20px beyond the viewport, blurs by 24px and dims to .55; the fixed tint maintains legibility. No decorative scroll parallax moves interactive targets. The navbar remains fixed above the safe area.
 
-The game shelf is a horizontally scrolling row of 120–126px tiles with 10px gaps and proximity scroll snapping. Each tile pairs one proportional, transparent game illustration with its title; the home shelf does not repeat a large cover, description, and play badge for every game. The larger free-play cards retain their full scene art. Recent games also scroll horizontally. The map preserves the original three chapters of six missions and procedurally continues with six-step chapters that rotate all five games, a cyan winding path, numbered or locked platforms, a selected-level preview, and the large play action. Those map positions are a surface composition, not a reusable page grid.
+The menu header is a relative 92px row with 16px gutters, a proportional 126px brand mark, two actual wallet controls and a 44px settings action. Normal page gutters are 16px, reducing to 12px at 370px and narrower. Brand and currency dimensions reduce without distorting their icons. No breakpoint introduces a desktop sidebar or phone frame.
 
-Gameplay and loading omit the site header and bottom navigation. Game worlds fill the viewport, use 16px top and 14px side insets, and apply a navy gradient veil behind header, HUD, and lower controls. Tower uses sunlit alpine terraces; Merge uses a submerged coral lab; Lab Sort uses a botanical glasshouse; Peak Blocks uses a violet crystal cavern; Bottle Mahjong uses a moonlit temple garden. These are full scene backgrounds behind separate boards and controls.
+Reusable spatial grammar is an object display above a live navy plaque, or a framed console containing one task. Console padding is 22px; slim consoles use 16px. Home uses a three-column display grid with 16px row and 8px column gaps; the full chooser uses two columns with 24px row and 16px column gaps. Archive bottles use three columns; compact profile racks use six. Puzzle nodes use five equal columns, reducing to four at the narrow breakpoint, and remain circular. Route-specific first-viewport composition belongs in the surface brief.
 
-Tower and Merge have transparent 480:580 canvas frames sized from the remaining viewport height. Tower fits individual bottle crops into a logical 124×170 maximum, with 164px stack spacing and a camera target that holds the top bottle around y=320. This keeps the active bottle large and readable rather than shrinking the whole stack. Merge places its dimensional chamber at x=12, y=72 with a logical 456×490 footprint; the live vial physics occupy its transparent interior. Lab Sort wraps tubes, widening the hit area into three columns when there are more than five tubes and four columns when there are more than six. Peak Blocks has an 8×8 square board with 3px cell gaps, three piece slots, and tool controls. Mahjong has a positioned 6:5 layered board. Game actions and puzzle tools follow the board; instructions remain in a polite status region.
-
-At every width, illustrations fill the viewport without a rounded outer shell or page gutters. Live content stays within 480px; the floating nav is inset 16px and stays above the safe area. At 370px and narrower, header and game side insets reduce to 10px, the logo is 100px wide, and pieces and tubes adjust. At viewport heights of 730px and below, HUD, action, tool, and board spacing compress to leave room for live play. At heights of 900px and above, the map path grows. No breakpoint introduces a desktop sidebar.
+Gameplay and loading omit the menu header and navigation. Gameplay keeps header, glossy three-card HUD, objective, board and control dock in one stable camera. The final game inset is 8px top, 14px sides and 14px bottom; narrow sides reduce to 10px. Tower and Merge retain a proportional 480:580 canvas whose width responds to remaining viewport height. Blocks has a square 8×8 board, three piece slots and a dock. Sort wraps proportional glass tubes into three or four columns; Mahjong retains a 6:5 layered board. Board dimensions respond to available height without stretching source sprites. Essential game movement and the Tower stack camera remain gameplay, not decorative page movement.
 
 ## Elevation & Depth
 
-This world uses illustrated depth plus functional glass and metal. Primary controls have a light rim and inset specular highlight with soft blue shadow; the larger game action adds a stronger cyan glow. HUD panels use a dark translucent face and a restrained inset blue glow. Sort tubes use a raster clear-glass cylinder with dimensional chrome rim and base, layered above live liquid; selected glass lifts and receives a soft golden glow. Merge uses a raster chrome frame, glass walls, and segmented blue base around its live canvas vials. Supporting cards use diffuse low shadows instead of receiving the full primary-action finish.
+Depth comes from the illustrated world, raster chrome furniture and functional glass highlights. Console frames use a pseudo-element with nine-slice borders; their corners keep their material thickness while the center expands. The console uses a 23px border-image width and `19% 13% 23% 13% fill` slices. Treasury furniture uses a 25px width and `21% 14% 22% 14% fill`; slim consoles use 17px and the objective frame uses 15px. Pedestals remain separate proportional raster images beneath the game or bottle object.
 
 ### Shadow Vocabulary
 
-- **Primary control:** `inset 0 2px 3px #f4ffffa8,inset 0 -3px 7px #00258d55,0 5px 12px #028ee73d`.
-- **Gameplay action:** `inset 0 2px 4px #ffffffb0,inset 0 -4px 7px #00208d66,0 0 15px #03d7ff88`.
-- **Supporting game card:** `0 5px 20px #31739c21`.
-- **Selected glass tube:** `filter:drop-shadow(0 0 8px #fff26b)` on the actual glass silhouette. Its default depth comes from the raster material; the retired CSS wall borders and box shadows are overridden.
-- **Liquid cylinder:** `inset 0 -4px 6px #04174233` inside live curved liquid bands.
-- **Dialog:** `0 18px 70px #00183f99`; its navy backdrop uses 6px blur. Bottom navigation uses 14px blur.
+- **Console contact:** `filter:drop-shadow(0 9px 9px #00102266)` on the furniture frame.
+- **Displayed object contact:** `filter:drop-shadow(0 5px 4px #01234877)` on proportional game art.
+- **Primary action:** `inset 0 2px 3px #fff,inset 0 -4px 8px #00258d88,0 4px 0 #0258b5,0 8px 24px #007be759`.
+- **Navbar:** `0 12px 32px #00163875,inset 0 1px 0 #c4e7ff26`, with 14px backdrop blur.
+- **Dialog:** `0 16px 50px #001028b3`, with 6px backdrop blur.
+- **Toast:** `0 4px 20px #003b7755` for temporary feedback above the world.
+- **Selected glass tube:** `filter:drop-shadow(0 0 8px #fff26b)` on the actual silhouette.
+- **Liquid cylinder:** `inset 0 -4px 6px #04174233` inside the live liquid bands.
 
-**The Material Rule.** Use rims, specular highlights, and glow where glass, metal, selection, or a primary game action explains them. Do not give every supporting panel the same luminous treatment.
+**The Material Rule.** Use rims, specular highlights, contact shadows and glow where chrome furniture, glass, selection or a primary action explains them. Keep live content separate from its material frame.
 
-CSS settling uses the root easing. Screen entrance lasts 260ms; control transforms last 150ms; loading fill lasts 180ms; mission and XP fill lasts 300ms. Pressing the primary button scales it to .96 and moves it down 2px. Fine-pointer hover brightens primary actions. Decorative mascot loops float slowly, while completed-run confetti and score impacts occur only in response to play.
+The liquid meniscus is an elliptical 7px strip; its bubble/specular layer has `inset:7px 3px 1px`. The bottle-reveal radial `#d9f5ff` is object lighting, not a page background. These material details remain intentional. The old shell shadow `#4a729b36` is overridden by the transparent shell's `box-shadow:none`; do not restore it as an Alpine Lab token.
 
-The local motion switch and `prefers-reduced-motion` suppress CSS animations and transitions. JavaScript gates impact movement, pours, confetti, particles, and decorative canvas movement with both settings. Impact text remains visible briefly without motion. Essential gameplay physics and state updates remain active. Gentle, locally synthesized sound cues are available in all five games and are on by default. The sound choice saves on this device, can be changed in Settings or from the in-game pause sheet, and begins on the first player gesture.
+The shipped entrance is 260ms with `cubic-bezier(.16,1,.3,1)`, control transitions are 150ms, loading interpolation is 180ms, and XP/puzzle progress is 300ms. A pedestal press translates down 2px; a primary press translates down 3px and scales to .98. Home's mascot is stationary. Both the local motion setting and system reduced-motion preference suppress decorative CSS and JavaScript effects while preserving essential game physics. Optional synthesized sound starts on by default after a player gesture and saves its preference locally.
 
 ## Shapes
 
-Forms are curved, tactile, and materially specific. Frontmatter radius tokens describe actual cells, inputs, covers, cards, HUD capsules, dialogs, and controls. Pill-like actions use the control radius; circular icon controls remain distinct from them. The game board frame and card corners are related but not identical.
+Curved controls and fixed-square icons sit alongside materially specific chrome and glass. Pills, dialogs, navy plaques and tools use the frontmatter radii; raster furniture corners use nine-slice geometry rather than a stretched full-image frame. Circular buttons, avatar and level nodes retain equal width and height.
 
-The white PH Arcade logo and official symbol preserve their source proportions. The happy mascot is a glass bottle with a silver cap. Collectible vials are short glass silhouettes sampled from a six-cell atlas; ordinary CSS vials and Mahjong vial sprites preserve the atlas’s 1:2 aspect ratio. Level nodes and round utility controls keep equal width and height. Canvas sprite drawing uses tight, individual source bounds for each happy or collectible vial and fits each crop proportionally; transparent margins no longer determine its apparent size. Lab Sort overlays `sort-glass.webp` above a separate live fluid cylinder. The glass has a polished elliptical rim and foot; liquid bands use cylindrical lighting, an elliptical meniscus, small bubble highlights, and numbers, with a bottom tube index. The default glass is 73×210px with a 78px button, the fluid inset is 9% top / 10% sides / 8% bottom, and dense or short layouts reduce dimensions. The chamber asset `merge-chamber.webp` supplies the chrome frame and segmented blue base without baked pieces or scores. Do not substitute the former robot or square vial crops.
+Preserve logo, mascot and game-icon proportions with contain fitting. Tower uses tight individual bottle source bounds, a logical 124×170 maximum, 164px stack spacing and a camera target holding the top bottle around y=320. Short vial atlas sprites retain a 1:2 ratio. Sort glass sits above a separate live fluid cylinder with 9% top, 10% side and 8% bottom inset; its final height is responsive up to 180px, and dense glass up to 143px. Merge's 456×490 logical chamber has no baked pieces, scores or controls.
 
 ## Components
 
 ### Buttons
 
-Tactile and clearly actionable. Primary, secondary, and gold variants share curved silhouettes and visible focus. Primary and gold faces use gradients recorded in the sidecar; secondary and ghost share the pale face in this build. Default primary actions have 52px minimum height and the frontmatter padding. The final game action is 64px high and has its own brighter finish; short viewports reduce it to 56px. Disabled controls remove glow and retain dark text. Fine-pointer hover increases brightness; active press changes scale and position.
+Glossy cyan/blue actions, dark blue secondary actions and gold claims share the control silhouette and 56px default minimum height. Dialog and section-specific labels may use smaller type on the same target. Hover brightens enabled actions on fine pointers; press changes position and scale; disabled state removes glow. General focus is a 3px gold outline at 4px offset; puzzle selections use their own gold ring. Actions preserve a 44px minimum target; the final dialog close override is also 44×44px with a square aspect ratio.
 
 ### Chips
 
-Home categories are three soft category buttons, 46px minimum height, with a pale inactive face and dark label. The selected state uses a cyan-to-blue gradient and white copy. Selection comes from actual filtering state and remains separate from main navigation.
+Three home category buttons have a dark navy face, ice-blue rim and pale label, with a cyan-to-blue selected face. Each is at least 44px tall. Actual filtering sets `aria-pressed`; main navigation remains separate.
 
 ### Cards / Containers
 
-Game cards pair a clipped scene cover with a short title, description, real record, and explicit action. The home shelf uses lighter cover-and-copy tiles on the common white sheet. Profile and rewards use icy information modules, bottle shelves, and achievement shelves. Bottle ownership is independent of equipment: owned bottles show a check, available unowned bottles show an arrow, and unavailable bottles show a lock. Equipped bottles retain their separate highlight and label. The sidecar card specimen captures the diffuse supporting-card finish, not a mandate to wrap every group in a card.
+Task containers are physical laboratory consoles, with a gold variant for treasury tasks. A nine-slice pseudo-element owns the raster frame and navy center; semantic content sits above it. The furniture layer is inert and never owns focus. Live object displays place a proportional game icon or vial above a cyan pedestal and its separate navy name plaque. They launch the actual game or open the saved bottle state. Home and chooser use these displays instead of repeated scenic cover cards.
 
 ### Inputs / Fields
 
-The profile-name field is a native input with a pale-blue stroke, white background, 12px corners, 10px padding, 16px text, and 48px minimum height. Native 22px settings checkboxes use the action blue. All retain the visible gold focus outline; form labels and dialog headings remain available to assistive technology.
+The name input remains native, white with a pale-blue stroke, dark copy, field corners, 10px padding, 16px type and 48px minimum height. Settings retain native checkboxes, labels and saved state. Native dialogs use their visible heading for the accessible name.
 
 ### Navigation
 
-Five icon-and-text tabs: Home, Arcade, Rewards, Bottles, and Profile. Each tab uses a 60px minimum height and the nav-label role inside the same inset navy pill, with 16px horizontal screen clearance and a safe-area-aware bottom offset. All pages share the dark surface, muted inactive items, and luminous cyan-edged active item. Icons use fixed square dimensions so the gamepad, gift, bottle, and profile marks keep their intended proportions. `aria-current="page"` exposes the actual selected route. Gameplay and loading focus on their own close, help, pause, and recovery controls.
+Home, Arcade, Rewards, Bottles and Profile share the established inset navy pill, 16px horizontal clearance and a safe-area-aware 12px bottom offset. Tabs are at least 60px tall. Fixed-square icons and muted inactive labels become cyan and white for the current route; `aria-current="page"` exposes selection. Gameplay and loading use their own close, help, pause and recovery controls.
 
 ### Live Gameplay and Loading
 
-The shared game header precedes three matching glossy blue stat cards, objective, and board. Each 72px card uses the same cyan-to-blue face, pale glass rim, white label, tabular value, and softly offset blue shadow as the selected primary-button treatment. Its three columns stay proportional; icon glyphs retain a fixed square aspect ratio and values shrink or ellipsize rather than distorting the artwork. Tower and Merge use keyboard-enabled canvas with external HUD and status. Lab Sort exposes tube contents bottom-to-top, selected state, numbered liquid colors, legend, Undo, Hint, and Reset; rendering restores tube focus. Its transparent raster glass is an inert overlay over the live fluid cylinder, so pouring changes the liquid state rather than a prepainted bottle. Merge similarly keeps real falling, collision, and tier-matching vials inside its raster chamber. Peak Blocks uses a labeled 8×8 grid with roving arrow-key focus, real occupied cells, shape selection, placement previews, and finite tools. Mahjong exposes tile names, layer or availability, and selected state, with genuine matching and open-side rules. Tools show remaining uses and disable when unavailable.
+The three matching glossy stat cards retain the cyan-to-electric-blue face, pale rim, fixed-square glyph and tabular value. The final minimum card height is 64px. Tower and Merge use keyboard-enabled canvas with external HUD and status; Tower's initial instruction also has an opaque navy canvas backing. Sort exposes contents bottom-to-top, numbers, selected state, legend, Undo, Hint and Reset. Blocks retains its labeled grid, roving keyboard focus, placement previews and finite tools. Mahjong exposes tile names, layers, availability and genuine open-side matching rules. Docks hold the actual tool actions and remaining uses.
 
-Loading uses the alpine scene, white logo, mascot, actual asset-progress bar, cancel, and load-failure retry. Sort glass and the Merge chamber are included in their respective game preload lists. Result views retain the bottle mascot, actual score, XP, run details, earned local currency, and relevant replay or next-mission actions. The original 18 missions remain sequential; the two newer puzzle games extend free play rather than altering that progression.
+Loading reports real asset progress, supports cancel and retries asset failure. The chrome console is part of the preload, along with the game's sprites and furniture. Results show actual score, personal best, rewards and relevant next-level or coin-retry action. Local data remains under the existing browser save model; errors report feedback without blocking play. This visual record does not claim equivalent nonvisual spatial gameplay for canvas games.
 
-### Accessibility and Local State
-
-Keyboard focus is a 3px gold outline at 4px offset. Native dialogs use their visible heading for an accessible name; game status and toast feedback are polite live regions. Controls supplement color with icons, numbers, names, selected state, or locks. Header and main game actions preserve the larger touch targets. Small ancillary text and a few smaller secondary controls in the build are not a recommended accessibility scale. Canvas gameplay remains visually spatial; equivalent nonvisual gameplay is not established.
-
-Progress, personal records, tutorial state, local currency, and preferences stay in the existing browser-local data model. Save failures report feedback without blocking play. Generated artwork has adjacent `.provenance.json` records and remains separate from official supplied brand assets. The new sort-glass and merge-chamber records retain the full original source path, SHA-256, AI tool, reference image, generation summary, and derivation crop; the original generated sources are retained. The visual audit found oval level nodes at narrow widths, a forced-fill canvas fit, and Mahjong vial sprites wider than their source ratio. These were corrected and verified in browser at 320px and 390px wide; all five game sound paths and both mute controls were checked.
+All generated raster sources retain adjacent prompt/provenance records. New console, treasury, pedestal and home-lobby `.webp.json` sidecars record the source path, SHA-256, generation tool, prompt and derivation. Existing Sort glass and Merge chamber keep their separate `.provenance.json` history.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- Do preserve the 480px maximum shell, five labeled tabs, and safe-area spacing outside gameplay.
-- Do retain the white PH Arcade logo, official symbol, glass bottle mascot, and proportional vial artwork.
-- Do keep raster glass and chrome materials separate from live liquids, vial physics, and scores.
-- Do preserve individual vial source bounds and the large focal Tower bottle.
-- Do distinguish bottle ownership, equipment, availability, and locking with the actual saved state.
-- Do use Anybody for wide display and Inter for instructions, labels, and local statistics.
-- Do keep all five game boards and HUD values live over the illustrated scenes.
-- Do retain visible gold keyboard focus, piece numbers or names, accessible states, and polite feedback.
-- Do respect both the local decorative-motion setting and the system reduced-motion preference.
-- Do make loading progress real and retain cancel and retry recovery.
-- Do describe progress and currency as saved on this device.
+- Do preserve the 480px content column, five labeled navy tabs and safe-area spacing outside gameplay.
+- Do scroll central scene art, furniture and live menu content together while the blurred perimeter and tint remain fixed.
+- Do retain the white PH Arcade identity, separate bottle mascot and proportional vial/game artwork.
+- Do keep console corners intact with nine-slice frames and place live objects on separate pedestals.
+- Do separate generated material from all live labels, controls, liquids, game pieces, scores and rewards.
+- Do distinguish bottle ownership, equipment, availability and locking from actual saved state.
+- Do use Anybody for wide headings and Inter for instructions, labels and local statistics.
+- Do preserve 44px action targets, gold focus, named or numbered pieces and polite feedback.
+- Do respect local motion and system reduced-motion preferences while retaining game mechanics.
+- Do retain real loading progress, cancel/retry and device-local save feedback.
 
 ### Don't:
 
-- Don’t restore the superseded robot, Nunito identity, or desktop dashboard shell.
-- Don’t stretch the logo, mascot, or short vial sprites to fill an unrelated shape.
-- Don’t bake a game board, score, or reward claim into scene artwork.
-- Don’t add decorative kickers, glyph icons, or hard offset type shadows as reusable house styles.
-- Don’t use scene art as the sole background for small instructions; retain the navy HUD or readable information surface.
-- Don’t remove essential game movement when decorative effects are off.
-- Don’t promise accounts, cross-device sync, cash value, or store rewards for local game currency.
-- Don’t claim the canvas games provide an equivalent nonvisual spatial experience.
-
-## Continuous world update — October 11
-
-The ten generated portrait assets in `dist/assets/worlds/` are text-free environment images. Home, Arcade, Rewards, Bottles and Profile each use a distinct world; gameplay and loading share the appropriate game environment. Provenance and generation scene briefs are recorded in ASSET_PROMPTS.json. A fixed body scene fills scrolling content; transparent page surfaces and navy panels prevent white sheets and abrupt image endings. Informational headings remain live and banner headings are screen-reader-only. Banner actions use a separate 64px area.
-
-Supporting panels use a translucent navy face with an ice-blue edge; the bottle selected state uses cyan-blue. Primary actions share the cyan/electric-blue face, pale outer rim, inner highlights and tactile pressed state. Gameplay HUD values shrink according to their actual digit count. Circular controls and level nodes use equal width and height.
-
-Progress is unlimited by chapter count. Original mission IDs and device saves remain valid. After level 18, generated chapters rotate Tower, Sort, Merge, Blocks and Mahjong. Per-game wins unlock the next free-play level; failed runs retain the current level. Goals rise, Tower drift grows faster and its landing window narrows, Merge introduces more spawn tiers, Blocks starts with a fuller board and bigger trays, Sort introduces more colours, and Mahjong expands its layered layouts and symbols. Board sizes and difficulty parameters eventually cap for playability; fresh puzzles and rotating goals continue.
-
-Detector interpretation: Inter is the body face explicitly established by the supplied brand reference. Chrome tube rims and liquid meniscus/specular strips are material cues on game pieces, not accent borders on information cards. Retired CSS tube walls are overridden by the clear-glass asset. These narrow material and typography choices are intentional. On wide viewports, a sharp 480px portrait world sits over a blurred extension of the same scene, preserving the full-height artwork and covering the outer viewport without white gutters.
+- Don’t restore the robot identity, Nunito typography, white page sheets or desktop dashboard shell.
+- Don’t stretch full console artwork, the logo, mascot, game icons or short vial sprites.
+- Don’t bake labels, buttons, scores, board state or reward claims into scene artwork.
+- Don’t introduce decorative kickers, glyph icons or hard offset type shadows as reusable house styles.
+- Don’t put small instructions directly on scenery without a navy reading surface.
+- Don’t move interactive targets with ornamental scroll parallax.
+- Don’t promise accounts, cross-device sync, real payments or cash value for local currency.
+- Don’t claim equivalent nonvisual spatial gameplay for the canvas games.

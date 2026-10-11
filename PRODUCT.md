@@ -1,23 +1,42 @@
 # PH Arcade
 <!-- impeccable:product-schema 1 -->
+
 ## Platform
-web
+
+Web; mobile first with a centered 480px content column on larger screens.
+
 ## Users
+
 Peak Haven customers aged 30–50, approximately 65% female per the user.
+
 ## Product Purpose
-Mobile casual games with a procedural sequential trail and level-based free play. Vial Tower, Vial Merge, Lab Sort, Peak Blocks and Bottle Mahjong. English UI, local progress, no customer account.
+
+Five casual bottle games with short, satisfying loops: Vial Tower, Vial Merge, Lab Sort, Peak Blocks and Bottle Mahjong. English UI, device-local progress and no customer account. Lab Sort and Bottle Mahjong have sequential puzzle levels. Vial Tower, Vial Merge and Peak Blocks are endless runs with saved personal bests and increasing challenge during play.
+
 ## Capabilities and Constraints
-Coins and gems are local in-game currency, earned through play and free daily rewards. Six collectible bottle skins equip in Tower. Daily free spin and a five-game coin boost. No payment or store value. Existing Site audience stays private. Progress and personal bests migrate from the prior version. Gentle synthesized sound effects cover all five games, start on by default, and can be switched off from Settings or the in-game pause sheet; the preference saves on device.
+
+Coins and gems are local in-game currency earned through play and free daily rewards. Six collectible bottle skins equip in Tower. A daily free spin, daily merge challenge and five-game coin boost support return visits. Profile shows actual XP, statistics, bottle ownership and achievements. The retry flow spends prototype coins and presents its payment as a simulation; it is not a real transaction. There is no payment, cash or store value and no cloud-save claim. Existing customer Site audience stays private.
+
+Existing version-one browser saves and personal bests remain compatible. Sort and Mahjong store their own unlocked puzzle level; winning unlocks the next board and failure retains the current level. The level console initially presents 18 or more nodes with Show more levels; this is a view window rather than an 18-mission cap. Prior completed mission IDs remain save data, while the active Arcade menu now exposes the two puzzle ladders and three endless modes. Legacy mission links route to Arcade.
+
+All five games preserve their real mechanics, tutorial, help/pause, tools, result and retry flow. Blocks has an 8×8 grid and three shape slots; Mahjong is a layered open-pair board; Sort changes live numbered liquids; Tower stacks proportional vials; Merge collides and combines matching tiers inside a glass chamber. Per-run consumable tools show remaining uses. No game forces a timer. Difficulty parameters cap for playability while new puzzle levels and endless play continue.
+
+Gentle synthesized sound effects cover all five games, begin on by default after the first player gesture, and can be switched off in Settings or pause. The sound and decorative-motion preferences save on device; reduced-motion also suppresses decoration while essential gameplay continues. Asset loading reports actual progress and provides cancel/retry. Save failure reports feedback without blocking play.
+
 ## Brand Commitments
-The five latest supplied reference images replace all prior visual authority. PH ARCADE white geometric wordmark, official Peak Haven arrow/molecule symbol, happy silver-capped glass vial mascot, 3D alpine castles and winding cyan map, collectible short glass vials, silver/blue/gold reward chests. Palette #0A1B3D #0EA5FF #38BDF8 #E6F4FF #FFD24D #F8FAFC. Extended geometric display and Inter body.
+
+Supplied PH Arcade references establish the white geometric wordmark, official Peak Haven arrow/molecule symbol, happy silver-capped glass vial mascot, alpine bottle laboratories, short collectible glass vials and silver/blue/gold reward chests. The brand palette remains #0A1B3D, #0EA5FF, #38BDF8, #E6F4FF, #FFD24D and #F8FAFC. Extended geometric display uses locally hosted Anybody as the established substitute; practical text uses Inter.
+
+The implemented Alpine Lab direction expresses menus as physical chrome/cobalt consoles, cyan bottle pedestals, gold reward trays, an archive rack and a player terminal. Every route has a distinct illustrated environment. Central sharp portrait art scrolls with its furniture and live menu content; peripheral blurred scenery and a readability tint remain fixed. No opaque white page sheet or outer phone frame. All text, controls, game state and focus remain separate from generated art.
+
 ## Product Principles
-Mobile first, large touch targets, short loops, satisfying motion, no forced timer, truthful local progress.
 
-## October 10 gameplay extension
-Five playable games: Vial Tower, Vial Merge, Lab Sort, Peak Blocks (8x8 block blast), Bottle Mahjong (34–48 layered tiles / 17–24 pairs). Original 18 mission IDs remain compatible with device saves. Subsequent procedural chapters rotate all five games, and per-game free-play wins unlock increasingly challenging levels. All gameplay uses full raster environments and a navy legible HUD. No baked game board or score; boards and scores are interactive and real. Artwork preloads with progress and cancel/retry before each game. Power tools are per-run and have three uses each; no payment. Home uses a horizontally scrollable game shelf with proportional transparent game illustrations and titles only, a text-free illustration banner with a separate live play button, and 44px header controls. Across app screens, the five-tab navigation is a centered navy pill with 16px side gutters and a selected cyan treatment. Game HUD stat cards share the glossy cyan-to-electric-blue surface, pale rim, rounded bold type, and restrained blue shadow of the primary button. Keep circular controls and game art at their native aspect ratio.
+Mobile first, large action targets, no forced timer, short loops, satisfying material feedback and truthful device-local progress. Keep the inset five-tab navy navigation, proportional art and readable navy backing for information. Reward state and ownership must come from saved data. Never imply store benefits, real payments or customer-account integration.
 
-## Vessel material finishing
+## Current Menu Experience
 
-Lab Sort composites live numbered cylindrical liquid layers beneath a transparent raster glass tube with polished chrome rim and base. Vial Merge renders the real falling/merging pile inside a transparent 3D chrome and glass chamber frame. Tower uses individually bounded proportional sprites at a larger focal size with coordinated stack spacing and camera movement. Collection indicators show checks for owned bottles, arrows for available unlocks, and locks for unavailable bottles.
+Home has a separate mascot above Play Now, category filtering and a three-column grid containing all five game objects plus daily rewards. A live daily merge challenge and Continue a puzzle terminal follow. The game chooser uses two-column pedestal displays with current puzzle level or personal best. Arcade has Sort/Mahjong tabs, circular level nodes, a selected-level launch action and three endless displays.
 
-The entire viewport is an illustrated world, including scrolling menu content and space beneath the inset navigation. Menu scenes are distinct (waterfalls, mountain trail, treasury, bottle archive, observatory); game scenes are distinct (sunlit terraces, underwater lab, glasshouse, crystal cavern, moonlit garden). There are no opaque white page sheets or outer phone frames. Generated backgrounds contain no baked text or controls. Board and difficulty parameters cap for playability while procedural chapters and fresh puzzle arrangements continue.
+Rewards makes the daily chest the main gold-tray action, followed by XP, streak, calendar, achievements and coin boost. Bottles displays the equipped vial and a six-bottle archive; checks, unlock arrows and locks distinguish ownership and availability. Profile contains the player terminal, actual stats, bottle rack, achievement tray and settings actions; it has no Your Games shelf. At narrow widths the player name wraps across a full second row.
+
+Gameplay combines a real board, glossy three-metric HUD, mounted control dock and a distinct scene per game. Lab Sort composites live cylindrical liquid below transparent chrome glass. Merge keeps falling pieces inside a transparent raster chamber. Tower uses individually bounded sprites, coordinated stack spacing and a moving stack camera. Generated backgrounds and furniture contain no baked labels, controls, scores or board state; each generated asset keeps provenance alongside the shipping file.

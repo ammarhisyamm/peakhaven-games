@@ -1,0 +1,9 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: vertical continuous game lobby environment background for PH Arcade. Primary request: a premium playful 3D alpine bottle laboratory welcome terrace, portrait 9:16, camera front-on facing a spectacular snowy mountain waterfall valley. In the foreground, a broad cobalt blue and silver chrome terrace with gentle cyan inlaid light reflecting across the floor. Slender glass bottle laboratory towers only at the far left and right edges, rich pine greenery near the edges, blue crystalline water falling in the distance. Composition expressly for live game UI: generous open center from top to bottom, no huge foreground props, no bottle mascot, no character, no board, no display panel, no pedestal blocking center; the existing interface will place its own bottle mascot and displays on the terrace. Upper third open blue sky and mountains, middle third valley and glass towers, lower third blue reflective terrace steps and basin. Polished chrome, glass and cold stone materials; cyan, sky blue, deep cobalt, white snow, restrained yellow sunlight. Lighting bright crisp morning with coherent highlights from upper left. Edge-to-edge full environment, no frame, no text, no letters, no logos, no UI, no buttons, no numbers, no watermarks. Beautiful detailed mobile game illustration, clear depth, distinct welcoming alpine world.",
+  "createdAt": "2026-10-11T04:07:59.623Z",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-9d3eadde-fd9c-4857-ba7c-f0bd8052a9f6.png",
+  "sourceSha256": "0b4fd55165b8efd975a1ea72aef306e603d9115d28c4d0ce1fa88a3d1830efcd",
+  "derivation": "Proportional resize, WebP encoding; transparent UI alpha preserved",
+  "purpose": "PH Arcade Alpine Lab interface material. Live UI text and controls remain separate."
+}

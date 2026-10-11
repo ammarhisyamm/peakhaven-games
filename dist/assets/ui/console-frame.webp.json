@@ -1,0 +1,9 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: production game UI sprite, empty resizable control-console frame for the PH Arcade alpine bottle laboratory. Primary request: one front-on empty wide rectangular sci-fi laboratory console, width 3:2, polished silver/chrome rim with a restrained electric cyan illuminated inner lip, cobalt-blue lower chassis. Perfectly symmetric, near orthographic camera, no perspective skew. Center is a plain uninterrupted very dark navy blue (#061d42) surface occupying 75 percent of the width and height, for live HTML text and controls. Rounded corners. Rim occupies 10 percent at each edge and must be suitable for CSS nine-slice resizing. Two subtle chrome screws at lower corners, thin specular highlights, clean playful high-end 3D mobile game rendering, materials matching silver glass bottles and blue alpine labs. Transparent exterior with no drop shadow baked outside, no ground, no environment, no object covering the center. No text, no letters, no logos, no buttons, no icons, no numbers. Exactly one frame centered and fully visible, edge margin 2 percent.",
+  "createdAt": "2026-10-11T04:07:59.584Z",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-1be58b23-65a7-4fbd-b54a-228a8465eb46.png",
+  "sourceSha256": "3042aa2d46d38131f5ee83cbdd3dde14f1a9eb8ed34914a8020f58f49e828b84",
+  "derivation": "Proportional resize, WebP encoding; transparent UI alpha preserved",
+  "purpose": "PH Arcade Alpine Lab interface material. Live UI text and controls remain separate."
+}

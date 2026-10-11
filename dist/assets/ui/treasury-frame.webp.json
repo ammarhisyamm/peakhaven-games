@@ -1,0 +1,9 @@
+{
+  "prompt": "Use case: stylized-concept. Asset type: empty resizable reward tray UI frame for PH Arcade premium playful 3D mobile game. Primary request: one front-on wide rectangular empty laboratory treasure display tray, width 3:2, polished silver metal outer rim, deep cobalt blue chassis, warm champagne gold inner rim and very subtle gold light, rounded corners. Center is an uninterrupted dark navy (#061d42) flat panel covering 75 percent of width and height for live controls. Nine-slice compatible: frame decoration stays entirely within 10 percent of edges. Small chrome corner joints. Perfectly symmetric, orthographic, no perspective skew. Silvery material matches a blue-and-silver magical reward chest. Transparent outside. No text, glyphs, logos, letters, icons, buttons, coins or chest in center. Exactly one complete frame with 2 percent outer margin.",
+  "createdAt": "2026-10-11T04:07:59.605Z",
+  "tool": "image_gen.imagegen",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-fc59ee2a-ea8d-46b6-a26b-f68be73aee67.png",
+  "sourceSha256": "4c35cd92fb04e7e80744be7be30b83b6676c95fbfb4b310fd9f2f79ac42dd34b",
+  "derivation": "Proportional resize, WebP encoding; transparent UI alpha preserved",
+  "purpose": "PH Arcade Alpine Lab interface material. Live UI text and controls remain separate."
+}
