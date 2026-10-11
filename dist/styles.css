@@ -173,6 +173,15 @@ body{scrollbar-color:#4aa9e7 #071f42}::selection{background:#ffd24d;color:#0a1b3
 .app-header{background:none}
 @media(min-width:650px){body::before{filter:blur(24px) brightness(.65);transform:scale(1.06)}body::after{left:50%;right:auto;width:480px;transform:translateX(-50%);background-image:linear-gradient(180deg,#031b4c14 20%,#02153766 100%),var(--world-art);background-size:cover;background-position:center top}}
 
+/* Keep the content readable while the illustrated world drifts gently with page scroll. */
+body::before{content:none}
+#scene-backdrop,#scene-art{position:fixed;pointer-events:none;background-image:linear-gradient(180deg,#031b4c14 20%,#02153766 100%),var(--world-art);background-position:center top;background-size:cover;background-repeat:no-repeat;will-change:transform}
+#scene-backdrop{inset:-10vh -5vw;z-index:-2;transform:translate3d(0,0,0) scale(1.04)}
+body::after{background:linear-gradient(90deg,#02153630,transparent 35%,transparent 65%,#02153630)}
+#scene-art{display:none}
+@media(min-width:650px){#scene-backdrop{filter:blur(24px) brightness(.65)}#scene-art{display:block;top:-10vh;bottom:-10vh;left:50%;width:480px;z-index:-1;transform:translate3d(-50%,0,0)}}
+@media(prefers-reduced-motion:reduce){#scene-backdrop,#scene-art{will-change:auto}}
+
 /* Puzzle progression is reserved for the two finite-board games. */
 .arcade-levels{display:grid;gap:15px;padding:122px 16px 34px;}
 .levels-heading{padding:6px 2px 0;}
