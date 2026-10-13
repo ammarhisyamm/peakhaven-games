@@ -29,3 +29,7 @@ The user pinned Monument Extended and Inter. Inter is self-hosted; open-license 
 Reduced decorative motion follows both device preference and the saved setting; essential gameplay movement stays available. Audio is off by default and optional. Progress stays on this browser with no customer account. The existing hosted Site remains owner-private and its platform access requires ChatGPT sign-in.
 
 The Sites helper packages `dist/` plus `.openai/hosting.json` and deploys the pushed source commit. No Next build is part of this independent static release.
+
+## Replays and anti-cheat (Peak Blocks, Ridge Run, Vial Merge)
+
+These three games are seeded and step on a fixed 1/120 s clock, so a run is fully determined by its seed and inputs. Each finished run's result includes a `replay` record (seed plus input log). `tools/replay.mjs` re-plays a record headless in Node and returns the score it really earned. A future leaderboard should accept a score only if its replay reproduces it; anything kept in the browser alone can still be edited. `npm test` covers stuck boards, undo re-rolls, gate reachability on several screen sizes, frame-rate independence and replay accuracy.

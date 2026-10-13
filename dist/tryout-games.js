@@ -1,6 +1,7 @@
 import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,SEQUENCE_MOVES} from './sequence-rules.js';
 import {drawSprite,drawBottleObstacle,crystalSprites,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
+import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 
 const TAU=Math.PI*2;
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
@@ -15,27 +16,31 @@ function ring(c,x,y,r,rotation=0){
 // Uniform logical pixels keep round objects round on every viewport.
 class MiniEngine{
  constructor(canvas,cb,options={}){
-  this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=cb;this.level=options.level||1;this.motion=options.motion!==false;this.time=0;this.last=0;this.paused=false;this.ended=false;this.alive=true;this.score=0;this.particles=[];this.shockwaves=[];
+  this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=cb;this.level=options.level||1;this.motion=options.motion!==false;this.time=0;this.last=0;this.acc=0;this.ticks=0;this.seed=(options.seed??makeSeed())>>>0;this.random=createRandom(this.seed);this.paused=false;this.ended=false;this.alive=true;this.score=0;this.particles=[];this.shockwaves=[];
   this.resize();this.observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(()=>this.resize());this.observer?.observe(canvas);
   this.pointer=e=>{const r=canvas.getBoundingClientRect();return[(e.clientX-r.left)/this.scale,(e.clientY-r.top)/this.scale];};
   this.frame=this.frame.bind(this);this.raf=requestAnimationFrame(this.frame);
  }
  resize(){
-  const r=this.canvas.getBoundingClientRect(),width=r.width||480,height=r.height||720,dpr=Math.min(2,window.devicePixelRatio||1),oldW=this.w,oldH=this.h;
+  const r=this.canvas.getBoundingClientRect(),width=r.width||480,height=r.height||720,dpr=Math.min(2,window.devicePixelRatio||1),oldW=this.w,oldH=this.h;this.view=[width,height];
   this.scale=Math.min(width/480,height/720);this.w=width/this.scale;this.h=height/this.scale;this.top=110/this.scale;this.bottom=48/this.scale;
   this.canvas.width=Math.round(width*dpr);this.canvas.height=Math.round(height*dpr);
   if(this.ctx.setTransform)this.ctx.setTransform(dpr*this.scale,0,0,dpr*this.scale,0,0);else this.ctx.scale(dpr*this.scale,dpr*this.scale);
   if(oldW&&this.onResize)this.onResize(oldW,oldH);
  }
+ step(dt){this.ticks++;this.time+=dt;this.update(dt);this.particles=this.particles.filter(p=>(p.life-=dt)>0);for(const p of this.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=120*dt;}}
  frame(now){
-  if(!this.alive)return;const dt=Math.min(.025,(now-(this.last||now))/1000);this.last=now;
-  if(!this.paused&&!this.ended){this.time+=dt;this.update(dt);this.particles=this.particles.filter(p=>(p.life-=dt)>0);for(const p of this.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=120*dt;}}
+  if(!this.alive)return;const real=Math.min(.25,(now-(this.last||now))/1000);this.last=now;
+  // Fixed simulation step: the same inputs give the same run at 30, 60 or 120 Hz, and throttling the CPU
+  // no longer slows the game down (below ~10 fps it still drops time rather than spiralling).
+  if(!this.paused&&!this.ended){this.acc+=real;let n=0;while(this.acc>=SIM_STEP-1e-9&&n<MAX_STEPS_PER_FRAME&&!this.ended&&this.alive){this.step(SIM_STEP);this.acc-=SIM_STEP;n++;}if(n===MAX_STEPS_PER_FRAME)this.acc=0;}
+  if(!this.alive)return;
   this.ctx.clearRect(0,0,this.w,this.h);this.draw();this.drawEffects();this.raf=requestAnimationFrame(this.frame);
  }
  burst(x,y,color='#8fffff',count=24){if(!this.motion)return;this.shockwaves.push({x,y,color,start:this.time});for(let i=0;i<count;i++){const a=i/count*TAU,s=80+Math.random()*90;this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.6+Math.random()*.3,color});}}
  drawEffects(){const c=this.ctx;this.shockwaves=this.shockwaves.filter(p=>this.time-p.start<.55);c.save();for(const p of this.shockwaves){const t=(this.time-p.start)/.55;c.globalAlpha=1-t;c.strokeStyle=p.color;c.lineWidth=3*(1-t);c.beginPath();c.arc(p.x,p.y,10+t*65,0,TAU);c.stroke();}for(const p of this.particles){c.globalAlpha=clamp(p.life/.7,0,1);c.fillStyle=p.color;c.beginPath();c.arc(p.x,p.y,2.5,0,TAU);c.fill();}c.restore();}
  end(result){if(this.ended)return;this.ended=true;this.cb.end(result);}
- pause(value=true){this.paused=value;this.last=0;}
+ pause(value=true){this.paused=value;this.last=0;this.acc=0;}
  destroy(){this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();for(const name of ['pointerdown','pointerup','pointercancel','pointermove']){const handler=this['on'+name];if(handler)this.canvas.removeEventListener(name,handler);}}
 }
 
@@ -75,21 +80,38 @@ export class OrbitEngine extends MiniEngine{
 }
 
 export class RidgeEngine extends MiniEngine{
- constructor(canvas,cb,options){super(canvas,cb,options);this.y=this.top+(this.h-this.top-this.bottom)*.5;this.vy=0;this.started=false;this.gates=[];this.speed=148;this.spawn=0;this.trail=[];this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
+ constructor(canvas,cb,options){super(canvas,cb,options);this.y=this.top+(this.h-this.top-this.bottom)*.5;this.vy=0;this.started=false;this.gates=[];this.speed=148;this.spawn=0;this.trail=[];this.lastCenter=null;this.lastInterval=0;this.inputs=[];this.resizes=[];this.resumes=[];this.startView=this.view;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
  get playerX(){return Math.min(170,this.w*.28);}
  get floor(){return this.h;}
  get gap(){return Math.max(140,Math.min(245,(this.floor-this.top)*.36)-this.score*2.8);}
- action(){if(this.paused||this.ended)return;this.started=true;this.vy=-Math.sqrt((this.floor-this.top)/430)*282;this.cb.sound('flap');this.cb.message('');}
+ get flap(){return Math.sqrt((this.floor-this.top)/430)*282;}
+ action(){if(this.paused||this.ended)return;this.inputs.push(this.ticks);this.started=true;this.vy=-this.flap;this.cb.sound('flap');this.cb.message('');}
  update(dt){
   if(!this.started)return;this.speed=Math.min(300,148+this.score*3.2);this.vy+=640*dt;this.y+=this.vy*dt;this.spawn-=dt;
-  if(this.spawn<=0){const margin=this.gap/2+38,center=this.top+margin+Math.random()*Math.max(1,this.floor-this.top-margin*2);this.gates.push({x:this.w+40,center,gap:this.gap,passed:false});this.spawn=Math.max(1.02,1.9-this.score*.014);}
+  if(this.spawn<=0){const gap=this.gap,center=this.nextCenter(gap);this.gates.push({x:this.w+40,center,gap,passed:false});this.lastCenter=center;this.spawn=this.lastInterval=Math.max(1.02,1.9-this.score*.014);}
   for(const g of this.gates){const gap=g.gap??this.gap;g.x-=this.speed*dt;if(!g.passed&&g.x+35<this.playerX-18){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.playerX,this.y,'#8fffff',12);}
    if(g.x-35<this.playerX+17&&g.x+35>this.playerX-17&&(this.y-29<g.center-gap/2||this.y+29>g.center+gap/2)){this.crash();return;}}
   this.gates=this.gates.filter(g=>g.x>-60);if(this.y-28<0||this.y+28>this.floor)this.crash();
   if(this.motion){this.trail.push({x:this.playerX,y:this.y});for(const p of this.trail)p.x-=this.speed*dt;if(this.trail.length>24)this.trail.shift();}
  }
- crash(){if(this.ended)return;this.burst(this.playerX,this.y,'#ffd383');this.cb.sound('miss');this.end({score:this.score,gates:this.score});}
- onResize(oldW,oldH){this.y*=this.h/oldH;for(const g of this.gates){g.x*=this.w/oldW;g.center*=this.h/oldH;}}
+ // Every gate must be reachable from the one before. The vial gets the time between leaving one gate and
+ // entering the next; a human tapping fast climbs about 75% of the flap speed, and falls at most what gravity
+ // allows. Half the spare room inside the gap counts too. MAX_SHIFT also stops tall phones getting bigger swings.
+ nextCenter(gap){
+  const margin=gap/2+38,lo=this.top+margin,hi=Math.max(lo+1,this.floor-margin);
+  let a=lo,b=hi;
+  if(this.lastCenter!==null){
+   const travel=Math.max(.2,this.lastInterval-(70+34)/this.speed),slack=Math.max(0,gap-58)/2,MAX_SHIFT=240;
+   const up=Math.min(MAX_SHIFT,.75*this.flap*travel+slack),down=Math.min(MAX_SHIFT,.75*.5*640*travel*travel+slack);
+   a=Math.max(lo,this.lastCenter-up);b=Math.min(hi,this.lastCenter+down);if(b<a)a=b=clamp(this.lastCenter,lo,hi);
+  }
+  return a+this.random()*(b-a);
+ }
+ replay(){return {v:1,game:'ridge',seed:this.seed,view:this.startView,step:SIM_STEP,taps:[...this.inputs],resizes:this.resizes.map(([t,v])=>[t,[...v]]),resumes:[...this.resumes]};}
+ // After a pause the vial waits for a tap instead of resuming mid-fall.
+ pause(value=true){super.pause(value);if(!value&&this.started&&!this.ended){this.resumes.push(this.ticks);this.started=false;this.vy=0;this.cb.message('Tap to keep flying.');}}
+ crash(){if(this.ended)return;this.burst(this.playerX,this.y,'#ffd383');this.cb.sound('miss');this.end({score:this.score,gates:this.score,replay:this.replay()});}
+ onResize(oldW,oldH){this.resizes?.push([this.ticks,this.view]);this.y*=this.h/oldH;for(const g of this.gates){g.x*=this.w/oldW;g.center*=this.h/oldH;}}
  gateSegments(g){const gap=g.gap??this.gap;return{top:g.center-gap/2,bottom:g.center+gap/2};}
  draw(){const c=this.ctx;c.save();if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.28;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.16,0,TAU);c.fill();}c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;for(const g of this.gates){const{top,bottom}=this.gateSegments(g);drawBottleObstacle(c,g.x,top,top,70,true);drawBottleObstacle(c,g.x,bottom,this.h-bottom,70,false);}c.shadowColor='#8fffff';c.shadowBlur=16;const bob=this.started?0:Math.sin(this.time*2.8)*6;drawSprite(c,'vial-cyan',this.playerX,this.y+bob,48,80,clamp(this.vy*.0011,-.28,.6));c.restore();}
  finish(){this.crash();}

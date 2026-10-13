@@ -1,0 +1,139 @@
+// Scenario tests for the Peak Blocks, Ridge Run and Vial Merge fixes: stuck boards, undo re-rolls,
+// unreachable gates, frame-rate independence, spawn tiers, and replays that reproduce the real score.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+let rafCalls=0;
+globalThis.window={devicePixelRatio:1};
+globalThis.requestAnimationFrame=()=>{rafCalls++;return 1;};
+globalThis.cancelAnimationFrame=()=>{};
+globalThis.Image=class{complete=false;naturalWidth=0;};
+const {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,replayBlocks,anyFit}=await import('../dist/blocks-core.js');
+const {SHAPES,makeTray,emptyGrid}=await import('../dist/puzzle-rules.js');
+const {RidgeEngine}=await import('../dist/tryout-games.js');
+const {MergeEngine,MERGE_SPAWN_TIERS}=await import('../dist/engines.js');
+const {SIM_STEP,createRandom}=await import('../dist/rng.js');
+const {replayRidge,replayMerge}=await import('../tools/replay.mjs');
+
+const noop=()=>{};
+function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:noop,set:(t,k,v)=>(t[k]=v,true)});return {getContext:()=>ctx,getBoundingClientRect:()=>({width,height,left:0,top:0}),addEventListener:noop,removeEventListener:noop,setPointerCapture:noop};}
+function callbacks(onEnd){const out={result:null};out.cb={hud:noop,message:noop,sound:noop,effect:noop,progress:noop,ready:noop,topTier:noop,place:noop,end(r){out.result??=r;onEnd?.(r);}};return out;}
+
+// ---------- Peak Blocks ----------
+const I4=SHAPES[8];
+function checker(){return Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>(r+c)%2?1:0));}
+
+test('Blocks ends when the last Bomb leaves no piece that fits, instead of freezing',()=>{
+  const g=createBlocks(1);g.state.grid=checker();g.state.tray=[{shape:I4,color:1},null,null];g.tools.shuffle=0;g.tools.bomb=1;
+  assert.equal(anyFit(g),false);assert.equal(g.ended,false,'a Bomb is still available');
+  assert.equal(blocksBomb(g,0,0),true);assert.equal(g.ended,true,'corner bomb opens only 3 in a row, so the I4 still has nowhere to go');
+});
+test('Blocks ends when Undo returns to a stuck board with no space tools left',()=>{
+  const g=createBlocks(2);g.history.push({...structuredClone(g.state),grid:checker(),tray:[{shape:I4,color:1},null,null]});g.tools.bomb=0;g.tools.shuffle=0;
+  assert.equal(blocksUndo(g),true);assert.equal(g.ended,true);
+});
+test('Blocks never sits stuck with no space tools across 300 random games, and every run replays to its score',()=>{
+  for(let seed=1;seed<=300;seed++){
+    const g=createBlocks(seed),rand=createRandom(seed*7919);
+    for(let turn=0;turn<400&&!g.ended;turn++){
+      const roll=rand();
+      if(roll<.03)blocksShuffle(g);else if(roll<.05)blocksUndo(g);else if(roll<.07)blocksBomb(g,Math.floor(rand()*8),Math.floor(rand()*8));else if(roll<.08)blocksHint(g);
+      else{const options=[];g.state.tray.forEach((p,i)=>{if(!p)return;for(let r=0;r<8;r++)for(let c=0;c<8;c++)options.push([i,r,c]);});
+        for(let k=0;k<options.length;k++){const [i,r,c]=options[Math.floor(rand()*options.length)];if(blocksPlace(g,i,r,c))break;}}
+      assert.ok(g.ended||anyFit(g)||g.tools.bomb||g.tools.shuffle,`seed ${seed}: stuck board left running`);
+      assert.ok(g.history.length<=3);
+    }
+    const result=blocksResult(g);assert.equal(replayBlocks(result.replay).score,result.score,`seed ${seed}`);
+  }
+});
+test('Undo cannot re-roll the next tray',()=>{
+  const g=createBlocks(42);g.state.tray=[{shape:SHAPES[0],color:1},null,null];
+  blocksPlace(g,0,0,0);const dealt=JSON.stringify(g.state.tray);
+  blocksUndo(g);blocksPlace(g,0,0,0);assert.equal(JSON.stringify(g.state.tray),dealt);
+});
+test('A tampered Blocks log is rejected',()=>{
+  const g=createBlocks(5);blocksPlace(g,0,0,0);const rep=blocksResult(g).replay;
+  assert.throws(()=>replayBlocks({...rep,log:[...rep.log,['p',0,0,0]]}),/Illegal step/);
+});
+test('Late Blocks trays draw evenly instead of piling onto the 2×3 block',()=>{
+  const rand=createRandom(9),counts=new Map();
+  for(let i=0;i<3000;i++)for(const p of makeTray(emptyGrid(),rand,60))counts.set(SHAPES.indexOf(p.shape),(counts.get(SHAPES.indexOf(p.shape))||0)+1);
+  for(const [index,n] of counts){assert.ok(index>=5,'smallest shapes retire late');assert.ok(n/9000>.15&&n/9000<.25,`shape ${index} share ${n/9000}`);}
+});
+
+// ---------- Ridge Run ----------
+// A simple bot that keeps the vial near the next gate's centre.
+function ridgeBot(e){const next=e.gates.find(g=>!g.passed&&g.x+35>e.playerX-18);const target=next?next.center:(e.top+e.floor)/2;return e.y>target+8&&e.vy>-40;}
+function playRidge({seed,hz,view=[480,720],maxSeconds=90}){
+  const c=canvas(...view),out=callbacks(),e=new RidgeEngine(c,out.cb,{seed,motion:false});
+  let now=1000;e.frame(now);e.action();
+  for(let f=0;f<maxSeconds*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&ridgeBot(e))e.action();}
+  if(!e.ended)e.finish();e.destroy();return out.result;
+}
+test('Ridge Run replays to the same score at 30, 60 and 144 Hz',async()=>{
+  for(const hz of [30,60,144])for(const seed of [11,22,33]){
+    const live=playRidge({seed,hz});const again=await replayRidge(live.replay);
+    assert.equal(again.score,live.score,`seed ${seed} at ${hz} Hz`);assert.equal(again.unusedInputs,0);
+  }
+});
+test('Ridge Run flap height no longer depends on frame rate',()=>{
+  // Sample at the same game moment (after 0.5 s) at each frame rate; the old variable step drifted by a few px.
+  const at=hz=>{const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false});let now=1000;e.frame(now);e.action();for(let f=0;f<hz/2;f++){now+=1000/hz;e.frame(now);}const out=[e.ticks,e.y];e.destroy();return out;};
+  const [t30,y30]=at(30),[t60,y60]=at(60),[t144,y144]=at(144);
+  assert.equal(t30,60);assert.equal(t60,60);assert.equal(t144,60);assert.equal(y30,y60);assert.equal(y60,y144);
+});
+test('Every Ridge gate is reachable from the last one, on standard and tall screens',()=>{
+  for(const view of [[480,720],[390,844],[1280,800]])for(let seed=1;seed<=60;seed++){
+    const e=new RidgeEngine(canvas(...view),callbacks().cb,{seed,motion:false});
+    for(let score=0;score<=120;score+=2){
+      e.score=score;e.speed=Math.min(300,148+score*3.2);const gap=e.gap,interval=Math.max(1.02,1.9-score*.014);
+      const prev=e.lastCenter;e.lastInterval=interval;const c=e.nextCenter(gap);e.lastCenter=c;
+      if(prev===null)continue;
+      const travel=interval-(70+34)/e.speed,slack=(gap-58)/2;
+      const climb=e.flap*travel+slack,fall=.5*640*travel*travel+slack;
+      assert.ok(prev-c<=climb+1e-6,`${view} seed ${seed} score ${score}: climb ${prev-c} > ${climb}`);
+      assert.ok(c-prev<=fall+1e-6,`${view} seed ${seed} score ${score}: drop ${c-prev} > ${fall}`);
+      assert.ok(Math.abs(c-prev)<=240+1e-6,'same maximum swing on every screen');
+    }
+    e.destroy();
+  }
+});
+test('Ridge Run waits for a tap after resuming instead of falling straight away',()=>{
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});e.action();for(let i=0;i<30;i++)e.step(SIM_STEP);
+  e.pause(true);e.pause(false);const y=e.y;for(let i=0;i<240;i++)e.step(SIM_STEP);
+  assert.equal(e.y,y);assert.equal(e.ended,false);e.action();e.step(SIM_STEP);assert.notEqual(e.y,y);e.destroy();
+});
+test('Ending a run inside a frame does not schedule another frame',()=>{
+  let e;const out=callbacks(()=>e.destroy());e=new RidgeEngine(canvas(),out.cb,{seed:4,motion:false});
+  e.action();e.y=e.floor;e.frame(5000);const before=rafCalls;e.frame(5100);
+  assert.ok(out.result);assert.equal(rafCalls,before,'no rAF after destroy');
+});
+test('A doctored Ridge score does not survive replay',async()=>{
+  const live=playRidge({seed:77,hz:60});const claimed=live.score+50;
+  assert.notEqual((await replayRidge(live.replay)).score,claimed);
+});
+
+// ---------- Vial Merge ----------
+function playMerge({seed,hz,drops}){
+  const out=callbacks(),e=new MergeEngine(canvas(),out.cb,{seed,motion:false});const plan=drops.map(d=>[...d]);
+  let now=1000;e.frame(now);
+  for(let f=0;f<120*hz&&!e.ended;f++){
+    while(plan.length&&e.ticks>=plan[0][0]){const [,x]=plan.shift();e.x=x;e.action();}
+    now+=1000/hz;e.frame(now);
+  }
+  if(!e.ended)e.finish();e.destroy();return out.result;
+}
+const mergePlan=seed=>{const r=createRandom(seed);return Array.from({length:60},(_,i)=>[60+i*140,Math.round((90+r()*300)*100)/100]);};
+test('Vial Merge gives the same result at 60, 120 and 240 Hz for the same drops',()=>{
+  for(const seed of [1,2,3]){
+    const scores=[60,120,240].map(hz=>playMerge({seed,hz,drops:mergePlan(seed)}).score);
+    assert.equal(new Set(scores).size,1,`seed ${seed}: ${scores}`);
+  }
+});
+test('Vial Merge replays to the same score',async()=>{
+  for(const seed of [5,6]){const live=playMerge({seed,hz:60,drops:mergePlan(seed)});const again=await replayMerge(live.replay);assert.equal(again.score,live.score);assert.equal(again.unusedInputs,0);}
+});
+test('Vial Merge never spawns tiers that cannot merge',()=>{
+  const e=new MergeEngine(canvas(),callbacks().cb,{seed:8,motion:false});const seen=new Set();
+  for(let i=0;i<2000;i++){e.cooldown=0;e.bodies.length=0;e.action();seen.add(e.preview);seen.add(e.next);}
+  assert.ok(Math.max(...seen)<MERGE_SPAWN_TIERS,`spawned ${[...seen]}`);e.destroy();
+});
