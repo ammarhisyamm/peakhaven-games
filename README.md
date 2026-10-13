@@ -1,5 +1,12 @@
 # PH Arcade
 
+**Production V2:** https://peakhaven-arcade.vercel.app/#play
+
+Every push or merge into `main` automatically builds and deploys production.
+The current V2 interface lives in [`arcade/ui/`](arcade/ui/), and game engines,
+rules, artwork and sounds remain in `dist/`. The build combines both sources.
+See [`arcade/README.md`](arcade/README.md) for edit locations and local preview.
+
 A mobile browser game built from the user's latest PH Arcade reference boards. Buildless HTML, CSS and JavaScript in `dist/`; the existing Next application serves a mirrored copy at `/arcade`.
 
 ## Run and verify
