@@ -14,9 +14,9 @@ Tower has an alignment cue, slight landing assistance, particles, shockwaves and
 
 ## Progress and collectibles
 
-Existing `ph-arcade-v1` saves migrate without losing XP, missions, best scores or badges. XP advances the player level every 150 points. First mission wins award the mission's XP and one gem; repeats award five XP. Won runs award 20 coins, doubled by a five-game boost. Failed runs award no XP or currency.
+Existing `ph-arcade-v1` saves migrate without losing XP, missions, best scores or badges. XP advances the player level every 150 points. Clearing a puzzle level (Sort, Mahjong, Sequence) for the first time awards 25 XP, 20 coins and one gem; replays award 5 XP and 20 coins. A failed puzzle level awards nothing. Endless runs (Tower, Merge, Blocks, Orbit, Ridge Run, Bond) award 5 to 30 coins by score plus 5 XP. The five-game boost doubles the coins from any game that pays coins. Retrying from the result screen costs 50 coins, taken once the game has loaded; the prototype top-up adds only the coins needed.
 
-Rewards include one daily chest, one free daily spin, a five-game coin boost, badges and a calendar. Daily chests start at 50 coins, add 10 per consecutive claim up to 110, and award one gem plus 10 XP. Daily merge challenge awards 40 coins once after 10 merges. Six skins unlock through XP, mission completion, streaks or game currency. Equipped skin appears in Tower. All currency is local, with no real-money purchases or cash value. Profile shows real device stats and an editable local nickname.
+Rewards include one daily chest, one free daily spin, a five-game coin boost, badges and a calendar. Daily chests start at 50 coins, add 10 per consecutive claim up to 110, and award one gem plus 10 XP. Daily merge challenge awards 40 coins once after 10 merges; stacking 10 Tower vials earns its badge separately. Six skins unlock through XP, mission completion, streaks or game currency. Equipped skin appears in Tower. All currency is local, with no real-money purchases or cash value. Profile shows real device stats and an editable local nickname.
 
 ## Art and typography
 
@@ -26,7 +26,7 @@ The user pinned Monument Extended and Inter. Inter is self-hosted; open-license 
 
 ## Accessibility and deployment
 
-Reduced decorative motion follows both device preference and the saved setting; essential gameplay movement stays available. Audio is off by default and optional. Progress stays on this browser with no customer account. The existing hosted Site remains owner-private and its platform access requires ChatGPT sign-in.
+Reduced decorative motion follows both device preference and the saved setting; essential gameplay movement stays available. Sound starts on after the first tap and can be switched off in Settings or Pause. Progress stays on this browser with no customer account. The existing hosted Site remains owner-private and its platform access requires ChatGPT sign-in.
 
 The Sites helper packages `dist/` plus `.openai/hosting.json` and deploys the pushed source commit. No Next build is part of this independent static release.
 
