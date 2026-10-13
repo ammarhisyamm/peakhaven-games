@@ -185,3 +185,27 @@ test('Bond replays to the same score at 30, 60 and 144 Hz',async()=>{
   }
 });
 
+// ---------- Sequence feel ----------
+const {SequenceEngine}=await import('../dist/tryout-games.js');
+const {sequenceExchange,sequenceMatches}=await import('../dist/sequence-rules.js');
+function seqGame(){const handlers={},c=canvas();c.addEventListener=(n,h)=>{handlers[n]=h;};const out=callbacks(),e=new SequenceEngine(c,out.cb,{seed:1,motion:true});return {e,handlers};}
+test('Sequence swaps as soon as a drag crosses a third of a tile, before the finger lifts',()=>{
+  const {e,handlers}=seqGame(),[i,to]=e.findMove(),g=e.geometry();
+  const at=k=>({clientX:(g.x+(k%7+.5)*g.cell)*e.scale,clientY:(g.y+(Math.floor(k/7)+.5)*g.cell)*e.scale,pointerId:1});
+  handlers.pointerdown(at(i));const dest=at(to),from=at(i);
+  handlers.pointermove({clientX:from.clientX+(dest.clientX-from.clientX)*.4,clientY:from.clientY+(dest.clientY-from.clientY)*.4});
+  assert.equal(e.phase,'swap','swap started mid-drag');e.destroy();
+});
+test('Sequence matches shrink out before the gap opens, and longer drops take longer',()=>{
+  const {e}=seqGame(),[i,to]=e.findMove();e.choose(i,to);
+  while(e.phase==='swap')e.step(SIM_STEP);
+  assert.equal(e.phase,'clear');const cleared=[...e.clearing];assert.ok(cleared.every(k=>e.board[k]>=0),'tiles still drawn while popping');
+  assert.equal(e.popups.length,1);assert.match(e.popups[0].text,/^\+\d+$/);
+  while(e.phase==='clear')e.step(SIM_STEP);
+  assert.equal(e.phase,'fall');const longest=Math.max(...[...e.falls.values()].map(Math.abs));assert.ok(Math.abs(e.fallDur-(.12+.05*longest))<1e-9);e.destroy();
+});
+test('Sequence shows a working hint after 5 idle seconds and clears it on the next touch',()=>{
+  const {e,handlers}=seqGame();for(let t=0;t<4.9;t+=SIM_STEP)e.step(SIM_STEP);assert.equal(e.hintPair,null);
+  for(let t=0;t<.3;t+=SIM_STEP)e.step(SIM_STEP);assert.ok(e.hintPair);const [a,b]=e.hintPair;assert.ok(sequenceMatches(sequenceExchange(e.board,a,b)).size>0);
+  handlers.pointerdown({clientX:0,clientY:0,pointerId:1});assert.equal(e.hintPair,null);e.destroy();
+});

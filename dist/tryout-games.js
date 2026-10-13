@@ -7,6 +7,7 @@ const TAU=Math.PI*2;
 export const BOND_MAX_VIALS=11,BOND_HIT=.17;
 // Shot clock: time allowed for each shot, 6 s on chain 1, 0.5 s less each chain, never under 2.5 s.
 export const bondClock=stage=>Math.max(2.5,6-.5*(stage-1));
+const SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d);
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const angularDistance=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
@@ -167,8 +168,12 @@ export class BondEngine extends MiniEngine{
 
 export class SequenceEngine extends MiniEngine{
  constructor(canvas,cb,options){
-  super(canvas,cb,options);this.board=createSequenceBoard(this.level);this.palette=Math.min(7,4+Math.floor((this.level-1)/5));this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;
-  this.onpointerdown=e=>{this.keyboard=false;this.pointerStart=this.pointer(e);canvas.setPointerCapture?.(e.pointerId);};this.onpointerup=e=>{if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),[x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];this.pointerStart=null;if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10){this.choose(start);return;}const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointercancel=()=>{this.pointerStart=null;};for(const name of ['pointerdown','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
+  super(canvas,cb,options);this.board=createSequenceBoard(this.level);this.palette=Math.min(7,4+Math.floor((this.level-1)/5));this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  this.onpointerdown=e=>{this.keyboard=false;this.idle=0;this.hintPair=null;this.pointerStart=this.pointer(e);canvas.setPointerCapture?.(e.pointerId);};
+  // Swaps fire as soon as the finger has moved a third of a tile, instead of waiting for it to lift.
+  this.onpointermove=e=>{if(!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;
+   const start=this.cellAt(...this.pointerStart);this.pointerStart=null;if(start===null)return;const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));
+   if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointerup=e=>{if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),[x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];this.pointerStart=null;if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10){this.choose(start);return;}const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointercancel=()=>{this.pointerStart=null;};for(const name of ['pointerdown','pointermove','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
  }
  geometry(){const size=Math.min(this.w-36,this.h-this.top-this.bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:this.top+(this.h-this.top-this.bottom-size)/2,size,cell};}
  cellAt(x,y){const g=this.geometry();if(x<g.x||x>=g.x+g.size||y<g.y||y>=g.y+g.size)return null;return Math.floor((y-g.y)/g.cell)*7+Math.floor((x-g.x)/g.cell);}
@@ -178,30 +183,51 @@ export class SequenceEngine extends MiniEngine{
   if(this.selection===index&&swapWith===null){this.selection=null;return;}
   const from=this.selection,to=swapWith??index,next=sequenceExchange(this.board,from,to);
   if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message('Swap neighbours to make a line of three.');return;}
-  const matched=sequenceMatches(next).size>0;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=this.motion?.16:.001;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
+  const matched=sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=this.motion?.16:.001;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
  }
- resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();for(const i of matches)this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);this.board=this.board.map((v,i)=>matches.has(i)?-1:v);this.score+=matches.size*50*(1+this.chain);this.chain++;this.cb.sound('crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=this.motion?.24:.001;}
+ // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
+ resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();let sx=0,sy=0;
+  for(const i of matches){this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);sx+=i%7;sy+=Math.floor(i/7);}
+  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;
+  this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
+  if(this.chain>1)this.banner={text:`Chain ×${this.chain}`,t:0};if(matches.size>=8)this.shake=1;
+  this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=this.motion?SEQ_CLEAR:.001;}
+ // Any swap that makes a line, for the idle hint.
+ findMove(){for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
  finishMove(){
-  this.phase=null;this.pending=0;this.falls.clear();this.cb.hud(this.score,this.moves,this.target);
+  this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.cb.hud(this.score,this.moves,this.target);
   if(this.score>=this.target){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:true});return;}if(this.moves<=0){this.end({score:this.score,moves:SEQUENCE_MOVES,won:false});return;}
   if(!hasSequenceMove(this.board)){this.board=createSequenceBoard(this.level);this.cb.message('Fresh crystals. No move used.');}else this.cb.message(`${this.moves} moves left. ${Math.max(0,this.target-this.score)} points to go.`);
  }
+ tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
+  if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
  update(dt){
-  if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
+  this.tickEffects(dt);if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
   if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=this.motion?.16:.001;return;}this.swap=null;this.resolveMatches();return;}
   if(this.phase==='return'){this.board=this.swap.original;this.swap=null;this.phase=null;this.pending=0;this.cb.sound('undo');this.cb.message('Try another pair. No move used.');return;}
-  if(this.phase==='clear'){this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,Math.random,7,this.palette);this.phase='fall';this.pending=this.motion?.28:.001;return;}
+  if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,Math.random,7,this.palette);this.phase='fall';
+   // Crystals fall like they have weight: each one accelerates and takes longer the further it drops.
+   this.fallDur=this.motion?Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d))):.001;this.pending=this.fallDur;return;}
   if(this.phase==='fall'){this.falls.clear();if(this.score>=this.target)this.finishMove();else this.resolveMatches();}
  }
  moveSelection(key){this.keyboard=true;let r=Math.floor(this.cursor/7),c=this.cursor%7;if(key==='ArrowUp')r=(r+6)%7;if(key==='ArrowDown')r=(r+1)%7;if(key==='ArrowLeft')c=(c+6)%7;if(key==='ArrowRight')c=(c+1)%7;this.cursor=r*7+c;if(this.selection!==null)this.choose(this.cursor);else this.cb.message(`Row ${r+1}, column ${c+1}. Press Enter to select.`);}
  action(){if(this.paused||this.ended||this.pending)return;this.keyboard=true;this.choose(this.cursor);}
  draw(){
-  const c=this.ctx,g=this.geometry();c.save();c.fillStyle='#03183de8';rounded(c,g.x-5,g.y-5,g.size+10,g.size+10,16);c.fill();c.strokeStyle='#8cefff77';c.lineWidth=2;c.stroke();c.save();rounded(c,g.x,g.y,g.size,g.size,12);c.clip();
+  const c=this.ctx,g=this.geometry();c.save();if(this.shake)c.translate(Math.sin(this.time*90)*this.shake*4,Math.cos(this.time*70)*this.shake*3);c.fillStyle='#03183de8';rounded(c,g.x-5,g.y-5,g.size+10,g.size+10,16);c.fill();c.strokeStyle='#8cefff77';c.lineWidth=2;c.stroke();c.save();rounded(c,g.x,g.y,g.size,g.size,12);c.clip();
   for(let i=0;i<this.board.length;i++){const row=Math.floor(i/7),col=i%7,v=this.board[i];let x=g.x+(col+.5)*g.cell,y=g.y+(row+.5)*g.cell;c.fillStyle='#123965a0';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();if(v<0)continue;
    if((this.phase==='swap'||this.phase==='return')&&(i===this.swap.from||i===this.swap.to)){const to=i===this.swap.from?this.swap.to:this.swap.from,t=1-clamp(this.pending/.16,0,1);x+=((to%7)-col)*g.cell*t;y+=(Math.floor(to/7)-row)*g.cell*t;}
-   if(this.phase==='fall')y+=(this.falls.get(i)||0)*g.cell*(clamp(this.pending/.28,0,1)**2);drawSprite(c,crystalSprites[v],x,y,g.cell*.86,g.cell*.86);
+   if(this.phase==='fall'){const d=this.falls.get(i)||0;if(d){const k=clamp((this.fallDur-this.pending)/fallTime(d),0,1);y+=d*g.cell*(1-k*k);}}
+   let size=g.cell*.86;if(this.clearing?.has(i)){const p=1-clamp(this.pending/SEQ_CLEAR,0,1),s=1-p*p;size*=s;c.globalAlpha=s;}
+   drawSprite(c,crystalSprites[v],x,y,size,size);c.globalAlpha=1;
    if(this.selection===i||(this.keyboard&&this.cursor===i)){c.strokeStyle=this.selection===i?'#ffe77a':'#e6ffff';c.lineWidth=3;rounded(c,g.x+col*g.cell+3,g.y+row*g.cell+3,g.cell-6,g.cell-6,9);c.stroke();}
-  }c.restore();c.restore();
+  }
+  // Idle hint: after a few seconds without a move, one swap that works pulses gently.
+  if(this.hintPair&&!this.pending){const a=.45+.35*Math.sin(this.time*5);c.strokeStyle=`rgba(255,231,122,${a})`;c.lineWidth=3;for(const i of this.hintPair)rounded(c,g.x+i%7*g.cell+3,g.y+Math.floor(i/7)*g.cell+3,g.cell-6,g.cell-6,9),c.stroke();}
+  c.restore();
+  c.textAlign='center';c.textBaseline='middle';
+  for(const p of this.popups){c.globalAlpha=Math.max(0,1-p.t/.9);c.fillStyle='#ffffff';c.shadowColor='#00c9ff';c.shadowBlur=10;c.font=`800 ${Math.round(g.cell*.36)}px Inter, sans-serif`;c.fillText(p.text,p.x,p.y-p.t*g.cell*.7);}
+  if(this.banner){const t=this.banner.t,a=Math.min(1,t*6,(1.1-t)*3);c.globalAlpha=Math.max(0,a);c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font=`900 ${Math.round(g.cell*.5)}px Inter, sans-serif`;c.fillText(this.banner.text.toUpperCase(),g.x+g.size/2,g.y+g.size/2-(1-Math.min(1,t*5))*12);}
+  c.globalAlpha=1;c.shadowBlur=0;c.restore();
  }
  finish(){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:this.score>=this.target});}
 }
