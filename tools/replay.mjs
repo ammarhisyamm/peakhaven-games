@@ -41,8 +41,10 @@ export async function replayBond(rep){
   const out=collector(),e=new BondEngine(stubCanvas([...rep.view]),out.cb,{seed:rep.seed,motion:false});
   const taps=[...rep.taps];let rejected=0;
   const stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
-  while(!e.ended&&e.ticks<stop){
+  // Taps on the final tick still count: finish() can follow a throw in the same frame, before any step.
+  while(!e.ended){
     while(taps.length&&taps[0]===e.ticks){taps.shift();const before=e.inputs.length;e.action();if(e.inputs.length===before)rejected++;}
+    if(e.ticks>=stop)break;
     e.step(SIM_STEP);
   }
   e.destroy();

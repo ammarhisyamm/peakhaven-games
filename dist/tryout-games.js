@@ -40,6 +40,12 @@ const angularDistance=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
 export const bondVials=s=>s<=BOND_KNEE?5+s:5+BOND_KNEE+(s-BOND_KNEE);
 // Seconds allowed per vial: 4 s until stage 5, easing to 2.5 s flat from stage 20.
 export const bondClock=s=>clamp(BOND_CLOCK_MAX-(BOND_CLOCK_MAX-BOND_CLOCK_MIN)*(s-BOND_CLOCK_FROM)/(BOND_CLOCK_TO-BOND_CLOCK_FROM),BOND_CLOCK_MIN,BOND_CLOCK_MAX);
+// The most vials that still fit between `pins` (angles on the ring), each at least BOND_HIT from every other:
+// a gap g between neighbours holds floor(g / BOND_HIT) - 1 more. An empty ring holds floor(TAU / BOND_HIT), 36.
+export function bondCapacity(pins){if(!pins.length)return Math.floor(TAU/BOND_HIT);
+ const s=pins.map(a=>((a%TAU)+TAU)%TAU).sort((a,b)=>a-b);let n=0;
+ for(let i=0;i<s.length;i++){const g=(i+1<s.length?s[i+1]:s[0]+TAU)-s[i];n+=Math.max(0,Math.floor((g-1e-9)/BOND_HIT)-1);}
+ return n;}
 function rounded(c,x,y,w,h,r){c.beginPath();c.roundRect(x,y,w,h,r);}
 function ring(c,x,y,r,rotation=0){
  c.save();c.shadowColor='#00d9ff';c.shadowBlur=20;c.lineWidth=12;c.strokeStyle='#b8f6ff';c.beginPath();c.arc(x,y,r,0,TAU);c.stroke();c.shadowBlur=0;c.lineWidth=5;c.strokeStyle='#0752a8';c.stroke();c.lineWidth=2;c.strokeStyle='#ffffffb0';c.beginPath();c.arc(x,y,r-8,0,TAU);c.stroke();
@@ -205,9 +211,11 @@ export class BondEngine extends MiniEngine{
  get wobble(){return this.index>=3?Math.sin(this.time*1.15)*1.3+.35:1;}
  nextStage(){this.stage++;const s=this.index;this.left=bondVials(s);this.pins=[];this.stageTime=0;
   // Up to five seeded fixed vials, each kept a gap clear of the others, 24 tries apiece, so a chain
-  // never starts already crowded. Fewer than asked for is normal once the ring is busy.
-  const want=Math.floor(this.random()*(BOND_MAX_FIXED+1));
-  for(let i=0;i<want;i++)for(let t=0;t<24;t++){const a=this.random()*TAU;if(this.pins.every(p=>angularDistance(p,a)>BOND_FIXED_GAP)){this.pins.push(a);break;}}
+  // never starts already crowded. Fewer than asked for is normal once the ring is busy. A fixed vial is
+  // also refused if it would leave less room than the chain has shots: until the shots alone outgrow the
+  // ring (chain 33), every chain can be cleared. That only bites from chain 25; earlier chains seed as before.
+  const want=Math.floor(this.random()*(BOND_MAX_FIXED+1)),roomy=this.left<=bondCapacity([]);
+  for(let i=0;i<want;i++)for(let t=0;t<24;t++){const a=this.random()*TAU;if(this.pins.every(p=>angularDistance(p,a)>BOND_FIXED_GAP)&&(!roomy||bondCapacity([...this.pins,a])>=this.left)){this.pins.push(a);break;}}
   this.fixed=this.pins.length;
   this.base=(1.7+s*.22)*(this.random()<.5?-1:1);this.rotation=this.random()*TAU;this.clock=this.clockLimit;
   this.cb.hud(this.score,this.left,String(this.stage));if(this.stage>1)this.cb.message(`Chain ${this.stage}. ${this.left} vials.`);}
@@ -223,7 +231,7 @@ export class BondEngine extends MiniEngine{
   for(const flight of this.flights){flight.progress+=dt/.12;if(flight.progress<1)continue;
    const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<BOND_HIT);
    if(collision){this.flights=[];this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds,round:this.stage,replay:this.replay()});return;}
-   this.pins.push(target);this.bonds++;this.left--;this.score+=100;this.bump=1;this.clock=bondClock(this.stage);const g=this.geometry();this.burst(g.x,g.y+g.r);
+   this.pins.push(target);this.bonds++;this.left--;this.score+=100;this.bump=1;this.clock=this.clockLimit;const g=this.geometry();this.burst(g.x,g.y+g.r);
    this.cb.hud(this.score,this.left,String(this.stage));this.cb.sound('bond');
    if(this.left===0){this.clearT=.45;this.burst(g.x,g.y,'#ffd24d',36);this.cb.sound('perfect');this.cb.effect?.('CHAIN COMPLETE!','bond');}else this.cb.effect?.('BONDED!','bond');}
   this.flights=this.flights.filter(f=>f.progress<1);
