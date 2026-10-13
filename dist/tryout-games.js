@@ -145,7 +145,11 @@ export class RidgeEngine extends MiniEngine{
   this.lastGy=gy;this.lastAmp=amp;this.gates.push(gate);this.nextX+=RIDGE.SPACE;}
  // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.
  fillGates(){while(this.nextX<this.worldW+RIDGE.PW*2)this.addGate();}
- action(){if(this.paused||this.ended||this.dead)return;this.inputs.push(this.ticks);this.started=true;this.waiting=false;this.vy=-RIDGE.FLAP;this.cb.sound('flap');this.cb.message('');}
+ // The tap that ends a post-pause wait only picks the flight back up, at the speed it had when it paused; it does
+ // not flap. A forced flap there could throw the vial into glass it was threading when the tab went hidden.
+ action(){if(this.paused||this.ended||this.dead)return;this.inputs.push(this.ticks);
+  if(this.waiting){this.waiting=false;this.cb.message('');return;}
+  this.started=true;this.vy=-RIDGE.FLAP;this.cb.sound('flap');this.cb.message('');}
  // Broad phase on the gate's column, then the two vial outlines themselves.
  hits(g){const R=RIDGE.R;if(!(this.px+R>g.x&&this.px-R<g.x+RIDGE.PW))return false;const cx=g.x+RIDGE.PW/2;
   return hitsVial(this.px,this.py,R,cx,g.cy+g.gap/2,1)||hitsVial(this.px,this.py,R,cx,g.cy-g.gap/2,-1);}
@@ -166,9 +170,10 @@ export class RidgeEngine extends MiniEngine{
  }
  crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.py*this.ws,'#ffd383');this.cb.sound('miss');}
  result(){return {score:this.score,gates:this.gatesPassed,orbs:this.orbsTaken,replay:this.replay()};}
- replay(){return {v:3,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
- // After a pause the vial waits for a tap instead of resuming mid-fall.
- pause(value=true){super.pause(value);if(!value&&this.started&&!this.dead&&!this.ended){this.resumes.push(this.ticks);this.waiting=true;this.vy=0;this.cb.message('Tap to keep flying.');}}
+ replay(){return {v:4,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
+ // After a pause the vial (and the course) hold still until a tap, so the run never resumes before the player is
+ // ready. Its velocity is kept: the tap continues the same flight, as if the pause never happened.
+ pause(value=true){super.pause(value);if(!value&&this.started&&!this.dead&&!this.ended){this.resumes.push(this.ticks);this.waiting=true;this.cb.message('Tap to keep flying.');}}
  draw(){const c=this.ctx,k=this.ws;c.save();c.scale(k,k);
   if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.3;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.25,0,TAU);c.fill();}
   c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;

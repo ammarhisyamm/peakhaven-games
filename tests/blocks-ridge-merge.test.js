@@ -136,8 +136,30 @@ test('The Ridge bot clears plenty of gates, so the course is playable',()=>{
 });
 test('Ridge Run waits for a tap after resuming instead of falling straight away',()=>{
   const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});e.action();for(let i=0;i<30;i++)e.step(SIM_STEP);
-  e.pause(true);e.pause(false);const y=e.py,xs=e.gates.map(g=>g.x);for(let i=0;i<240;i++)e.step(SIM_STEP);
-  assert.equal(e.py,y,'holds still where it was');assert.deepEqual(e.gates.map(g=>g.x),xs,'the course waits too');assert.equal(e.ended,false);e.action();assert.equal(e.vy,-430);e.destroy();
+  e.pause(true);e.pause(false);const y=e.py,vy=e.vy,xs=e.gates.map(g=>g.x);for(let i=0;i<240;i++)e.step(SIM_STEP);
+  assert.equal(e.py,y,'holds still where it was');assert.deepEqual(e.gates.map(g=>g.x),xs,'the course waits too');assert.equal(e.ended,false);
+  e.action();assert.equal(e.vy,vy,'the tap picks the flight back up');e.step(SIM_STEP);assert.notEqual(e.py,y,'and it moves again');e.destroy();
+});
+test('The tap that resumes Ridge Run carries on the paused flight instead of forcing a flap into the glass',()=>{
+  // Paused (say the tab went hidden) while threading a gate just under the hanging vial. A forced flap on
+  // resume used to throw the vial into the glass: the run was lost to the pause, not to the player.
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});e.action();
+  const g={x:e.px-RIDGE.PW/2,gy:300,cy:300,gap:115.4,amp:0,phase:0,rate:0,passed:false};e.gates=[g];e.nextX=1e7;e.orbs=[];
+  e.py=g.cy-g.gap/2+RIDGE.R+4;e.vy=120;const vy=e.vy;
+  e.pause(true);e.pause(false);e.pause(false);assert.equal(e.vy,vy,'velocity kept through the pause, even if resumed twice');
+  for(let i=0;i<30;i++)e.step(SIM_STEP);assert.equal(e.vy,vy,'still waiting');
+  e.action();assert.equal(e.vy,vy,'the resuming tap does not flap');assert.equal(e.waiting,false);
+  for(let i=0;i<6;i++)e.step(SIM_STEP);assert.equal(e.dead,false,'falls on through the gap');
+  e.action();assert.equal(e.vy,-430,'the next tap flaps as usual');e.destroy();
+  const f=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});f.action();f.gates=[{...g}];f.nextX=1e7;f.orbs=[];f.py=g.cy-g.gap/2+RIDGE.R+4;f.vy=120;
+  f.action();for(let i=0;i<6;i++)f.step(SIM_STEP);assert.equal(f.dead,true,'a flap from that spot is fatal, which is what resuming used to force');f.destroy();
+});
+test('A Ridge run with pauses replays to the same score, and an old-format replay is refused',async()=>{
+  const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:21,motion:false});e.action();
+  for(let t=0;t<120*20&&!e.ended;t++){if(t%300===150){e.pause(true);e.pause(false);}const next=e.gates.find(g=>!g.passed);if(e.waiting&&t%300===170)e.action();else if(!e.waiting&&next&&e.py>next.cy+12&&e.vy>-60)e.action();e.step(SIM_STEP);}
+  e.finish();const rep=out.result.replay;assert.equal(rep.v,4);assert.ok(rep.resumes.length>0);
+  assert.equal((await replayRidge(rep)).score,out.result.score);
+  await assert.rejects(replayRidge({...rep,v:3}),/Not a Ridge Run replay/);e.destroy();
 });
 test('Ending a run inside a frame does not schedule another frame',()=>{
   let e;const out=callbacks(()=>e.destroy());e=new RidgeEngine(canvas(),out.cb,{seed:4,motion:false});
