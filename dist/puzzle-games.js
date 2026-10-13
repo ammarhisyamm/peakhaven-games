@@ -19,8 +19,8 @@ export function startBlocks(root,cb,options={}){
  function afterAction(){if(g.ended){finish();return;}if(!anyFit(g))cb.message('No space for this tray. Use Bomb or Shuffle, or finish from Pause.');}
  function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound('invalid');cb.message('Choose a square near filled blocks.');return;}state=g.state;bomb=false;cb.effect('SPACE CLEARED!','blocks');cb.sound('merge');render();afterAction();return;}const p=state.tray[state.selected];if(!p){cb.sound('invalid');cb.message('Select a piece from the tray first.');return;}const out=blocksPlace(g,state.selected,r,c);if(!out){cb.sound('invalid');cb.message('That piece needs empty squares. Try another spot.');return;}state=g.state;hintCells=[];render();cb.sound(out.lines?'perfect':'drop');cb.message(out.lines?`${out.lines} ${out.lines===1?'line':'lines'} cleared! ${state.chain>1?state.chain+'× chain.':''}`:'Lovely fit. Keep a little space for the next piece.');if(out.lines)cb.effect(out.lines>1?`${out.lines} LINE BLAST!`:'LINE BLAST!','blocks');cb.progress?.({lines:state.lines});afterAction();}
  // Dragging works like Lattice in the tryout arcade: the piece lifts at full board size the moment it is
- // touched, floats centred about 1.75 cells above the finger so it is never hidden, and snaps to the nearest
- // cells. The landing spot and any lines it would clear light up; an invalid drop goes back to the tray.
+ // touched and snaps to the nearest cells. On touch it floats centred about 1.75 cells above the finger so
+ // the thumb never hides it; with a mouse or pen it sits centred on the pointer. The landing spot and any lines it would clear light up; an invalid drop goes back to the tray.
  // A tap without moving still selects the piece, and keyboard play is unchanged.
  const LIFT_CELLS=1.75,TAP_SLOP=6;
  let drag=null,dragArt=null,suppressClick=false;
@@ -32,13 +32,13 @@ export function startBlocks(root,cb,options={}){
   tray.querySelector(`[data-shape="${drag.index}"]`)?.classList.add('lifted');buzz(8);}
  function follow(e){if(!dragArt)return;const m=boardMetrics(),p=state.tray[drag.index];if(!p)return;
   const cols=Math.max(...p.shape.map(s=>s[0]))+1,rows=Math.max(...p.shape.map(s=>s[1]))+1,w=cols*m.step-(m.step-m.cell),h=rows*m.step-(m.step-m.cell);
-  const left=e.clientX-w/2,top=e.clientY-LIFT_CELLS*m.step-h/2;
+  const left=e.clientX-w/2,top=e.clientY-drag.lift*m.step-h/2;
   dragArt.style.left=`${left}px`;dragArt.style.top=`${top}px`;
   drag.r=Math.round((top-m.top)/m.step);drag.c=Math.round((left-m.left)/m.step);
   drag.valid=fits(state.grid,p.shape,drag.r,drag.c);dragArt.classList.toggle('invalid',!drag.valid);
   if(drag.valid)preview(drag.r,drag.c);else board.querySelectorAll('.ghost,.clear-preview').forEach(b=>b.classList.remove('ghost','clear-preview'));}
  const dragDown=e=>{const slot=e.target.closest('[data-shape]');if(locked()||!slot||!state.tray[slot.dataset.shape])return;
-  drag={index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false};tray.setPointerCapture?.(e.pointerId);
+  drag={index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false,lift:e.pointerType==='touch'?LIFT_CELLS:0};tray.setPointerCapture?.(e.pointerId);
   state.selected=drag.index;bomb=false;hintCells=[];liftPiece();follow(e);};
  const dragMove=e=>{if(!drag||locked())return;if(!drag.moving&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>=TAP_SLOP){drag.moving=true;cb.sound('select');}follow(e);};
  const dragUp=e=>{if(!drag)return;follow(e);const last=drag;clearDrag();if(!last.moving){render();return;} // a tap: the click handler selects it
