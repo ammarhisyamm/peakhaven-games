@@ -59,12 +59,12 @@ test('Ridge bottles fill both screen edges and a gate keeps its original opening
 
 test('Bond awards clean placements and ends once on a occupied gap',()=>{
  const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.pins=[];game.action();game.update(.37);assert.equal(game.score,100);assert.equal(game.bonds,1);assert.ok(game.speed>.5);
- game.pins=Array.from({length:100},(_,i)=>i*Math.PI*2/100);game.cooldown=0;game.action();game.update(.37);assert.deepEqual(h.result(),{score:100,bonds:1});game.destroy();
+ game.pins=Array.from({length:100},(_,i)=>i*Math.PI*2/100);game.cooldown=0;game.action();game.update(.37);const {replay,...result}=h.result();assert.deepEqual(result,{score:100,bonds:1,round:1});assert.equal(replay.game,'bond');game.destroy();
 });
 
-test('Bond accepts a second fast tap while the first vial is still in flight',()=>{
- const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.pins=[];game.action();tick(game,.07);game.action();assert.equal(game.flights.length,2);assert.equal(h.sounds.filter(s=>s==='launch').length,2);
- tick(game,.06);assert.equal(game.bonds,1,'first impact occurs after 120ms');assert.equal(game.flights.length,1);game.pause();game.action();assert.equal(game.flights.length,1,'pause blocks new shots');game.destroy();
+test('Bond accepts a second fast tap while the first vial is still in flight, but ignores a double tap that would hit it',()=>{
+ const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.pins=[];game.action();game.update(.05);game.action();assert.equal(game.flights.length,1,'a 50 ms double tap is ignored');game.update(.065);game.action();assert.equal(game.flights.length,2,'a tap once the ring has moved a vial-width is accepted mid-flight');assert.equal(h.sounds.filter(s=>s==='launch').length,2);
+ tick(game,.01);assert.equal(game.bonds,1,'first impact occurs after 120ms');assert.equal(game.flights.length,1);game.pause();game.action();assert.equal(game.flights.length,1,'pause blocks new shots');game.destroy();
 });
 
 test('Bond starts with a clear lane and supports two well-timed rapid throws',()=>{
