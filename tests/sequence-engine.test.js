@@ -6,7 +6,7 @@ globalThis.requestAnimationFrame=()=>1;
 globalThis.cancelAnimationFrame=()=>{};
 globalThis.Image=class{complete=false;naturalWidth=0;};
 const {SequenceEngine}=await import('../dist/tryout-games.js');
-const {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,sequencePalette,SEQUENCE_MOVES}=await import('../dist/sequence-rules.js');
+const {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,sequenceTarget,sequencePalette,SEQUENCE_MOVES,SEQUENCE_TARGET_CAP}=await import('../dist/sequence-rules.js');
 const {SIM_STEP,createRandom}=await import('../dist/rng.js');
 const {replaySequence}=await import('../tools/replay.mjs');
 const {playSequence,greedyMove,randomMove,driveSequence}=await import('../tools/sequence-bot.mjs');
@@ -114,4 +114,13 @@ test('Even a generator stuck on one value deals a playable board at every colour
   for(const level of [1,6,11,16,60])for(const r of [()=>0,()=>.999999]){
     const b=createSequenceBoard(level,r);assert.equal(sequenceMatches(b).size,0);assert.equal(hasSequenceMove(b),true);
   }
+});
+
+// ---------- Targets ----------
+test('Sequence targets keep levels 1-50 as they were, then ease toward a ceiling instead of climbing for ever',()=>{
+  for(let l=1;l<=50;l++)assert.equal(sequenceTarget(l),350+150*l);
+  let prev=sequenceTarget(50);
+  for(let l=51;l<=400;l++){const t=sequenceTarget(l);assert.ok(t>=prev&&t-prev<=150,`level ${l}: ${prev} -> ${t}`);assert.ok(t<=SEQUENCE_TARGET_CAP);assert.equal(t%50,0);prev=t;}
+  assert.equal(sequenceTarget(200),SEQUENCE_TARGET_CAP);assert.equal(sequenceTarget(0),sequenceTarget(1));
+  assert.equal(SEQUENCE_MOVES,25);
 });

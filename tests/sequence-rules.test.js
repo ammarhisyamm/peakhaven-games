@@ -12,7 +12,7 @@ test('Sequence boards start clean and higher levels add color choices and a larg
     assert.ok(board.every(color=>color>=0&&color<Math.min(7,4+Math.floor((level-1)/5))));
   }
   assert.equal(SEQUENCE_MOVES,25);
-  assert.ok(sequenceTarget(80)>sequenceTarget(79));
+  assert.ok(sequenceTarget(55)>sequenceTarget(54));assert.ok(sequenceTarget(80)>=sequenceTarget(79));
 });
 
 test('Sequence always begins with a legal swap, even with a deterministic random source',()=>{
