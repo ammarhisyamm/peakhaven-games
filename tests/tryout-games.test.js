@@ -87,6 +87,6 @@ test('Sequence long swipes choose one adjacent crystal and cancel never exchange
 test('Sequence resolves one animated swap and settles before returning the winning result',()=>{
  const h=harness(),game=new SequenceEngine(h.canvas,h.cb,{motion:true,level:3});
  game.board.fill(1);game.board[0]=0;game.board[1]=1;game.board[2]=0;game.board[8]=0;game.target=100;game.motion=false;
- game.choose(1,8);assert.equal(game.moves,24);assert.equal(h.result(),null);game.choose(0,1);assert.equal(game.moves,24,'pending swap locks duplicate input');tick(game,.1);
+ game.choose(1,8);assert.equal(game.moves,24);assert.equal(h.result(),null);game.choose(0,1);assert.equal(game.moves,24,'pending swap locks duplicate input');tick(game,2); // crystals now animate even with reduced motion
  assert.ok(game.score>=100);assert.equal(game.board.some(v=>v<0),false,'board settles before completion');assert.deepEqual(h.result(),{score:game.score,moves:1,won:true});assert.ok(sequenceTarget(4)>sequenceTarget(3));game.destroy();
 });
