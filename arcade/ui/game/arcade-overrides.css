@@ -1,0 +1,13 @@
+/* V2 toolbar spacing stays independent of the gameplay stylesheet. */
+.in-game .game-tools,.in-game .sort-controls{width:fit-content;max-width:calc(100% - 24px);justify-content:center;gap:clamp(6px,2vw,12px)}
+.in-game .tool-button{width:max-content;flex:0 0 auto;min-width:0;max-width:none;aspect-ratio:auto;padding:7px 12px}
+@media(max-width:370px){.in-game .game-tools{gap:5px}.in-game .game-tools .tool-button{gap:4px;padding:5px 7px}.in-game .game-tools .tool-button>.icon{width:16px;height:16px}.in-game .game-tools .tool-button>span{font-size:9px;line-height:1}.in-game .tool-button>b{right:-2px}}
+
+@keyframes peak-blocks-clear{0%{transform:translate3d(0,0,0) scale(1);filter:brightness(1)}14%{transform:translate3d(-3px,0,0) scale(1.025);filter:brightness(1.6)}30%{transform:translate3d(3px,0,0) scale(1.015)}48%{transform:translate3d(-2px,0,0) scale(1.01)}70%{transform:translate3d(1px,0,0) scale(1)}100%{transform:translate3d(0,0,0) scale(1);filter:brightness(1)}}
+@keyframes peak-blocks-flash{0%{opacity:0}16%{opacity:.78}42%{opacity:.22}100%{opacity:0}}
+.in-game .block-board{position:relative;isolation:isolate;overflow:hidden}
+.in-game .block-board.block-clearing{animation:peak-blocks-clear 420ms cubic-bezier(.2,.8,.2,1)}
+.in-game .block-board.block-clearing::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:12px;background:radial-gradient(ellipse at center,#fffbd9 0,#79f6ff9c 30%,#16aaff44 62%,transparent 78%);animation:peak-blocks-flash 420ms ease-out}
+.in-game .block-board.block-combo-2{box-shadow:0 0 0 4px #12d8ff99,0 0 34px #12d8ffdd}
+.in-game .block-board.block-combo-3{box-shadow:0 0 0 5px #ffe174cc,0 0 44px #ffb62fee}
+@media(prefers-reduced-motion:reduce){.in-game .block-board.block-clearing,.in-game .block-board.block-clearing::after{animation-duration:1ms}}
