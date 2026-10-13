@@ -77,3 +77,30 @@ The October 14 client gameplay/result/shop references and observed responsive
 rules are documented in [GAME_REFERENCE_UX.md](GAME_REFERENCE_UX.md). The root
 `DESIGN.md` and `.impeccable/design.json` continue to describe the incumbent
 Alpine Lab application; this scoped production extension does not replace them.
+
+## Accounts and the leaderboard
+
+Invite-only accounts, 3 free plays per game per day and the monthly/yearly leaderboard run on Supabase plus the
+Vercel functions in `api/`. Every score is replayed on the server with the gameplay code from `../dist/` before
+it counts, so a changed client can't post a fake score.
+
+- `api/*.js`: thin Vercel wrappers. Logic lives in `server/handlers.mjs`; rules (Melbourne days, shared daily
+  seeds, rank points) in `server/competition.mjs`; replay checks in `server/verify.mjs`.
+- `supabase/schema.sql`: tables, Row Level Security and the two database functions. Run it once in the SQL editor.
+- `ui/account.js`: sign-in by emailed link and calls to `/api`. Without `/api/config` (plain static preview)
+  the arcade falls back to the on-device demo.
+- Tests: `npm test` in the repo root (`tests/competition.test.js`).
+
+Environment variables (Vercel, Production and Preview): `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY` (added automatically by the Vercel Supabase integration) and `RUN_SEED_SECRET`
+(any long random string; changing it changes every daily course).
+
+Local preview with working accounts and no Supabase: `npm install && npm run build && npm run dev`, then open
+http://localhost:8775/#play and join with invite code `DEV`. Data is kept in memory only.
+
+Running the competition (Supabase SQL editor):
+
+```sql
+insert into public.invites (code, max_uses, note) values ('PEAK-7Q2X', 1, 'for Sam');      -- new invite
+select * from public.runs where flagged or status = 'rejected' order by updated_at desc;     -- review
+```
