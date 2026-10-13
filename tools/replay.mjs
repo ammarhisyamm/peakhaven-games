@@ -41,9 +41,9 @@ export async function replayBond(rep){
   const {BondEngine}=await import('../dist/tryout-games.js');
   const out=collector(),e=new BondEngine(stubCanvas([...rep.view]),out.cb,{seed:rep.seed,motion:false});
   const taps=[...rep.taps];let rejected=0;
-  while(!e.ended&&e.ticks<MAX_TICKS){
+  const stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
+  while(!e.ended&&e.ticks<stop){
     while(taps.length&&taps[0]===e.ticks){taps.shift();const before=e.inputs.length;e.action();if(e.inputs.length===before)rejected++;}
-    if(!taps.length&&!e.flights.length)break; // nothing left in the air and no more taps: the run was finished from pause
     e.step(SIM_STEP);
   }
   e.destroy();

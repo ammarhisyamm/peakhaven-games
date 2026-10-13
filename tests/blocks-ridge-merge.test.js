@@ -139,31 +139,39 @@ test('Vial Merge never spawns tiers that cannot merge',()=>{
 });
 
 // ---------- Bond ----------
-const {BondEngine,BOND_ROUND}=await import('../dist/tryout-games.js');
+const {BondEngine,BOND_MAX_VIALS,BOND_HIT}=await import('../dist/tryout-games.js');
 const {replayBond}=await import('../tools/replay.mjs');
-// Fires only when the vial would land clear of every pinned and in-flight vial.
-function bondSafe(e,margin=.05){const land=r=>Math.PI/2-r;const t=land(e.rotation+e.direction*e.speed*.12);
-  const pending=e.flights.map(f=>land(e.rotation+e.direction*e.speed*(1-f.progress)*.12));
-  const d=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
-  return [...e.pins,...pending].every(a=>d(a,t)>=.22+margin);}
-test('Bond no longer fills up and stalls: a careful player keeps finding gaps round after round',()=>{
-  const e=new BondEngine(canvas(),callbacks().cb,{seed:12,motion:false});let sinceShot=0,longestWait=0;
-  for(let i=0;i<120*180&&!e.ended;i++){if(e.cooldown===0&&bondSafe(e)){e.action();longestWait=Math.max(longestWait,sinceShot);sinceShot=0;}else sinceShot+=SIM_STEP;e.step(SIM_STEP);}
-  assert.equal(e.ended,false,'safe shots never crash');assert.ok(e.bonds>=60,`bonds ${e.bonds}`);assert.ok(e.round>=8,`round ${e.round}`);
-  assert.ok(longestWait<3,`longest wait for a gap ${longestWait.toFixed(2)} s`);e.destroy();
+const angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+// Fires only when the vial, 0.12 s from now, would land clear of every vial on the ring.
+function bondSafe(e,margin=.04){let t=e.stageTime,rot=e.rotation,p=0;while(p<1){t+=SIM_STEP;rot+=e.base*(1+e.wob*Math.sin(t*1.4))*SIM_STEP;p+=SIM_STEP/.12;} // same steps as the engine
+  return e.pins.every(a=>angDist(a,Math.PI/2-rot)>=BOND_HIT+margin);}
+function playBond(e,seconds,chance=0){const rand=createRandom(99);for(let i=0;i<seconds*120&&!e.ended;i++){if(!e.flights.length&&e.clearT<=0&&(bondSafe(e)||rand()<chance))e.action();e.step(SIM_STEP);}}
+test('Bond chains follow the Tryout Arcade design: 5 + chain vials, up to 3 fixed vials, faster spin, wobble from chain 3',()=>{
+  for(let seed=1;seed<=40;seed++){const e=new BondEngine(canvas(),callbacks().cb,{seed,motion:false});
+    for(let stage=1;stage<=9;stage++){
+      assert.equal(e.stage,stage);assert.equal(e.left,Math.min(5+stage,BOND_MAX_VIALS));assert.ok(e.pins.length<=Math.min(3,stage-1),'fixed vials');
+      assert.ok(Math.abs(Math.abs(e.base)-(1.6+.2*stage))<1e-9);assert.equal(e.wob>0,stage>=3);if(stage>=3)assert.ok(e.wob>=.6&&e.wob<=1.7);
+      e.left=0;e.clearT=.001;e.step(SIM_STEP);}
+    e.destroy();}
 });
-test('Bond rounds pay a bonus, reset the ring and reverse from round 3',()=>{
-  const e=new BondEngine(canvas(),callbacks().cb,{seed:3,motion:false});
-  while(e.round===1){if(e.cooldown===0&&bondSafe(e))e.action();e.step(SIM_STEP);}
-  assert.equal(e.score,BOND_ROUND*100+200);assert.equal(e.pins.length,5);assert.equal(e.direction,1);
-  while(e.round===2){if(e.cooldown===0&&bondSafe(e))e.action();e.step(SIM_STEP);}assert.equal(e.direction,1);
-  while(e.round===3){if(e.cooldown===0&&bondSafe(e))e.action();e.step(SIM_STEP);}assert.equal(e.direction,-1,'round 4 spins the other way');e.destroy();
+test('Bond completes a chain when every vial is used, then starts the next after a short pause',()=>{
+  const e=new BondEngine(canvas(),callbacks().cb,{seed:5,motion:false});const start=e.left;
+  while(e.stage===1&&!e.ended){if(!e.flights.length&&e.clearT<=0&&bondSafe(e))e.action();e.step(SIM_STEP);}
+  assert.equal(e.ended,false);assert.equal(e.stage,2);assert.equal(e.bonds,start);assert.equal(e.score,start*100);e.destroy();
+});
+test('Only one Bond vial flies at a time, so a double tap cannot hit itself',()=>{
+  const e=new BondEngine(canvas(),callbacks().cb,{seed:2,motion:false});e.action();e.action();assert.equal(e.flights.length,1);assert.equal(e.inputs.length,1);e.destroy();
+});
+test('A careful Bond player keeps clearing chains for three minutes',()=>{
+  const e=new BondEngine(canvas(),callbacks().cb,{seed:12,motion:false});playBond(e,180);
+  assert.equal(e.ended,false);assert.ok(e.stage>=8,`reached chain ${e.stage}`);e.destroy();
 });
 test('Bond replays to the same score at 30, 60 and 144 Hz',async()=>{
   for(const hz of [30,60,144])for(const seed of [1,2]){
     const out=callbacks(),e=new BondEngine(canvas(),out.cb,{seed,motion:false});const rand=createRandom(seed);let now=1000;e.frame(now);
-    for(let f=0;f<60*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&e.cooldown===0&&(bondSafe(e)||rand()<.004))e.action();}
+    for(let f=0;f<60*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&!e.flights.length&&e.clearT<=0&&(bondSafe(e)||rand()<.004))e.action();}
     if(!e.ended)e.finish();e.destroy();
     const again=await replayBond(out.result.replay);assert.equal(again.score,out.result.score,`seed ${seed} at ${hz} Hz`);
   }
 });
+

@@ -62,9 +62,10 @@ test('Bond awards clean placements and ends once on a occupied gap',()=>{
  game.pins=Array.from({length:100},(_,i)=>i*Math.PI*2/100);game.cooldown=0;game.action();game.update(.37);const {replay,...result}=h.result();assert.deepEqual(result,{score:100,bonds:1,round:1});assert.equal(replay.game,'bond');game.destroy();
 });
 
-test('Bond accepts a second fast tap while the first vial is still in flight, but ignores a double tap that would hit it',()=>{
- const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.pins=[];game.action();game.update(.05);game.action();assert.equal(game.flights.length,1,'a 50 ms double tap is ignored');game.update(.065);game.action();assert.equal(game.flights.length,2,'a tap once the ring has moved a vial-width is accepted mid-flight');assert.equal(h.sounds.filter(s=>s==='launch').length,2);
- tick(game,.01);assert.equal(game.bonds,1,'first impact occurs after 120ms');assert.equal(game.flights.length,1);game.pause();game.action();assert.equal(game.flights.length,1,'pause blocks new shots');game.destroy();
+test('Bond fires one vial at a time: taps during a flight are ignored, and pause blocks new shots',()=>{
+ const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.pins=[];game.action();game.update(.05);game.action();assert.equal(game.flights.length,1,'a tap mid-flight is ignored');
+ game.update(.08);assert.equal(game.bonds,1,'first impact occurs after 120ms');assert.equal(game.flights.length,0);game.action();assert.equal(game.flights.length,1);assert.equal(h.sounds.filter(s=>s==='launch').length,2);
+ game.update(.2);game.pause();game.action();assert.equal(game.flights.length,0,'pause blocks new shots');game.destroy();
 });
 
 test('Bond starts with a clear lane and supports two well-timed rapid throws',()=>{
