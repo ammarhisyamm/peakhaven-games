@@ -61,22 +61,54 @@ test('Late Blocks trays draw evenly instead of piling onto the 2×3 block',()=>{
 });
 
 // ---------- Ridge Run ----------
-const {RIDGE}=await import('../dist/tryout-games.js');
+const {RIDGE,RIDGE_VIAL,vialHalfWidth,hitsVial}=await import('../dist/tryout-games.js');
 // A simple bot that keeps the vial a little below the next gate's centre.
-function ridgeBot(e){const next=e.gates.find(g=>g.x+RIDGE.PW>e.px-RIDGE.HALF_W);const target=next?next.gy+12:300;return e.py>target&&e.vy>-60;}
+function ridgeBot(e){const next=e.gates.find(g=>g.x+RIDGE.PW>e.px-RIDGE.R);const target=next?next.gy+12:300;return e.py>target&&e.vy>-60;}
 function playRidge({seed,hz,view=[480,720],maxSeconds=90}){
   const c=canvas(...view),out=callbacks(),e=new RidgeEngine(c,out.cb,{seed,motion:false});
   let now=1000;e.frame(now);e.action();
   for(let f=0;f<maxSeconds*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&!e.dead&&ridgeBot(e))e.action();}
   if(!e.ended)e.finish();e.destroy();return {result:out.result,engine:e};
 }
-test('Ridge Run builds the Tryout Arcade course: 210 apart, openings 150 to 118, steps up to 120 rising to 220',()=>{
+// The reference ramps, written out as flap.ts has them: the box-era gap less the room the vial outline
+// hands back, so the reskin is not also a difficulty change.
+const refGap=i=>(150-RIDGE.SLACK)-((150-RIDGE.SLACK)-(118-RIDGE.SLACK))*Math.min(1,Math.max(0,(i-10)/40));
+const refJump=i=>120+100*Math.min(1,Math.max(0,i/40));
+test('Ridge Run builds the Tryout Arcade course: 210 apart, openings 147.4 to 115.4, steps up to 120 rising to 220',()=>{
   for(let seed=1;seed<=50;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false});
     while(e.index<90)e.addGate();
-    for(let i=0;i<e.gates.length;i++){const g=e.gates[i],gap=150-32*Math.min(1,Math.max(0,(i-10)/40));
-      assert.ok(Math.abs(g.gap-gap)<1e-9);assert.ok(g.gy>=60+gap/2-1e-9&&g.gy<=RIDGE.GROUND-60-gap/2+1e-9);
-      if(i){assert.ok(Math.abs(g.x-e.gates[i-1].x-210)<1e-9);assert.ok(Math.abs(g.gy-e.gates[i-1].gy)<=120+100*Math.min(1,i/40)+1e-9);}}
+    for(let i=0;i<e.gates.length;i++){const g=e.gates[i],gap=refGap(i);
+      assert.ok(Math.abs(g.gap-gap)<1e-9,`gap at ${i}`);assert.ok(g.gy>=RIDGE.EDGE+gap/2-1e-9&&g.gy<=RIDGE.GROUND-RIDGE.EDGE-gap/2+1e-9);
+      if(i){assert.ok(Math.abs(g.x-e.gates[i-1].x-210)<1e-9);assert.ok(Math.abs(g.gy-e.gates[i-1].gy)<=refJump(i)+1e-9);}}
     e.destroy();}
+});
+test('Ridge openings give back exactly the room the vial outline takes, and the first gate waits at 450',()=>{
+  assert.equal(RIDGE.SLACK,2.6);assert.equal(RIDGE.GROUND,570);assert.equal(RIDGE.R,13);assert.equal(RIDGE.FIRST_X,450);
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});
+  assert.ok(Math.abs(e.gapFor(0)-147.4)<1e-9);assert.ok(Math.abs(e.gapFor(50)-115.4)<1e-9);assert.ok(Math.abs(e.gapFor(90)-115.4)<1e-9);
+  assert.equal(e.gates[0].x,450);assert.ok(Math.abs(e.gates[1].x-660)<1e-9);e.destroy();
+});
+test('Ridge collision follows the vial outline: the neck is forgiving, the cap and body are not',()=>{
+  // Half-widths straight off the profile: cap 22, neck 15, shoulder ramping to 30, body 30.
+  assert.equal(vialHalfWidth(-1),-1);assert.equal(vialHalfWidth(0),RIDGE_VIAL.capW);assert.equal(vialHalfWidth(20),RIDGE_VIAL.neckW);
+  assert.equal(vialHalfWidth(RIDGE_VIAL.shoulder),RIDGE_VIAL.bodyW);assert.equal(vialHalfWidth(400),RIDGE_VIAL.bodyW);
+  assert.ok(Math.abs(vialHalfWidth(31)-(15+15*(31-24)/14))<1e-9,'shoulder ramps');
+  // How close the node may pass at each height. The neck is the most forgiving part of the glass, and
+  // every part of it is kinder than the 31-half-width box the outline replaced.
+  const capY=200,cx=100,clearance=d=>{let dx=0;while(dx<80&&hitsVial(cx+dx,capY+d,RIDGE.R,cx,capY,1))dx+=.1;return dx;};
+  const neck=clearance(20),body=clearance(60),cap=clearance(8),box=31+RIDGE.R*.9;
+  assert.ok(neck<cap&&neck<body,`neck ${neck.toFixed(1)} is the forgiving part (cap ${cap.toFixed(1)}, body ${body.toFixed(1)})`);
+  assert.ok(body<box,`even the body ${body.toFixed(1)} clears inside the old box ${box.toFixed(1)}`);
+  assert.equal(hitsVial(cx+28,capY+60,RIDGE.R,cx,capY,1),true,'the body still stops a close pass');
+  // Direction flips for the hanging vial, whose body runs up off the top of the screen.
+  assert.equal(hitsVial(cx,capY-60,RIDGE.R,cx,capY,-1),true);assert.equal(hitsVial(cx,capY+60,RIDGE.R,cx,capY,-1),false);
+});
+test('A Ridge gate is only scored once the whole gate is behind the vial',()=>{
+  const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:4,motion:false});
+  for(const g of e.gates)g.x=1e6;e.nextX=1e7;
+  const g=e.gates[0];g.x=e.px-RIDGE.PW+1;g.gy=e.py;g.gap=300; // wide open, still overlapping the vial
+  e.action();e.step(SIM_STEP);assert.equal(e.score,0,'not scored while the gate still overlaps');
+  g.x=e.px-RIDGE.PW-RIDGE.R-1;e.step(SIM_STEP);assert.equal(e.score,1);e.destroy();
 });
 test('Ridge Run speed rises from 165 to 230 by gate 60, with Tryout Arcade gravity and flap',()=>{
   const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false});assert.equal(e.speed,165);e.score=30;assert.equal(e.speed,197.5);e.score=90;assert.equal(e.speed,230);e.score=0;
@@ -88,8 +120,8 @@ test('Every screen gets the same Ridge course',()=>{
 });
 test('The Ridge ceiling stops the vial; the ground ends the run after a short fall',()=>{
   const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:2,motion:false});for(const g of e.gates)g.x=1e6;e.nextX=1e7;e.action();e.py=5;e.vy=-400;e.step(SIM_STEP);
-  assert.equal(e.dead,false);assert.equal(e.py,RIDGE.HALF_H);
-  e.py=RIDGE.GROUND;e.step(SIM_STEP);assert.equal(e.dead,true);assert.equal(out.result,null,'falls for a moment first');
+  assert.equal(e.dead,false);assert.equal(e.py,RIDGE.R);
+  e.py=RIDGE.GROUND;e.step(SIM_STEP);assert.equal(e.dead,true);assert.equal(e.py,RIDGE.GROUND-RIDGE.R,'settles on the ground');assert.equal(out.result,null,'falls for a moment first');
   for(let i=0;i<120;i++)e.step(SIM_STEP);assert.ok(out.result);assert.equal(out.result.score,0);e.destroy();
 });
 test('Ridge Run replays to the same score at 30, 60 and 144 Hz, on any screen',async()=>{

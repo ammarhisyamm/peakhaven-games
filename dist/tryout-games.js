@@ -9,7 +9,26 @@ export const BOND_MAX_VIALS=11,BOND_HIT=.17;
 export const bondClock=stage=>Math.max(2.5,6-.5*(stage-1));
 const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d);
 // Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
-const RIDGE=Object.freeze({H:640,GROUND:582,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,GAP:150,GAP_SHRINK:32,HALF_W:11,HALF_H:13,FIRST_X:420});
+// Every number here is the Tryout Arcade's Flap Dash, in its fixed 360x640 world: ground H-70, a node of
+// radius 13 at x 100, and gates whose openings are the box-era 150..118 less VIAL_SLACK, the room the
+// vial-shaped collision below hands back. Shrinking the gap by exactly that keeps the vial a reskin
+// rather than an easier game.
+const RIDGE=Object.freeze({H:640,W:360,GROUND:570,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,
+ SLACK:2.6,GAP:150,GAP_TO:118,GAP_START:10,GAP_END:50,JUMP:120,JUMP_TO:220,JUMP_END:40,EDGE:60,R:13,FIRST_X:450});
+// The vial profile in pixels down from the crimp cap: cap 0-16 at half-width 22, neck 16-24 at 15,
+// shoulder 24-38 ramping 15 to 30, body 30 beyond. The drawing and the collision read the same numbers.
+export const RIDGE_VIAL=Object.freeze({cap:16,neck:24,shoulder:38,capW:22,neckW:15,bodyW:30});
+export function vialHalfWidth(d){if(d<0)return -1;const V=RIDGE_VIAL;
+ if(d<V.cap)return V.capW;if(d<V.neck)return V.neckW;
+ if(d<V.shoulder)return V.neckW+(V.bodyW-V.neckW)*((d-V.neck)/(V.shoulder-V.neck));
+ return V.bodyW;}
+// Twelve points round the node's rim, slightly inside it, against the profile above: cheap, deterministic,
+// and forgiving at the neck, which is where threading a gate close to the glass should be possible.
+const RIDGE_SAMPLES=12,RIDGE_INSET=.9;
+export function hitsVial(bx,by,r,cx,capY,dir){
+ for(let i=0;i<RIDGE_SAMPLES;i++){const a=i*TAU/RIDGE_SAMPLES,px=bx+Math.cos(a)*r*RIDGE_INSET,py=by+Math.sin(a)*r*RIDGE_INSET;
+  const hw=vialHalfWidth((py-capY)*dir);if(hw>0&&Math.abs(px-cx)<hw)return true;}
+ return false;}
 export {RIDGE};
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -98,23 +117,31 @@ export class RidgeEngine extends MiniEngine{
  get ws(){return this.h/RIDGE.H;}
  get worldW(){return this.w/this.ws;}
  get speed(){return RIDGE.SPEED+RIDGE.SPEED_GAIN*clamp(this.score/60,0,1);}
- gapFor(i){return RIDGE.GAP-RIDGE.GAP_SHRINK*clamp((i-10)/40,0,1);}
- addGate(){const i=this.index++,jump=120+100*clamp(i/40,0,1),gap=this.gapFor(i),lo=60+gap/2,hi=RIDGE.GROUND-60-gap/2;
-  const gy=clamp(this.lastGy+(this.random()*2-1)*jump,lo,hi);this.lastGy=gy;this.gates.push({x:this.nextX,gy,gap,passed:false});this.nextX+=RIDGE.SPACE;}
+ // Gap and reach ramp off the gate's own index, not the live score, so the course is the same for everyone
+ // however well they are playing.
+ gapFor(i){return(RIDGE.GAP-RIDGE.SLACK)-(RIDGE.GAP-RIDGE.GAP_TO)*clamp((i-RIDGE.GAP_START)/(RIDGE.GAP_END-RIDGE.GAP_START),0,1);}
+ jumpFor(i){return RIDGE.JUMP+(RIDGE.JUMP_TO-RIDGE.JUMP)*clamp(i/RIDGE.JUMP_END,0,1);}
+ // The reachable band is clamped to the playfield first and the centre drawn inside it, so a gate near an
+ // edge still uses its whole remaining range instead of piling up on the margin.
+ addGate(){const i=this.index++,jump=this.jumpFor(i),gap=this.gapFor(i),lo=RIDGE.EDGE+gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-gap/2;
+  const a=Math.max(lo,this.lastGy-jump),b=Math.min(hi,this.lastGy+jump),gy=a+this.random()*(b-a);
+  this.lastGy=gy;this.gates.push({x:this.nextX,gy,gap,passed:false});this.nextX+=RIDGE.SPACE;}
  // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.
  fillGates(){while(this.nextX<this.worldW+RIDGE.PW*2)this.addGate();}
  action(){if(this.paused||this.ended||this.dead)return;this.inputs.push(this.ticks);this.started=true;this.waiting=false;this.vy=-RIDGE.FLAP;this.cb.sound('flap');this.cb.message('');}
- hits(g){if(this.px+RIDGE.HALF_W<g.x||this.px-RIDGE.HALF_W>g.x+RIDGE.PW)return false;return this.py-RIDGE.HALF_H<g.gy-g.gap/2||this.py+RIDGE.HALF_H>g.gy+g.gap/2;}
+ // Broad phase on the gate's column, then the two vial outlines themselves.
+ hits(g){const R=RIDGE.R;if(!(this.px+R>g.x&&this.px-R<g.x+RIDGE.PW))return false;const cx=g.x+RIDGE.PW/2;
+  return hitsVial(this.px,this.py,R,cx,g.gy+g.gap/2,1)||hitsVial(this.px,this.py,R,cx,g.gy-g.gap/2,-1);}
  update(dt){
   if(this.waiting)return; // holds still where it was paused until the next tap
   if(!this.started){this.py=300+Math.sin(this.time*3)*8;return;}
   this.vy+=RIDGE.GRAVITY*dt;this.py+=this.vy*dt;this.tilt=clamp(this.vy*.0011,-.35,.7);
-  if(this.dead){this.deadT+=dt;if(this.py>RIDGE.GROUND-RIDGE.HALF_H)this.py=RIDGE.GROUND-RIDGE.HALF_H;if(this.deadT>.8)this.end({score:this.score,gates:this.score,replay:this.replay()});return;}
+  if(this.dead){this.deadT+=dt;if(this.py>RIDGE.GROUND-RIDGE.R)this.py=RIDGE.GROUND-RIDGE.R;if(this.deadT>.8)this.end({score:this.score,gates:this.score,replay:this.replay()});return;}
   const sp=this.speed;
-  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.py*this.ws,'#8fffff',12);}}
+  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px-RIDGE.R){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.py*this.ws,'#8fffff',12);}}
   this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-RIDGE.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
-  if(this.py<RIDGE.HALF_H){this.py=RIDGE.HALF_H;this.vy=0;}
-  if(this.py>RIDGE.GROUND-RIDGE.HALF_H||this.gates.some(g=>this.hits(g)))this.crash();
+  if(this.py<RIDGE.R){this.py=RIDGE.R;this.vy=0;}
+  if(this.py+RIDGE.R>RIDGE.GROUND){this.py=RIDGE.GROUND-RIDGE.R;this.crash();}else if(this.gates.some(g=>this.hits(g)))this.crash();
   if(this.motion){this.trail.push({x:this.px,y:this.py});for(const p of this.trail)p.x-=sp*dt;if(this.trail.length>14)this.trail.shift();}
  }
  crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.py*this.ws,'#ffd383');this.cb.sound('miss');}
@@ -126,7 +153,7 @@ export class RidgeEngine extends MiniEngine{
   c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;
   for(const g of this.gates){const top=g.gy-g.gap/2,bottom=g.gy+g.gap/2,cx=g.x+RIDGE.PW/2;drawBottleObstacle(c,cx,top,top,RIDGE.PW,true);drawBottleObstacle(c,cx,bottom,RIDGE.GROUND-bottom,RIDGE.PW,false);}
   c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,RIDGE.GROUND);c.lineTo(this.worldW,RIDGE.GROUND);c.stroke();
-  c.shadowColor='#8fffff';c.shadowBlur=16;drawSprite(c,'vial-cyan',this.px,this.py,RIDGE.HALF_W*2.4,RIDGE.HALF_H*2.6,this.tilt);
+  c.shadowColor='#8fffff';c.shadowBlur=16;drawSprite(c,'vial-cyan',this.px,this.py,RIDGE.R*2,RIDGE.R*2.6,this.tilt);
   c.restore();}
  finish(){if(!this.ended)this.end({score:this.score,gates:this.score,replay:this.replay()});}
 }
