@@ -136,8 +136,30 @@ test('The Ridge bot clears plenty of gates, so the course is playable',()=>{
 });
 test('Ridge Run waits for a tap after resuming instead of falling straight away',()=>{
   const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});e.action();for(let i=0;i<30;i++)e.step(SIM_STEP);
-  e.pause(true);e.pause(false);const y=e.py,xs=e.gates.map(g=>g.x);for(let i=0;i<240;i++)e.step(SIM_STEP);
-  assert.equal(e.py,y,'holds still where it was');assert.deepEqual(e.gates.map(g=>g.x),xs,'the course waits too');assert.equal(e.ended,false);e.action();assert.equal(e.vy,-430);e.destroy();
+  e.pause(true);e.pause(false);const y=e.py,vy=e.vy,xs=e.gates.map(g=>g.x);for(let i=0;i<240;i++)e.step(SIM_STEP);
+  assert.equal(e.py,y,'holds still where it was');assert.deepEqual(e.gates.map(g=>g.x),xs,'the course waits too');assert.equal(e.ended,false);
+  e.action();assert.equal(e.vy,vy,'the tap picks the flight back up');e.step(SIM_STEP);assert.notEqual(e.py,y,'and it moves again');e.destroy();
+});
+test('The tap that resumes Ridge Run carries on the paused flight instead of forcing a flap into the glass',()=>{
+  // Paused (say the tab went hidden) while threading a gate just under the hanging vial. A forced flap on
+  // resume used to throw the vial into the glass: the run was lost to the pause, not to the player.
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});e.action();
+  const g={x:e.px-RIDGE.PW/2,gy:300,cy:300,gap:115.4,amp:0,phase:0,rate:0,passed:false};e.gates=[g];e.nextX=1e7;e.orbs=[];
+  e.py=g.cy-g.gap/2+RIDGE.R+4;e.vy=120;const vy=e.vy;
+  e.pause(true);e.pause(false);e.pause(false);assert.equal(e.vy,vy,'velocity kept through the pause, even if resumed twice');
+  for(let i=0;i<30;i++)e.step(SIM_STEP);assert.equal(e.vy,vy,'still waiting');
+  e.action();assert.equal(e.vy,vy,'the resuming tap does not flap');assert.equal(e.waiting,false);
+  for(let i=0;i<6;i++)e.step(SIM_STEP);assert.equal(e.dead,false,'falls on through the gap');
+  e.action();assert.equal(e.vy,-430,'the next tap flaps as usual');e.destroy();
+  const f=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});f.action();f.gates=[{...g}];f.nextX=1e7;f.orbs=[];f.py=g.cy-g.gap/2+RIDGE.R+4;f.vy=120;
+  f.action();for(let i=0;i<6;i++)f.step(SIM_STEP);assert.equal(f.dead,true,'a flap from that spot is fatal, which is what resuming used to force');f.destroy();
+});
+test('A Ridge run with pauses replays to the same score, and an old-format replay is refused',async()=>{
+  const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:21,motion:false});e.action();
+  for(let t=0;t<120*20&&!e.ended;t++){if(t%300===150){e.pause(true);e.pause(false);}const next=e.gates.find(g=>!g.passed);if(e.waiting&&t%300===170)e.action();else if(!e.waiting&&next&&e.py>next.cy+12&&e.vy>-60)e.action();e.step(SIM_STEP);}
+  e.finish();const rep=out.result.replay;assert.equal(rep.v,4);assert.ok(rep.resumes.length>0);
+  assert.equal((await replayRidge(rep)).score,out.result.score);
+  await assert.rejects(replayRidge({...rep,v:3}),/Not a Ridge Run replay/);e.destroy();
 });
 test('Ending a run inside a frame does not schedule another frame',()=>{
   let e;const out=callbacks(()=>e.destroy());e=new RidgeEngine(canvas(),out.cb,{seed:4,motion:false});
@@ -175,7 +197,7 @@ test('Vial Merge never spawns tiers that cannot merge',()=>{
 });
 
 // ---------- Bond ----------
-const {BondEngine,BOND_HIT,BOND_MAX_FIXED,BOND_FIXED_GAP,bondVials,bondClock}=await import('../dist/tryout-games.js');
+const {BondEngine,BOND_HIT,BOND_MAX_FIXED,BOND_FIXED_GAP,bondVials,bondClock,bondCapacity}=await import('../dist/tryout-games.js');
 const {replayBond}=await import('../tools/replay.mjs');
 const angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
 // The ring's wobble follows run time from chain 4 (stage 3) on, exactly as the engine does.
@@ -244,6 +266,94 @@ test('Bond replays to the same score at 30, 60 and 144 Hz',async()=>{
     if(!e.ended)e.finish();e.destroy();
     const again=await replayBond(out.result.replay);assert.equal(again.score,out.result.score,`seed ${seed} at ${hz} Hz`);
   }
+});
+
+// Skips straight to a chain: the stage generator is the only thing that draws from the seed.
+function bondAt(chain,seed,out=callbacks()){const e=new BondEngine(canvas(),out.cb,{seed,motion:false});while(e.stage<chain){e.left=0;e.clearT=.001;e.step(SIM_STEP);}return e;}
+test('Bond refills the shot clock to this chain\'s limit after a landing, not the next chain\'s',()=>{
+  for(const chain of [6,10,15,20]){const e=bondAt(chain,3);e.pins=[];e.fixed=0;e.action();assert.equal(e.clock,bondClock(chain-1));
+    while(e.flights.length)e.step(SIM_STEP);
+    assert.equal(e.bonds,1);assert.equal(e.clock,e.clockLimit,`chain ${chain}`);assert.equal(e.clock,bondClock(chain-1));e.destroy();}
+});
+test('Bond ring capacity counts the vials that still fit a hit-width apart',()=>{
+  const TAU=Math.PI*2;assert.equal(bondCapacity([]),Math.floor(TAU/BOND_HIT));assert.equal(bondCapacity([]),36);
+  assert.equal(bondCapacity([0]),35);assert.equal(bondCapacity([0,Math.PI]),Math.floor(Math.PI/BOND_HIT-1e-9)*2-2);
+  assert.equal(bondCapacity([0,BOND_HIT*2.5]),1+Math.floor((TAU-BOND_HIT*2.5)/BOND_HIT)-1);
+  assert.equal(bondCapacity([-1,TAU-1]),bondCapacity([-1]),'angles are taken round the ring');
+});
+// Fixed vials used to be seeded with no thought for the shots still to come, so from chain 25 a seed could
+// open a chain that even perfectly spaced throws could not clear (0.9% of seeds at chain 25, 49% at chain 30).
+test('Every Bond chain up to 32 starts with room for all its shots; chains before 25 seed exactly as before',()=>{
+  const TAU=Math.PI*2;
+  for(let seed=1;seed<=300;seed++){const e=new BondEngine(canvas(),callbacks().cb,{seed,motion:false});const old=createRandom(seed);
+    for(let chain=1;chain<=34;chain++){const s=chain-1;
+      if(chain<=32)assert.ok(bondCapacity(e.pins)>=e.left,`seed ${seed} chain ${chain}: room for ${bondCapacity(e.pins)} of ${e.left}`);
+      for(let i=0;i<e.pins.length;i++)for(let j=i+1;j<e.pins.length;j++)assert.ok(angDist(e.pins[i],e.pins[j])>BOND_FIXED_GAP);
+      if(chain<25){// the original generator, step for step
+        const pins=[],want=Math.floor(old()*(BOND_MAX_FIXED+1));
+        for(let i=0;i<want;i++)for(let t=0;t<24;t++){const a=old()*TAU;if(pins.every(p=>angDist(p,a)>BOND_FIXED_GAP)){pins.push(a);break;}}
+        const base=(1.7+s*.22)*(old()<.5?-1:1),rotation=old()*TAU;
+        assert.deepEqual(e.pins,pins,`seed ${seed} chain ${chain}`);assert.equal(e.base,base);assert.equal(e.rotation,rotation);}
+      e.left=0;e.clearT=.001;e.step(SIM_STEP);}
+    e.destroy();}
+});
+test('Bond: the last shot thrown on the final tick of the clock completes the chain instead of timing out',()=>{
+  const out=callbacks(),e=bondAt(2,8,out);e.pins=[];e.fixed=0;e.left=1;e.clockLive=true;e.clock=e.clockLimit;
+  while(e.clock>SIM_STEP*1.5)e.step(SIM_STEP);
+  assert.equal(e.ended,false);e.action();assert.equal(e.flights.length,1);
+  while(e.stage===2&&!e.ended)e.step(SIM_STEP);
+  assert.equal(e.ended,false,'not timed out');assert.equal(e.stage,3);assert.equal(e.clock,e.clockLimit);e.destroy();
+});
+test('Bond pause holds a vial in flight and the chain-clear pause, and finish mid-flight ends once and replays',async()=>{
+  const out=callbacks(),e=new BondEngine(canvas(),out.cb,{seed:6,motion:false});e.pins=[];e.fixed=0;e.left=1;let now=1000;e.frame(now);
+  e.action();for(let i=0;i<3;i++){now+=1000/60;e.frame(now);}
+  const t=e.ticks,progress=e.flights[0].progress,rotation=e.rotation;e.pause();for(let i=0;i<120;i++){now+=1000/60;e.frame(now);}
+  assert.equal(e.ticks,t);assert.equal(e.flights[0].progress,progress);assert.equal(e.rotation,rotation);
+  e.pause(false);while(e.clearT<=0){now+=1000/60;e.frame(now);}
+  const clearT=e.clearT;e.pause();for(let i=0;i<120;i++){now+=1000/60;e.frame(now);}assert.equal(e.clearT,clearT);assert.equal(e.stage,1);
+  e.pause(false);while(e.stage===1){now+=1000/60;e.frame(now);}
+  // A throw and a quit in the same frame: the replay must use the throw too.
+  e.pins=[];e.action();e.finish();e.finish();
+  assert.equal(out.result.score,100);const again=await replayBond(out.result.replay);
+  assert.deepEqual([again.score,again.ticks,again.unusedInputs],[100,e.ticks,0]);e.destroy();
+});
+// Bots of four kinds over hundreds of seeds, with the invariants checked on every step and every run replayed.
+const BOND_FLIGHT=(()=>{let p=0,n=0;while(p<1){p+=SIM_STEP/.12;n++;}return n;})();
+function bondTargets(e,n){let t=e.time,rot=e.rotation;const rots=[];for(let i=0;i<n+BOND_FLIGHT;i++){t+=SIM_STEP;rot=(rot+e.base*bondWobble(e,t)*SIM_STEP)%(Math.PI*2);rots.push(rot);}
+  return rots.slice(BOND_FLIGHT-1,BOND_FLIGHT-1+n).map(r=>Math.PI/2-r);}
+function clockTicks(e){if(!e.clockLive)return 240;let c=e.clock,n=0;while(c>0){c-=SIM_STEP;n++;}return n;}
+function bondBot(style,seed){const r=createRandom(seed*7+1);let fireAt=null,key='';
+  return e=>{if(e.flights.length||e.clearT>0)return false;
+    if(style==='random')return r()<.02;if(style==='rapid')return true;
+    if(style==='late')return e.clockLive?clockTicks(e)<=1:r()<.05;
+    const k=`${e.stage}/${e.left}`;if(k!==key){key=k;const ts=bondTargets(e,clockTicks(e));let best=-1,most=-1;
+      for(let i=0;i<ts.length;i++){const c=Math.min(Infinity,...e.pins.map(p=>angDist(p,ts[i])));if(c>=BOND_HIT&&c>most){most=c;best=i;}}
+      fireAt=best<0?-1:e.ticks+best;}
+    return fireAt===e.ticks||(fireAt<0&&clockTicks(e)<=1);};}
+async function fuzzBond(seed,style,ticks){const out=callbacks();let ends=0;const cb={...out.cb,end(r){ends++;out.cb.end(r);}};
+  const c=canvas(),e=new BondEngine(c,cb,{seed,motion:false}),bot=bondBot(style,seed);
+  for(let i=0;i<ticks&&!e.ended;i++){
+    if(i===400&&seed%2){const w=c.getBoundingClientRect;c.getBoundingClientRect=()=>({...w(),width:320,height:568});e.resize();}
+    if(bot(e))e.action();
+    const stage=e.stage,left=e.left,clock=e.clock,flying=e.flights.length>0,clearing=e.clearT>0,live=e.clockLive;
+    e.step(SIM_STEP);const at=`seed ${seed} ${style} tick ${e.ticks}`;
+    for(const k of ['rotation','time','clock','base','clearT','score'])assert.ok(Number.isFinite(e[k]),`${at}: ${k}`);
+    assert.ok(e.pins.every(Number.isFinite),at);
+    assert.equal(e.score,e.bonds*100,at);assert.ok(e.left>=0&&e.flights.length<=1&&e.clock>=0,at);
+    assert.ok(e.pins.length<=BOND_MAX_FIXED+bondVials(e.index),at);
+    if(e.stage!==stage){assert.equal(left,0,at);assert.equal(e.stage,stage+1,at);assert.equal(e.left,bondVials(e.index),at);}
+    if(e.left===0&&!e.ended)assert.ok(e.clearT>0,at);
+    if(e.ended)continue;
+    if(!live||flying||clearing)assert.ok(e.clock===clock||e.clock===e.clockLimit,`${at}: clock ran while it should not`);
+    else if(e.flights.length===0)assert.ok(Math.abs(clock-SIM_STEP-e.clock)<1e-9,`${at}: clock should run`);}
+  if(!e.ended)e.finish();
+  assert.equal(ends,1);const again=await replayBond(out.result.replay);
+  assert.deepEqual([again.score,again.ticks,again.unusedInputs],[out.result.score,e.ticks,0],`seed ${seed} ${style} replay`);
+  e.destroy();return e;}
+test('Bond fuzz: random, rapid, last-moment and careful bots keep every invariant and replay exactly',async()=>{
+  for(let seed=1;seed<=300;seed++)for(const style of ['random','rapid','late'])await fuzzBond(seed,style,120*120);
+  let chains=0;for(let seed=1;seed<=30;seed++){const e=await fuzzBond(seed,'careful',120*400);chains+=e.stage;assert.ok(e.stage>=10,`careful seed ${seed} reached ${e.stage}`);}
+  assert.ok(chains/30>=15,`careful bots average chain ${chains/30}`);
 });
 
 // ---------- Sequence feel ----------
