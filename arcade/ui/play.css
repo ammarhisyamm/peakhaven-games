@@ -1,6 +1,6 @@
 /* Daily Play follows the supplied October 13 reference. All artwork stays whole. */
-body[data-page="play"]{--gutter:clamp(12px,3vw,22px);background:#fff}
-body[data-page="play"] #main{max-width:1104px}
+body[data-page="play"]{background:#fff}
+body[data-page="play"] #main{max-width:var(--page)}
 body[data-page="play"] .page-footer{display:none}
 body[data-page="play"] .breadcrumbs{font-size:clamp(12px,2.4vw,17px);min-height:clamp(38px,6.2vw,46px);gap:12px}
 body[data-page="play"] .breadcrumbs a[aria-current]{color:#090b0d;font-weight:550}
