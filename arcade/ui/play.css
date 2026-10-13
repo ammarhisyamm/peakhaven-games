@@ -31,9 +31,9 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
 .daily-intro h2{font-size:clamp(20px,4.35vw,32px);font-weight:780;letter-spacing:-.035em;line-height:1.2;text-wrap:balance}
 .daily-intro p{font-size:clamp(13px,2.9vw,21px);color:#475c69;line-height:1.35;margin-top:5px}
 .daily-games{display:grid;gap:8px}
-.daily-game{display:grid;grid-template-columns:34% minmax(0,1fr) auto;gap:clamp(8px,2vw,16px);align-items:center;min-height:clamp(94px,16.7vw,150px);padding:6px 10px 6px 6px;background:#f2fbfd;border:1px solid #d3eef3;border-radius:16px;min-width:0}
-.daily-game-image{height:clamp(80px,14.7vw,136px);width:100%;border-radius:11px;background:#e3f5ff;display:flex;align-items:center;justify-content:center}
-.daily-game-image img{display:block;width:100%;height:100%;object-fit:contain;border-radius:inherit;mask-image:none}
+.daily-game{display:grid;grid-template-columns:clamp(112px,33vw,242px) minmax(0,1fr) auto;gap:clamp(8px,2vw,16px);align-items:center;min-height:clamp(94px,16.7vw,150px);padding:6px 10px 6px 6px;background:#f2fbfd;border:1px solid #d3eef3;border-radius:16px;min-width:0}
+.daily-game-image{width:100%;aspect-ratio:1672/941;height:auto;border-radius:11px;background:#e3f5ff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.daily-game-image img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit;mask-image:none}
 .daily-game-copy{min-width:0;text-align:left}
 .daily-game-copy h3{font-size:clamp(17px,3.6vw,27px);font-weight:760;letter-spacing:-.025em;line-height:1.15;margin:0;color:#080b0c}
 .daily-game-copy>p{font-size:clamp(11px,2.45vw,18px);line-height:1.35;color:#445965;margin-top:5px}
@@ -79,7 +79,7 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
  .play-end{font-size:10px}
 }
 @media(max-width:370px){
- .daily-game{gap:7px;padding-right:7px;grid-template-columns:30% minmax(0,1fr) auto}
+ .daily-game{gap:7px;padding-right:7px;grid-template-columns:clamp(96px,34vw,126px) minmax(0,1fr) auto}
  .daily-game-copy h3{font-size:16px}
  .daily-game-copy>p{font-size:11px}
  .daily-play-button{width:68px;padding-inline:8px}
