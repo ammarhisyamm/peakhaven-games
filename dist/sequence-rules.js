@@ -2,6 +2,8 @@ export const SEQUENCE_SIZE=7;
 export const SEQUENCE_MOVES=25;
 export const SEQUENCE_TYPES=5;
 export const sequenceTarget=level=>350+Math.max(1,level)*150;
+// Colours in play: 4 at level 1, one more every 5 levels, capped at 7 from level 16.
+export const sequencePalette=level=>Math.min(7,4+Math.floor((Math.max(1,level)-1)/5));
 
 export function sequenceMatches(board,size=SEQUENCE_SIZE){
   const matches=new Set();
@@ -16,6 +18,7 @@ export function sequenceMatches(board,size=SEQUENCE_SIZE){
 }
 
 export function sequenceExchange(board,a,b,size=SEQUENCE_SIZE){
+  if(!Number.isInteger(a)||!Number.isInteger(b))return null;
   const ar=Math.floor(a/size),ac=a%size,br=Math.floor(b/size),bc=b%size;
   if(a<0||b<0||a>=size*size||b>=size*size||Math.abs(ar-br)+Math.abs(ac-bc)!==1)return null;
   const next=board.slice();[next[a],next[b]]=[next[b],next[a]];
@@ -37,7 +40,7 @@ export function hasSequenceMove(board,size=SEQUENCE_SIZE){
 }
 
 export function createSequenceBoard(level=1,rng=Math.random,size=SEQUENCE_SIZE){
-  const palette=Math.min(7,4+Math.floor((Math.max(1,level)-1)/5));
+  const palette=sequencePalette(level);
   const board=Array(size*size);
   for(let row=0;row<size;row++)for(let col=0;col<size;col++){
     const choices=Array.from({length:palette},(_,n)=>n).filter(value=>!(col>=2&&board[row*size+col-1]===value&&board[row*size+col-2]===value)&&!(row>=2&&board[(row-1)*size+col]===value&&board[(row-2)*size+col]===value));
@@ -62,4 +65,18 @@ export function settleSequence(board,rng=Math.random,size=SEQUENCE_SIZE,palette=
     for(let row=write;row>=0;row--)next[row*size+col]=Math.floor(rng()*palette);
   }
   return next;
+}
+
+// One whole cascade after a swap, exactly as SequenceEngine plays it out: each wave of matches scores
+// size*50*(1+chain), clears, falls and refills from `rng`; it stops early once `score` reaches `target`
+// (the engine ends the level there). Returns the settled board, the points gained and the chain length.
+export function sequenceCascade(board,rng=Math.random,palette=SEQUENCE_TYPES,score=0,target=Infinity,size=SEQUENCE_SIZE){
+  let next=board,gained=0,chain=0;
+  for(;;){
+    const matches=sequenceMatches(next,size);if(!matches.size)break;
+    gained+=matches.size*50*(1+chain);chain++;
+    next=settleSequence(next.map((v,i)=>matches.has(i)?-1:v),rng,size,palette);
+    if(score+gained>=target)break;
+  }
+  return {board:next,gained,chain};
 }

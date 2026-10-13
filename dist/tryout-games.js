@@ -1,4 +1,4 @@
-import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,SEQUENCE_MOVES} from './sequence-rules.js';
+import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES} from './sequence-rules.js';
 import {drawSprite,drawBottleObstacle,crystalSprites,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
@@ -263,7 +263,10 @@ export class BondEngine extends MiniEngine{
 
 export class SequenceEngine extends MiniEngine{
  constructor(canvas,cb,options){
-  super(canvas,cb,options);this.board=createSequenceBoard(this.level);this.palette=Math.min(7,4+Math.floor((this.level-1)/5));this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  super(canvas,cb,options);
+  // Every draw (the opening board, each refill, any reshuffle) comes from the seeded generator, in that order,
+  // so the seed plus the logged swaps rebuild the run exactly.
+  this.palette=sequencePalette(this.level);this.board=createSequenceBoard(this.level,this.random);this.inputs=[];this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
   this.onpointerdown=e=>{this.keyboard=false;this.idle=0;this.hintPair=null;this.pointerStart=this.pointer(e);this.pressed=this.pending?null:this.cellAt(...this.pointerStart);canvas.setPointerCapture?.(e.pointerId);};
   // Swaps fire as soon as the finger has moved a third of a tile, instead of waiting for it to lift.
   this.onpointermove=e=>{if(!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;
@@ -278,6 +281,7 @@ export class SequenceEngine extends MiniEngine{
   if(this.selection===index&&swapWith===null){this.selection=null;return;}
   const from=this.selection,to=swapWith??index,next=sequenceExchange(this.board,from,to);
   if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message('Swap neighbours to make a line of three.');return;}
+  this.inputs.push([this.ticks,from,to]);
   const matched=sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=SEQ_SWAP;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
  }
  // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
@@ -291,8 +295,8 @@ export class SequenceEngine extends MiniEngine{
  findMove(){for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
  finishMove(){
   this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.cb.hud(this.score,this.moves,this.target);
-  if(this.score>=this.target){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:true});return;}if(this.moves<=0){this.end({score:this.score,moves:SEQUENCE_MOVES,won:false});return;}
-  if(!hasSequenceMove(this.board)){this.board=createSequenceBoard(this.level);this.cb.message('Fresh crystals. No move used.');}else this.cb.message(`${this.moves} moves left. ${Math.max(0,this.target-this.score)} points to go.`);
+  if(this.score>=this.target||this.moves<=0){this.finish();return;}
+  if(!hasSequenceMove(this.board)){this.board=createSequenceBoard(this.level,this.random);this.cb.message('Fresh crystals. No move used.');}else this.cb.message(`${this.moves} moves left. ${Math.max(0,this.target-this.score)} points to go.`);
  }
  tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
   if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
@@ -300,7 +304,7 @@ export class SequenceEngine extends MiniEngine{
   this.tickEffects(dt);if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
   if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=SEQ_SWAP;return;}this.swap=null;this.resolveMatches();return;}
   if(this.phase==='return'){this.board=this.swap.original;this.swap=null;this.phase=null;this.pending=0;this.cb.sound('undo');this.cb.message('Try another pair. No move used.');return;}
-  if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,Math.random,7,this.palette);this.phase='fall';
+  if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,this.random,7,this.palette);this.phase='fall';
    // Crystals fall like they have weight: each one accelerates and takes longer the further it drops.
    this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
   if(this.phase==='fall'){this.falls.clear();if(this.score>=this.target)this.finishMove();else this.resolveMatches();}
@@ -325,5 +329,6 @@ export class SequenceEngine extends MiniEngine{
   if(this.banner){const t=this.banner.t,a=Math.min(1,t*6,(1.1-t)*3);c.globalAlpha=Math.max(0,a);c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font=`900 ${Math.round(g.cell*.5)}px Inter, sans-serif`;c.fillText(this.banner.text.toUpperCase(),g.x+g.size/2,g.y+g.size/2-(1-Math.min(1,t*5))*12);}
   c.globalAlpha=1;c.shadowBlur=0;c.restore();
  }
- finish(){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:this.score>=this.target});}
+ finish(){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:this.score>=this.target,replay:this.replay()});}
+ replay(){return {v:1,game:'sequence',seed:this.seed,level:this.level,step:SIM_STEP,moves:this.inputs.map(m=>[...m]),endTick:this.ticks};}
 }

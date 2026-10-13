@@ -66,4 +66,25 @@ export async function replayMerge(rep){
   return {score:e.score,ended:true,ticks:e.ticks,unusedInputs:drops.length+rejected};
 }
 
+export async function replaySequence(rep){
+  installStubs();
+  if(rep?.game!=='sequence'||rep.v!==1||rep.step!==SIM_STEP)throw new Error('Not a Sequence replay for this build');
+  const level=rep.level;if(!Number.isInteger(level)||level<1)throw new Error('Bad Sequence level');
+  if(!Array.isArray(rep.moves)||!rep.moves.every(m=>Array.isArray(m)&&m.length===3&&m.every(Number.isInteger)))throw new Error('Bad Sequence move log');
+  for(let i=1;i<rep.moves.length;i++)if(rep.moves[i][0]<rep.moves[i-1][0])throw new Error('Moves out of order');
+  const {SequenceEngine}=await import('../dist/tryout-games.js');
+  // The board is laid out in cells, so the screen size doesn't change the run.
+  const out=collector(),e=new SequenceEngine(stubCanvas([480,720]),out.cb,{seed:rep.seed,level,motion:false});
+  const moves=rep.moves.map(m=>[...m]);let rejected=0;
+  const stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
+  while(!e.ended&&e.ticks<stop){
+    while(moves.length&&moves[0][0]===e.ticks){const [,from,to]=moves.shift();const before=e.inputs.length;e.choose(from,to);if(e.inputs.length===before)rejected++;}
+    e.step(SIM_STEP);
+  }
+  if(!e.ended)e.finish();
+  e.destroy();
+  const result=out.result();
+  return {score:e.score,won:result.won,level,ended:true,ticks:e.ticks,unusedInputs:moves.length+rejected};
+}
+
 export {replayBlocks} from '../dist/blocks-core.js';

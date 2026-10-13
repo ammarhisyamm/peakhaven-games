@@ -85,5 +85,5 @@ test('Sequence resolves one animated swap and settles before returning the winni
  const h=harness(),game=new SequenceEngine(h.canvas,h.cb,{motion:true,level:3});
  game.board.fill(1);game.board[0]=0;game.board[1]=1;game.board[2]=0;game.board[8]=0;game.target=100;game.motion=false;
  game.choose(1,8);assert.equal(game.moves,24);assert.equal(h.result(),null);game.choose(0,1);assert.equal(game.moves,24,'pending swap locks duplicate input');tick(game,2); // crystals now animate even with reduced motion
- assert.ok(game.score>=100);assert.equal(game.board.some(v=>v<0),false,'board settles before completion');assert.deepEqual(h.result(),{score:game.score,moves:1,won:true});assert.ok(sequenceTarget(4)>sequenceTarget(3));game.destroy();
+ assert.ok(game.score>=100);assert.equal(game.board.some(v=>v<0),false,'board settles before completion');const {replay,...result}=h.result();assert.deepEqual(result,{score:game.score,moves:1,won:true});assert.equal(replay.game,'sequence');assert.equal(replay.level,3);assert.deepEqual(replay.moves.map(m=>m.slice(1)),[[1,8]]);assert.ok(sequenceTarget(4)>sequenceTarget(3));game.destroy();
 });
