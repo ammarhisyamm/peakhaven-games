@@ -27,7 +27,7 @@ body[data-page="play"] .prize-card:last-child .prize-words strong{font-size:clam
 body[data-page="play"] .prize-card:last-child .prize-offer{gap:clamp(4px,1vw,8px)}
 body[data-page="play"] .prize-card:last-child .prize-words p{font-size:clamp(9px,2vw,16px)}
 body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 12px}
-.daily-intro{text-align:center;margin:14px 0 16px}
+.daily-intro{text-align:left;margin:14px 0 16px}
 .daily-intro h2{font-size:clamp(20px,4.35vw,32px);font-weight:780;letter-spacing:-.035em;line-height:1.2;text-wrap:balance}
 .daily-intro p{font-size:clamp(13px,2.9vw,21px);color:#475c69;line-height:1.35;margin-top:5px}
 .daily-games{display:grid;gap:8px}
