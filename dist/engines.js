@@ -1,9 +1,11 @@
 import {towerPlacement,MERGE_RADII,mergePair,COLORS} from './rules.js';
+import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 const W=480,H=580;
 const sprite=new Image();sprite.src='assets/collectible-vials.webp';
 const happy=new Image();happy.src='assets/happy-vials.webp';
 const chamber=new Image();chamber.src='assets/merge-chamber.webp';
 const TOWER_STEP=164,TOWER_DROP=205;
+export const MERGE_SPAWN_TIERS=4;
 const MERGE_LEFT=62,MERGE_RIGHT=418,MERGE_FLOOR=486;
 const happyBounds=[[68,110,359,621],[59,110,350,621],[51,110,339,621],[35,110,325,621],[23,110,313,621],[9,110,300,621]];
 const collectibleBounds=[[54,95,340,636],[54,96,337,636],[47,96,329,636],[38,97,321,637],[30,96,313,637],[25,97,310,637]];
@@ -22,21 +24,25 @@ function vial(ctx,x,y,width,height,tier=0,rotation=0,character=false) {
 function labBackdrop(ctx){ctx.clearRect(0,0,W,H);}
 class CanvasEngine {
   constructor(canvas,callbacks,options={}) {
-    this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=callbacks;this.motion=options.motion;this.level=options.level||1;this.paused=false;this.ended=false;this.alive=true;this.time=0;this.last=0;this.particles=[];this.rings=[];
+    this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=callbacks;this.motion=options.motion;this.level=options.level||1;this.paused=false;this.ended=false;this.alive=true;this.time=0;this.last=0;this.acc=0;this.ticks=0;this.seed=(options.seed??makeSeed())>>>0;this.random=createRandom(this.seed);this.particles=[];this.rings=[];
     this.resize();this.observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(()=>this.resize());this.observer?.observe(canvas);
     this.pointer=e=>{const rect=canvas.getBoundingClientRect();return (e.clientX-rect.left-this.offsetX)/this.scale;};
     this.frame=this.frame.bind(this);this.raf=requestAnimationFrame(this.frame);
   }
   resize(){const r=this.canvas.getBoundingClientRect?.()||{width:480,height:720},width=r.width||480,height=r.height||720,dpr=Math.min(2,window.devicePixelRatio||1),top=110,bottom=48;this.scale=Math.min(width/W,(height-top-bottom)/H);this.offsetX=(width-W*this.scale)/2;this.offsetY=top+(height-top-bottom-H*this.scale)/2;this.canvas.width=Math.round(width*dpr);this.canvas.height=Math.round(height*dpr);if(this.ctx.setTransform)this.ctx.setTransform(dpr*this.scale,0,0,dpr*this.scale,this.offsetX*dpr,this.offsetY*dpr);else this.ctx.scale(dpr*this.scale,dpr*this.scale);}
+  step(dt){this.ticks++;this.time+=dt;this.update(dt);this.particles=this.particles.filter(p=>(p.life-=dt)>0);for(const p of this.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=180*dt;}}
   frame(now) {
-    if(!this.alive)return;const dt=Math.min(.025,(now-(this.last||now))/1000);this.last=now;
-    if(!this.paused&&!this.ended){this.time+=dt;this.update(dt);this.particles=this.particles.filter(p=>(p.life-=dt)>0);for(const p of this.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=180*dt;}}
+    if(!this.alive)return;const real=Math.min(.25,(now-(this.last||now))/1000);this.last=now;
+  // Fixed simulation step: the same inputs give the same run at 30, 60 or 120 Hz, and throttling the CPU
+  // no longer slows the game down (below ~10 fps it still drops time rather than spiralling).
+  if(!this.paused&&!this.ended){this.acc+=real;let n=0;while(this.acc>=SIM_STEP-1e-9&&n<MAX_STEPS_PER_FRAME&&!this.ended&&this.alive){this.step(SIM_STEP);this.acc-=SIM_STEP;n++;}if(n===MAX_STEPS_PER_FRAME)this.acc=0;}
+  if(!this.alive)return;
     this.draw();this.drawParticles();this.raf=requestAnimationFrame(this.frame);
   }
   burst(x,y,color) {if(!this.motion)return;this.rings.push({x,y,color,start:this.time});for(let i=0;i<28;i++){const a=i/28*Math.PI*2;this.particles.push({x,y,vx:Math.cos(a)*115,vy:Math.sin(a)*115-60,life:.8,color});}}
   drawParticles(){const c=this.ctx;this.rings=this.rings.filter(r=>this.time-r.start<.55);for(const r of this.rings){const t=(this.time-r.start)/.55;c.globalAlpha=1-t;c.strokeStyle=r.color;c.lineWidth=4*(1-t);c.beginPath();c.ellipse(r.x,r.y,12+t*50,5+t*18,0,0,Math.PI*2);c.stroke();}for(const p of this.particles){c.globalAlpha=p.life/.8;c.fillStyle=p.color;c.fillRect(p.x,p.y,4,4);}c.globalAlpha=1;}
   end(result){if(this.ended)return;this.ended=true;this.cb.end(result);}
-  pause(value=true){this.paused=value;}
+  pause(value=true){this.paused=value;this.last=0;this.acc=0;}
   destroy(){this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();this.canvas.removeEventListener('pointerdown',this.onDown);this.canvas.removeEventListener('pointermove',this.onMove);this.canvas.removeEventListener('pointerup',this.onUp);this.canvas.removeEventListener('pointercancel',this.onCancel);}
 }
 export class TowerEngine extends CanvasEngine {
@@ -66,9 +72,11 @@ export class TowerEngine extends CanvasEngine {
     c.restore();if(this.stack.length===1&&!this.drop){c.save();c.fillStyle='#06244b';c.beginPath();c.roundRect(137,158,206,34,17);c.fill();c.font='700 15px Inter';c.textAlign='center';c.fillStyle='#ffffff';c.fillText('Line it up. Tap to drop.',240,180);c.restore();} }
 }
 export class MergeEngine extends CanvasEngine {
-  constructor(canvas,callbacks,options){super(canvas,callbacks,options);this.bodies=[];this.score=0;this.merges=0;this.highest=0;this.drops=0;this.x=240;this.next=0;this.preview=1;this.cooldown=0;this.danger=0;this.chain=0;this.lastMerge=0;this.onMove=e=>{this.x=Math.max(MERGE_LEFT+MERGE_RADII[this.next],Math.min(MERGE_RIGHT-MERGE_RADII[this.next],this.pointer(e)));};this.onDown=e=>{this.onMove(e);this.dragging=true;canvas.setPointerCapture?.(e.pointerId);};this.onUp=e=>{if(this.dragging){this.onMove(e);this.action();}this.dragging=false;};this.onCancel=()=>{this.dragging=false;};canvas.addEventListener('pointermove',this.onMove);canvas.addEventListener('pointerdown',this.onDown);canvas.addEventListener('pointerup',this.onUp);canvas.addEventListener('pointercancel',this.onCancel);this.cb.hud(0,1,'1');}
+  constructor(canvas,callbacks,options){super(canvas,callbacks,options);this.bodies=[];this.score=0;this.merges=0;this.highest=0;this.drops=0;this.x=240;this.next=0;this.preview=1;this.cooldown=0;this.danger=0;this.chain=0;this.lastMerge=0;this.drops_log=[];this.onMove=e=>{this.x=Math.max(MERGE_LEFT+MERGE_RADII[this.next],Math.min(MERGE_RIGHT-MERGE_RADII[this.next],this.pointer(e)));};this.onDown=e=>{this.onMove(e);this.dragging=true;canvas.setPointerCapture?.(e.pointerId);};this.onUp=e=>{if(this.dragging){this.onMove(e);this.action();}this.dragging=false;};this.onCancel=()=>{this.dragging=false;};canvas.addEventListener('pointermove',this.onMove);canvas.addEventListener('pointerdown',this.onDown);canvas.addEventListener('pointerup',this.onUp);canvas.addEventListener('pointercancel',this.onCancel);this.cb.hud(0,1,'1');}
   move(direction){this.x=Math.max(MERGE_LEFT+MERGE_RADII[this.next],Math.min(MERGE_RIGHT-MERGE_RADII[this.next],this.x+direction*18));}
-  action(){if(this.paused||this.ended||this.cooldown>0)return;const r=MERGE_RADII[this.next];this.bodies.push({x:Math.max(MERGE_LEFT+r,Math.min(MERGE_RIGHT-r,this.x)),y:74,r,tier:this.next,vx:(Math.random()-.5)*22,vy:0,age:0});this.drops++;this.next=this.preview;this.preview=Math.floor(Math.random()*Math.min(6,3+Math.floor(this.drops/8)));this.cooldown=.55+Math.min(.45,this.drops*.004);this.cb.ready?.(false);this.cb.sound('drop');this.cb.message('Match two of the same colour and number.');}
+  // Drops are logged as [tick, x] with x rounded, and the game uses the rounded x, so a replay matches exactly.
+  // New vials come from the first four tiers only. Tiers 5 and 6 used to spawn too: a spawned top tier can never merge.
+  action(){if(this.paused||this.ended||this.cooldown>0)return;const r=MERGE_RADII[this.next],x=Math.round(Math.max(MERGE_LEFT+r,Math.min(MERGE_RIGHT-r,this.x))*100)/100;this.drops_log.push([this.ticks,x]);this.bodies.push({x,y:74,r,tier:this.next,vx:(this.random()-.5)*22,vy:0,age:0});this.drops++;this.next=this.preview;this.preview=Math.floor(this.random()*Math.min(MERGE_SPAWN_TIERS,3+Math.floor(this.drops/8)));this.cooldown=.55+Math.min(.45,this.drops*.004);this.cb.ready?.(false);this.cb.sound('drop');this.cb.message('Match two of the same colour and number.');}
   update(dt){const previousCooldown=this.cooldown;this.cooldown=Math.max(0,this.cooldown-dt);if(previousCooldown>0&&this.cooldown===0)this.cb.ready?.(true);
     // Fixed substeps and several contact passes keep the pile stable on slow frames.
     const step=dt/3;for(let sub=0;sub<3;sub++){
@@ -82,7 +90,8 @@ export class MergeEngine extends CanvasEngine {
     }
     const overflow=this.bodies.some(b=>b.age>1.8&&b.y-b.r<174&&Math.abs(b.vy)<45);this.danger=overflow?this.danger+dt:Math.max(0,this.danger-dt*2);if(this.danger>0)this.cb.message('Getting full — merge below the dotted line.');if(this.danger>2)this.finish();
   }
-  finish(){this.end({score:this.score,merges:this.merges,tier:this.highest+1});}
+  replay(){return {v:1,game:'merge',seed:this.seed,step:SIM_STEP,drops:this.drops_log.map(d=>[...d]),endTick:this.ticks};}
+  finish(){this.end({score:this.score,merges:this.merges,tier:this.highest+1,replay:this.replay()});}
   draw(){const c=this.ctx;labBackdrop(c);
     if(chamber.complete&&chamber.naturalWidth)c.drawImage(chamber,12,72,456,490);
     c.setLineDash([7,7]);c.strokeStyle=this.danger>0?'#ff7088':'#72eaff88';c.lineWidth=2;c.beginPath();c.moveTo(MERGE_LEFT,174);c.lineTo(MERGE_RIGHT,174);c.stroke();c.setLineDash([]);

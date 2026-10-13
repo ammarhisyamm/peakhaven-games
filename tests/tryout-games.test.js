@@ -49,7 +49,7 @@ test('Canvas sizing keeps uniform scale and maps pointer positions at mobile and
 
 test('Ridge Run tightens its gate course and reports a fall',()=>{
  const h=harness(),game=new RidgeEngine(h.canvas,h.cb,{motion:false});const initial=game.gap;game.score=20;game.action();game.update(.01);assert.equal(game.speed,212);assert.ok(game.gap<initial);
- game.y=70;game.vy=0;game.update(.02);assert.equal(h.result(),null,'no invisible ceiling below the screen edge');game.y=20;game.update(.02);assert.deepEqual(h.result(),{score:20,gates:20});game.destroy();
+ game.y=70;game.vy=0;game.update(.02);assert.equal(h.result(),null,'no invisible ceiling below the screen edge');game.y=20;game.update(.02);const {replay,...result}=h.result();assert.deepEqual(result,{score:20,gates:20});assert.equal(replay.game,'ridge');game.destroy();
 });
 
 test('Ridge bottles fill both screen edges and a gate keeps its original opening',()=>{
