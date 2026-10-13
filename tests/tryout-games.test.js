@@ -49,7 +49,7 @@ test('Canvas sizing keeps uniform scale and maps pointer positions at mobile and
 
 test('Ridge Run scores a gate once it is behind the vial and reports the run after a crash',()=>{
  const h=harness(),game=new RidgeEngine(h.canvas,h.cb,{motion:false});game.action();const gate=game.gates[0];gate.x=game.px-62-12;gate.gy=game.py;tick(game,.02);assert.equal(game.score,1);
- const next=game.gates[1];next.x=game.px-10;next.gy=game.py+200;tick(game,.02);assert.equal(game.dead,true);tick(game,1);const {replay,...result}=h.result();assert.deepEqual(result,{score:1,gates:1});assert.equal(replay.game,'ridge');game.destroy();
+ const next=game.gates[1];next.x=game.px-10;next.gy=game.py+200;tick(game,.02);assert.equal(game.dead,true);tick(game,1);const {replay,...result}=h.result();assert.deepEqual(result,{score:1,gates:1,orbs:0});assert.equal(replay.game,'ridge');game.destroy();
 });
 
 test('Bond awards clean placements and ends once on a occupied gap',()=>{

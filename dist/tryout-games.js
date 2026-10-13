@@ -12,7 +12,10 @@ const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d
 // vial-shaped collision below hands back. Shrinking the gap by exactly that keeps the vial a reskin
 // rather than an easier game.
 const RIDGE=Object.freeze({H:640,W:360,GROUND:570,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,
- SLACK:2.6,GAP:150,GAP_TO:118,GAP_START:10,GAP_END:50,JUMP:120,JUMP_TO:220,JUMP_END:40,EDGE:60,R:13,FIRST_X:450});
+ SLACK:2.6,GAP:150,GAP_TO:118,GAP_START:10,GAP_END:50,JUMP:120,JUMP_TO:220,JUMP_END:40,EDGE:60,R:13,FIRST_X:450,
+ // Moving vials and peptide orbs (additions on top of the Tryout Arcade course).
+ MOVE_START:15,MOVE_FULL:45,MOVE_AMP:18,MOVE_AMP_TO:55,MOVE_SPEED:1.2,MOVE_SPEED_TO:2.2,
+ ORB_START:3,ORB_CHANCE:.35,ORB_R:10,ORB_POINTS:2,ORB_OFFSET:30,ORB_OFFSET_TO:60});
 // The vial profile in pixels down from the crimp cap: cap 0-16 at half-width 22, neck 16-24 at 15,
 // shoulder 24-38 ramping 15 to 30, body 30 beyond. The drawing and the collision read the same numbers.
 export const RIDGE_VIAL=Object.freeze({cap:16,neck:24,shoulder:38,capW:22,neckW:15,bodyW:30});
@@ -115,51 +118,70 @@ export class RidgeEngine extends MiniEngine{
  // Gravity 1450, a tap sets climb speed to 430, gates 62 wide every 210 units, speed 165 rising to 230 by
  // gate 60, openings 150 shrinking to 118 between gates 10 and 50, and each opening a random step of up to
  // 120 (rising to 220 by gate 40) from the last. The ceiling stops you instead of ending the run.
- constructor(canvas,cb,options){super(canvas,cb,options);this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.trail=[];this.tilt=0;
+ constructor(canvas,cb,options){super(canvas,cb,options);this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.lastAmp=0;this.trail=[];this.tilt=0;this.gatesPassed=0;this.orbs=[];this.orbsTaken=0;this.runTime=0;this.popups=[];
   this.inputs=[];this.resumes=[];this.nextX=RIDGE.FIRST_X;for(let i=0;i<4;i++)this.addGate();this.fillGates();
   this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
  get ws(){return this.h/RIDGE.H;}
  get worldW(){return this.w/this.ws;}
- get speed(){return RIDGE.SPEED+RIDGE.SPEED_GAIN*clamp(this.score/60,0,1);}
+ get speed(){return RIDGE.SPEED+RIDGE.SPEED_GAIN*clamp(this.gatesPassed/60,0,1);}
  // Gap and reach ramp off the gate's own index, not the live score, so the course is the same for everyone
  // however well they are playing.
  gapFor(i){return(RIDGE.GAP-RIDGE.SLACK)-(RIDGE.GAP-RIDGE.GAP_TO)*clamp((i-RIDGE.GAP_START)/(RIDGE.GAP_END-RIDGE.GAP_START),0,1);}
  jumpFor(i){return RIDGE.JUMP+(RIDGE.JUMP_TO-RIDGE.JUMP)*clamp(i/RIDGE.JUMP_END,0,1);}
  // The reachable band is clamped to the playfield first and the centre drawn inside it, so a gate near an
  // edge still uses its whole remaining range instead of piling up on the margin.
- addGate(){const i=this.index++,jump=this.jumpFor(i),gap=this.gapFor(i),lo=RIDGE.EDGE+gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-gap/2;
-  const a=Math.max(lo,this.lastGy-jump),b=Math.min(hi,this.lastGy+jump),gy=a+this.random()*(b-a);
-  this.lastGy=gy;this.gates.push({x:this.nextX,gy,gap,passed:false});this.nextX+=RIDGE.SPACE;}
+ // Moving vials: from gate 15 some gates bob up and down, more of them and further and faster as you go
+ // (from 18 to 55 units, by gate 45). The step between gates shrinks by both swings so every gate stays
+ // reachable, and a gate never bobs past the playfield edges.
+ // Peptide orbs: from gate 3, about a third of the gaps hold an orb worth 2 points, set off the safe line.
+ addGate(){const i=this.index++,gap=this.gapFor(i),lo=RIDGE.EDGE+gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-gap/2,ramp=clamp((i-RIDGE.MOVE_START)/(RIDGE.MOVE_FULL-RIDGE.MOVE_START),0,1);
+  const moves=i>=RIDGE.MOVE_START&&this.random()<.4+.6*ramp,want=moves?RIDGE.MOVE_AMP+(RIDGE.MOVE_AMP_TO-RIDGE.MOVE_AMP)*ramp:0;
+  const jump=Math.max(40,this.jumpFor(i)-want-this.lastAmp);
+  const a=Math.max(lo,this.lastGy-jump),b=Math.min(hi,this.lastGy+jump),gy=a+this.random()*(b-a),amp=Math.min(want,gy-lo,hi-gy);
+  const gate={x:this.nextX,gy,cy:gy,gap,amp,phase:this.random()*TAU,rate:RIDGE.MOVE_SPEED+(RIDGE.MOVE_SPEED_TO-RIDGE.MOVE_SPEED)*ramp,passed:false};
+  const prev=this.gates.at(-1);
+  if(prev&&i>=RIDGE.ORB_START&&this.random()<RIDGE.ORB_CHANCE){const off=(RIDGE.ORB_OFFSET+(RIDGE.ORB_OFFSET_TO-RIDGE.ORB_OFFSET)*clamp(i/40,0,1))*(this.random()<.5?-1:1);
+   this.orbs.push({x:prev.x+RIDGE.PW+(RIDGE.SPACE-RIDGE.PW)/2,y:clamp((prev.gy+gy)/2+off,RIDGE.EDGE,RIDGE.GROUND-RIDGE.EDGE),taken:false});}
+  this.lastGy=gy;this.lastAmp=amp;this.gates.push(gate);this.nextX+=RIDGE.SPACE;}
  // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.
  fillGates(){while(this.nextX<this.worldW+RIDGE.PW*2)this.addGate();}
  action(){if(this.paused||this.ended||this.dead)return;this.inputs.push(this.ticks);this.started=true;this.waiting=false;this.vy=-RIDGE.FLAP;this.cb.sound('flap');this.cb.message('');}
  // Broad phase on the gate's column, then the two vial outlines themselves.
  hits(g){const R=RIDGE.R;if(!(this.px+R>g.x&&this.px-R<g.x+RIDGE.PW))return false;const cx=g.x+RIDGE.PW/2;
-  return hitsVial(this.px,this.py,R,cx,g.gy+g.gap/2,1)||hitsVial(this.px,this.py,R,cx,g.gy-g.gap/2,-1);}
+  return hitsVial(this.px,this.py,R,cx,g.cy+g.gap/2,1)||hitsVial(this.px,this.py,R,cx,g.cy-g.gap/2,-1);}
  update(dt){
   if(this.waiting)return; // holds still where it was paused until the next tap
   if(!this.started){this.py=300+Math.sin(this.time*3)*8;return;}
   this.vy+=RIDGE.GRAVITY*dt;this.py+=this.vy*dt;this.tilt=clamp(this.vy*.0011,-.35,.7);
-  if(this.dead){this.deadT+=dt;if(this.py>RIDGE.GROUND-RIDGE.R)this.py=RIDGE.GROUND-RIDGE.R;if(this.deadT>.8)this.end({score:this.score,gates:this.score,replay:this.replay()});return;}
-  const sp=this.speed;
-  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px-RIDGE.R){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.py*this.ws,'#8fffff',12);}}
+  if(this.dead){this.deadT+=dt;if(this.py>RIDGE.GROUND-RIDGE.R)this.py=RIDGE.GROUND-RIDGE.R;if(this.deadT>.8)this.end(this.result());return;}
+  const sp=this.speed;this.runTime+=dt;for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.8);
+  for(const g of this.gates)g.cy=g.gy+g.amp*Math.sin(g.phase+g.rate*this.runTime);
+  for(const o of this.orbs){o.x-=sp*dt;if(!o.taken&&Math.hypot(o.x-this.px,o.y-this.py)<RIDGE.R+RIDGE.ORB_R){o.taken=true;this.orbsTaken++;this.score+=RIDGE.ORB_POINTS;this.popups.push({x:o.x,y:o.y,t:0});this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('bond');this.burst(o.x*this.ws,o.y*this.ws,'#ffd24d',14);}}
+  this.orbs=this.orbs.filter(o=>o.x>-RIDGE.ORB_R*2);
+  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px-RIDGE.R){g.passed=true;this.gatesPassed++;this.score++;this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.py*this.ws,'#8fffff',12);}}
   this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-RIDGE.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
   if(this.py<RIDGE.R){this.py=RIDGE.R;this.vy=0;}
   if(this.py+RIDGE.R>RIDGE.GROUND){this.py=RIDGE.GROUND-RIDGE.R;this.crash();}else if(this.gates.some(g=>this.hits(g)))this.crash();
   if(this.motion){this.trail.push({x:this.px,y:this.py});for(const p of this.trail)p.x-=sp*dt;if(this.trail.length>14)this.trail.shift();}
  }
  crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.py*this.ws,'#ffd383');this.cb.sound('miss');}
- replay(){return {v:2,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
+ result(){return {score:this.score,gates:this.gatesPassed,orbs:this.orbsTaken,replay:this.replay()};}
+ replay(){return {v:3,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
  // After a pause the vial waits for a tap instead of resuming mid-fall.
  pause(value=true){super.pause(value);if(!value&&this.started&&!this.dead&&!this.ended){this.resumes.push(this.ticks);this.waiting=true;this.vy=0;this.cb.message('Tap to keep flying.');}}
  draw(){const c=this.ctx,k=this.ws;c.save();c.scale(k,k);
   if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.3;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.25,0,TAU);c.fill();}
   c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;
-  for(const g of this.gates){const top=g.gy-g.gap/2,bottom=g.gy+g.gap/2,cx=g.x+RIDGE.PW/2;drawBottleObstacle(c,cx,top,top,RIDGE.PW,true);drawBottleObstacle(c,cx,bottom,RIDGE.GROUND-bottom,RIDGE.PW,false);}
+  // Peptide orbs: a glowing core with three bonded atoms circling it.
+  for(const o of this.orbs){if(o.taken)continue;const pulse=1+.12*Math.sin(this.time*6+o.x*.05);c.save();c.shadowColor='#ffd24d';c.shadowBlur=16;
+   c.strokeStyle='#ffe9a3';c.lineWidth=1.5;for(let k=0;k<3;k++){const a=this.time*2.4+k*TAU/3,ax=o.x+Math.cos(a)*RIDGE.ORB_R*1.5,ay=o.y+Math.sin(a)*RIDGE.ORB_R*1.5;c.beginPath();c.moveTo(o.x,o.y);c.lineTo(ax,ay);c.stroke();c.fillStyle='#fff6d6';c.beginPath();c.arc(ax,ay,2.6,0,TAU);c.fill();}
+   const gr=c.createRadialGradient(o.x,o.y,1,o.x,o.y,RIDGE.ORB_R*pulse);gr.addColorStop(0,'#fffbe8');gr.addColorStop(.5,'#ffd24d');gr.addColorStop(1,'#ff9d2e');c.fillStyle=gr;c.beginPath();c.arc(o.x,o.y,RIDGE.ORB_R*pulse*.8,0,TAU);c.fill();c.restore();}
+  for(const p of this.popups){c.save();c.globalAlpha=1-p.t/.8;c.fillStyle='#ffe9a3';c.shadowColor='#ff9d2e';c.shadowBlur=10;c.font='900 18px Inter, sans-serif';c.textAlign='center';c.fillText(`+${RIDGE.ORB_POINTS}`,p.x,p.y-14-p.t*30);c.restore();}
+  for(const g of this.gates){const top=g.cy-g.gap/2,bottom=g.cy+g.gap/2,cx=g.x+RIDGE.PW/2;drawBottleObstacle(c,cx,top,top,RIDGE.PW,true);drawBottleObstacle(c,cx,bottom,RIDGE.GROUND-bottom,RIDGE.PW,false);}
   c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,RIDGE.GROUND);c.lineTo(this.worldW,RIDGE.GROUND);c.stroke();
   c.shadowColor='#8fffff';c.shadowBlur=16;drawSprite(c,'vial-cyan',this.px,this.py,RIDGE.R*2,RIDGE.R*2.6,this.tilt);
   c.restore();}
- finish(){if(!this.ended)this.end({score:this.score,gates:this.score,replay:this.replay()});}
+ finish(){if(!this.ended)this.end(this.result());}
 }
 
 export class BondEngine extends MiniEngine{

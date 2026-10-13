@@ -111,7 +111,7 @@ test('A Ridge gate is only scored once the whole gate is behind the vial',()=>{
   g.x=e.px-RIDGE.PW-RIDGE.R-1;e.step(SIM_STEP);assert.equal(e.score,1);e.destroy();
 });
 test('Ridge Run speed rises from 165 to 230 by gate 60, with Tryout Arcade gravity and flap',()=>{
-  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false});assert.equal(e.speed,165);e.score=30;assert.equal(e.speed,197.5);e.score=90;assert.equal(e.speed,230);e.score=0;
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false});assert.equal(e.speed,165);e.gatesPassed=30;assert.equal(e.speed,197.5);e.gatesPassed=90;assert.equal(e.speed,230);e.gatesPassed=0;
   e.action();assert.equal(e.vy,-430);e.step(SIM_STEP);assert.ok(Math.abs(e.vy-(-430+1450*SIM_STEP))<1e-9);e.destroy();
 });
 test('Every screen gets the same Ridge course',()=>{
@@ -269,4 +269,26 @@ test('Sequence shows a working hint after 5 idle seconds and clears it on the ne
   const {e,handlers}=seqGame();for(let t=0;t<4.9;t+=SIM_STEP)e.step(SIM_STEP);assert.equal(e.hintPair,null);
   for(let t=0;t<.3;t+=SIM_STEP)e.step(SIM_STEP);assert.ok(e.hintPair);const [a,b]=e.hintPair;assert.ok(sequenceMatches(sequenceExchange(e.board,a,b)).size>0);
   handlers.pointerdown({clientX:0,clientY:0,pointerId:1});assert.equal(e.hintPair,null);e.destroy();
+});
+
+// ---------- Ridge Run: moving vials and peptide orbs ----------
+test('Ridge vials start moving at gate 15, swing further by gate 45, stay inside the playfield and stay reachable',()=>{
+  for(let seed=1;seed<=40;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false});while(e.index<80)e.addGate();
+    for(let i=0;i<e.gates.length;i++){const g=e.gates[i],lo=RIDGE.EDGE+g.gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-g.gap/2;
+      if(i<RIDGE.MOVE_START)assert.equal(g.amp,0,`gate ${i} still`);
+      assert.ok(g.amp<=RIDGE.MOVE_AMP_TO+1e-9);assert.ok(g.gy-g.amp>=lo-1e-9&&g.gy+g.amp<=hi+1e-9,'never bobs past the edges');
+      if(i){const p=e.gates[i-1];assert.ok(Math.abs(g.gy-p.gy)+g.amp+p.amp<=Math.max(40+g.amp+p.amp,e.jumpFor(i))+1e-9,'reachable at any phase');}}
+    const late=e.gates.slice(50),moving=late.filter(g=>g.amp>0).length;assert.ok(moving/late.length>.6,'most late gates move');e.destroy();}
+});
+test('Moving Ridge vials really move, and the hit test follows them',()=>{
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:4,motion:false});const g={x:e.px-RIDGE.PW/2,gy:300,cy:300,gap:80,amp:50,phase:0,rate:2,passed:true};assert.equal(e.hits(g),false,"safe before it moves");
+  e.gates=[g];e.nextX=1e7;e.orbs=[];e.action();e.py=300;e.vy=0;e.runTime=Math.PI/4-SIM_STEP;e.step(SIM_STEP);
+  assert.ok(Math.abs(g.cy-(300+50*Math.sin(Math.PI/2)))<1,'gap centre moved down by the swing');assert.ok(e.dead,'the vial now hits the top glass');e.destroy();
+});
+test('Peptide orbs appear from gate 3, sit between gates, and pay 2 points when collected',()=>{
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:6,motion:false});while(e.index<200)e.addGate();
+  assert.ok(e.orbs.length>40&&e.orbs.length<100,`${e.orbs.length} orbs in 200 gates`);
+  for(const o of e.orbs){assert.ok(o.y>=RIDGE.EDGE&&o.y<=RIDGE.GROUND-RIDGE.EDGE);assert.ok(!e.gates.some(g=>o.x>g.x-RIDGE.ORB_R&&o.x<g.x+RIDGE.PW+RIDGE.ORB_R),'never inside a gate');}
+  const f=new RidgeEngine(canvas(),callbacks().cb,{seed:6,motion:false});for(const g of f.gates)g.x=1e6;f.nextX=1e7;f.orbs=[{x:f.px+4,y:f.py,taken:false}];f.action();f.step(SIM_STEP);
+  assert.equal(f.orbsTaken,1);assert.equal(f.score,2);assert.equal(f.gatesPassed,0,'orbs are not gates');e.destroy();f.destroy();
 });
