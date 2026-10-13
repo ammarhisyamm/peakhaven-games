@@ -47,14 +47,9 @@ test('Canvas sizing keeps uniform scale and maps pointer positions at mobile and
  }
 });
 
-test('Ridge Run tightens its gate course and reports a fall',()=>{
- const h=harness(),game=new RidgeEngine(h.canvas,h.cb,{motion:false});const initial=game.gap;game.score=20;game.action();game.update(.01);assert.equal(game.speed,212);assert.ok(game.gap<initial);
- game.y=70;game.vy=0;game.update(.02);assert.equal(h.result(),null,'no invisible ceiling below the screen edge');game.y=20;game.update(.02);const {replay,...result}=h.result();assert.deepEqual(result,{score:20,gates:20});assert.equal(replay.game,'ridge');game.destroy();
-});
-
-test('Ridge bottles fill both screen edges and a gate keeps its original opening',()=>{
- const h=harness(390,844),game=new RidgeEngine(h.canvas,h.cb,{motion:false});game.action();tick(game,.02);const gate=game.gates[0],gap=gate.gap;game.score=40;
- const s=game.gateSegments(gate);assert.equal(s.bottom-s.top,gap);assert.equal(game.floor,game.h);assert.ok(s.top>0&&s.bottom<game.h);game.y=game.h-20;game.vy=0;tick(game,.02);assert.ok(h.result());game.destroy();
+test('Ridge Run scores a gate once it is behind the vial and reports the run after a crash',()=>{
+ const h=harness(),game=new RidgeEngine(h.canvas,h.cb,{motion:false});game.action();const gate=game.gates[0];gate.x=game.px-62-12;gate.gy=game.py;tick(game,.02);assert.equal(game.score,1);
+ const next=game.gates[1];next.x=game.px-10;next.gy=game.py+200;tick(game,.02);assert.equal(game.dead,true);tick(game,1);const {replay,...result}=h.result();assert.deepEqual(result,{score:1,gates:1});assert.equal(replay.game,'ridge');game.destroy();
 });
 
 test('Bond awards clean placements and ends once on a occupied gap',()=>{

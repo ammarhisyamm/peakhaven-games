@@ -8,6 +8,9 @@ export const BOND_MAX_VIALS=11,BOND_HIT=.17;
 // Shot clock: time allowed for each shot, 6 s on chain 1, 0.5 s less each chain, never under 2.5 s.
 export const bondClock=stage=>Math.max(2.5,6-.5*(stage-1));
 const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d);
+// Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
+const RIDGE=Object.freeze({H:640,GROUND:582,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,GAP:150,GAP_SHRINK:32,HALF_W:11,HALF_H:13,FIRST_X:420});
+export {RIDGE};
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const angularDistance=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
@@ -84,41 +87,48 @@ export class OrbitEngine extends MiniEngine{
 }
 
 export class RidgeEngine extends MiniEngine{
- constructor(canvas,cb,options){super(canvas,cb,options);this.y=this.top+(this.h-this.top-this.bottom)*.5;this.vy=0;this.started=false;this.gates=[];this.speed=148;this.spawn=0;this.trail=[];this.lastCenter=null;this.lastInterval=0;this.inputs=[];this.resizes=[];this.resumes=[];this.startView=this.view;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
- get playerX(){return Math.min(170,this.w*.28);}
- get floor(){return this.h;}
- get gap(){return Math.max(140,Math.min(245,(this.floor-this.top)*.36)-this.score*2.8);}
- get flap(){return Math.sqrt((this.floor-this.top)/430)*282;}
- action(){if(this.paused||this.ended)return;this.inputs.push(this.ticks);this.started=true;this.vy=-this.flap;this.cb.sound('flap');this.cb.message('');}
+ // Course and physics copied from the Tryout Arcade's Ridge Run. Gameplay runs in a fixed 640-unit-tall world
+ // (ground at 582), scaled to fit the screen, so every phone and desktop gets the same course.
+ // Gravity 1450, a tap sets climb speed to 430, gates 62 wide every 210 units, speed 165 rising to 230 by
+ // gate 60, openings 150 shrinking to 118 between gates 10 and 50, and each opening a random step of up to
+ // 120 (rising to 220 by gate 40) from the last. The ceiling stops you instead of ending the run.
+ constructor(canvas,cb,options){super(canvas,cb,options);this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.trail=[];this.tilt=0;
+  this.inputs=[];this.resumes=[];this.nextX=RIDGE.FIRST_X;for(let i=0;i<4;i++)this.addGate();this.fillGates();
+  this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
+ get ws(){return this.h/RIDGE.H;}
+ get worldW(){return this.w/this.ws;}
+ get speed(){return RIDGE.SPEED+RIDGE.SPEED_GAIN*clamp(this.score/60,0,1);}
+ gapFor(i){return RIDGE.GAP-RIDGE.GAP_SHRINK*clamp((i-10)/40,0,1);}
+ addGate(){const i=this.index++,jump=120+100*clamp(i/40,0,1),gap=this.gapFor(i),lo=60+gap/2,hi=RIDGE.GROUND-60-gap/2;
+  const gy=clamp(this.lastGy+(this.random()*2-1)*jump,lo,hi);this.lastGy=gy;this.gates.push({x:this.nextX,gy,gap,passed:false});this.nextX+=RIDGE.SPACE;}
+ // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.
+ fillGates(){while(this.nextX<this.worldW+RIDGE.PW*2)this.addGate();}
+ action(){if(this.paused||this.ended||this.dead)return;this.inputs.push(this.ticks);this.started=true;this.waiting=false;this.vy=-RIDGE.FLAP;this.cb.sound('flap');this.cb.message('');}
+ hits(g){if(this.px+RIDGE.HALF_W<g.x||this.px-RIDGE.HALF_W>g.x+RIDGE.PW)return false;return this.py-RIDGE.HALF_H<g.gy-g.gap/2||this.py+RIDGE.HALF_H>g.gy+g.gap/2;}
  update(dt){
-  if(!this.started)return;this.speed=Math.min(300,148+this.score*3.2);this.vy+=640*dt;this.y+=this.vy*dt;this.spawn-=dt;
-  if(this.spawn<=0){const gap=this.gap,center=this.nextCenter(gap);this.gates.push({x:this.w+40,center,gap,passed:false});this.lastCenter=center;this.spawn=this.lastInterval=Math.max(1.02,1.9-this.score*.014);}
-  for(const g of this.gates){const gap=g.gap??this.gap;g.x-=this.speed*dt;if(!g.passed&&g.x+35<this.playerX-18){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.playerX,this.y,'#8fffff',12);}
-   if(g.x-35<this.playerX+17&&g.x+35>this.playerX-17&&(this.y-29<g.center-gap/2||this.y+29>g.center+gap/2)){this.crash();return;}}
-  this.gates=this.gates.filter(g=>g.x>-60);if(this.y-28<0||this.y+28>this.floor)this.crash();
-  if(this.motion){this.trail.push({x:this.playerX,y:this.y});for(const p of this.trail)p.x-=this.speed*dt;if(this.trail.length>24)this.trail.shift();}
+  if(this.waiting)return; // holds still where it was paused until the next tap
+  if(!this.started){this.py=300+Math.sin(this.time*3)*8;return;}
+  this.vy+=RIDGE.GRAVITY*dt;this.py+=this.vy*dt;this.tilt=clamp(this.vy*.0011,-.35,.7);
+  if(this.dead){this.deadT+=dt;if(this.py>RIDGE.GROUND-RIDGE.HALF_H)this.py=RIDGE.GROUND-RIDGE.HALF_H;if(this.deadT>.8)this.end({score:this.score,gates:this.score,replay:this.replay()});return;}
+  const sp=this.speed;
+  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.py*this.ws,'#8fffff',12);}}
+  this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-RIDGE.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
+  if(this.py<RIDGE.HALF_H){this.py=RIDGE.HALF_H;this.vy=0;}
+  if(this.py>RIDGE.GROUND-RIDGE.HALF_H||this.gates.some(g=>this.hits(g)))this.crash();
+  if(this.motion){this.trail.push({x:this.px,y:this.py});for(const p of this.trail)p.x-=sp*dt;if(this.trail.length>14)this.trail.shift();}
  }
- // Every gate must be reachable from the one before. The vial gets the time between leaving one gate and
- // entering the next; a human tapping fast climbs about 75% of the flap speed, and falls at most what gravity
- // allows. Half the spare room inside the gap counts too. MAX_SHIFT also stops tall phones getting bigger swings.
- nextCenter(gap){
-  const margin=gap/2+38,lo=this.top+margin,hi=Math.max(lo+1,this.floor-margin);
-  let a=lo,b=hi;
-  if(this.lastCenter!==null){
-   const travel=Math.max(.2,this.lastInterval-(70+34)/this.speed),slack=Math.max(0,gap-58)/2,MAX_SHIFT=240;
-   const up=Math.min(MAX_SHIFT,.75*this.flap*travel+slack),down=Math.min(MAX_SHIFT,.75*.5*640*travel*travel+slack);
-   a=Math.max(lo,this.lastCenter-up);b=Math.min(hi,this.lastCenter+down);if(b<a)a=b=clamp(this.lastCenter,lo,hi);
-  }
-  return a+this.random()*(b-a);
- }
- replay(){return {v:1,game:'ridge',seed:this.seed,view:this.startView,step:SIM_STEP,taps:[...this.inputs],resizes:this.resizes.map(([t,v])=>[t,[...v]]),resumes:[...this.resumes]};}
+ crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.py*this.ws,'#ffd383');this.cb.sound('miss');}
+ replay(){return {v:2,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
  // After a pause the vial waits for a tap instead of resuming mid-fall.
- pause(value=true){super.pause(value);if(!value&&this.started&&!this.ended){this.resumes.push(this.ticks);this.started=false;this.vy=0;this.cb.message('Tap to keep flying.');}}
- crash(){if(this.ended)return;this.burst(this.playerX,this.y,'#ffd383');this.cb.sound('miss');this.end({score:this.score,gates:this.score,replay:this.replay()});}
- onResize(oldW,oldH){this.resizes?.push([this.ticks,this.view]);this.y*=this.h/oldH;for(const g of this.gates){g.x*=this.w/oldW;g.center*=this.h/oldH;}}
- gateSegments(g){const gap=g.gap??this.gap;return{top:g.center-gap/2,bottom:g.center+gap/2};}
- draw(){const c=this.ctx;c.save();if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.28;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.16,0,TAU);c.fill();}c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;for(const g of this.gates){const{top,bottom}=this.gateSegments(g);drawBottleObstacle(c,g.x,top,top,70,true);drawBottleObstacle(c,g.x,bottom,this.h-bottom,70,false);}c.shadowColor='#8fffff';c.shadowBlur=16;const bob=this.started?0:Math.sin(this.time*2.8)*6;drawSprite(c,'vial-cyan',this.playerX,this.y+bob,48,80,clamp(this.vy*.0011,-.28,.6));c.restore();}
- finish(){this.crash();}
+ pause(value=true){super.pause(value);if(!value&&this.started&&!this.dead&&!this.ended){this.resumes.push(this.ticks);this.waiting=true;this.vy=0;this.cb.message('Tap to keep flying.');}}
+ draw(){const c=this.ctx,k=this.ws;c.save();c.scale(k,k);
+  if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.3;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.25,0,TAU);c.fill();}
+  c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;
+  for(const g of this.gates){const top=g.gy-g.gap/2,bottom=g.gy+g.gap/2,cx=g.x+RIDGE.PW/2;drawBottleObstacle(c,cx,top,top,RIDGE.PW,true);drawBottleObstacle(c,cx,bottom,RIDGE.GROUND-bottom,RIDGE.PW,false);}
+  c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,RIDGE.GROUND);c.lineTo(this.worldW,RIDGE.GROUND);c.stroke();
+  c.shadowColor='#8fffff';c.shadowBlur=16;drawSprite(c,'vial-cyan',this.px,this.py,RIDGE.HALF_W*2.4,RIDGE.HALF_H*2.6,this.tilt);
+  c.restore();}
+ finish(){if(!this.ended)this.end({score:this.score,gates:this.score,replay:this.replay()});}
 }
 
 export class BondEngine extends MiniEngine{
