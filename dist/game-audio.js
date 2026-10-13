@@ -1,14 +1,38 @@
-const files=['launch','flap','bond','crystal','swish','rim','drop','clear'];
-const voices={tower:{drop:'drop',perfect:'clear'},merge:{drop:'drop',merge:'bond'},sort:{drop:'launch',perfect:'clear'},blocks:{drop:'drop',merge:'clear'},mahjong:{drop:'crystal',merge:'clear'},orbit:{launch:'launch',swish:'swish',rim:'rim'},ridge:{flap:'flap',perfect:'clear'},bond:{launch:'launch',bond:'bond'},sequence:{drop:'drop',crystal:'crystal'}};
+// One shared sound set for every game and the menus, taken from the Tryout Arcade (tools/make-sfx.py).
+// Each event maps to a file plus a gain and pitch; a game can override a cue or shift its pitch so the
+// nine games share one voice but don't all sound the same.
+const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear'];
+// Gains even out the files' different loudness. `jitter` varies the pitch slightly on repeats.
+const cues={
+ select:{file:'tap',gain:.5,jitter:.04},toggle:{file:'tap',gain:.5,rate:1.2},hint:{file:'tap',gain:.5,rate:1.35},
+ tool:{file:'whoosh',gain:.45},undo:{file:'whoosh',gain:.45,rate:.8},launch:{file:'whoosh',gain:.45,jitter:.05},flap:{file:'whoosh',gain:.4,rate:1.4,jitter:.06},
+ drop:{file:'thunk',gain:.25,jitter:.06},invalid:{file:'clank',gain:.45},
+ bond:{file:'score',gain:.55,jitter:.03},crystal:{file:'score',gain:.5,rate:1.2,jitter:.04},merge:{file:'score',gain:.55,jitter:.03},
+ perfect:{file:'clear',gain:.5},win:{file:'clear',gain:.55},
+ swish:{file:'swish',gain:.2},rim:{file:'rim',gain:.5},miss:{file:'fail',gain:.8},
+};
+const pitch={mahjong:1.12,merge:.88,sequence:1.08,blocks:.95};
+const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{merge:'perfect'}};
+export function cueFor(game,event){const name=overrides[game]?.[event]??event,cue=cues[name];return cue?{...cue,rate:(cue.rate||1)*(pitch[game]||1)}:null;}
+
 export class GameAudio{
- constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.sources=new Set();this.generation=0;}
+ constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;}
  prepare(){
   if(!this.enabled())return;
-  try{this.context??=new(window.AudioContext||window.webkitAudioContext)();this.context.resume().catch(()=>{});for(const file of files)if(!this.buffers.has(file)){const pending=fetch(`assets/audio/${file}.wav`).then(r=>{if(!r.ok)throw new Error('Audio unavailable');return r.arrayBuffer();}).then(bytes=>this.context.decodeAudioData(bytes)).catch(()=>null);this.buffers.set(file,pending);}}catch{/* Effects are optional when audio is unavailable. */}
+  try{this.context??=new(window.AudioContext||window.webkitAudioContext)();this.context.resume().catch(()=>{});
+   for(const file of files)if(!this.buffers.has(file)){
+    // A failed download is forgotten so the next prepare() retries it, and play() reports it so the
+    // synthesised fallback can sound instead (before, one network error silenced the game for good).
+    const pending=fetch(`assets/audio/${file}.wav`).then(r=>{if(!r.ok)throw new Error('Audio unavailable');return r.arrayBuffer();}).then(bytes=>this.context.decodeAudioData(bytes)).then(buffer=>{this.failed.delete(file);return buffer;}).catch(()=>{this.buffers.delete(file);this.failed.add(file);return null;});
+    this.buffers.set(file,pending);}
+  }catch{/* Effects are optional when audio is unavailable. */}
  }
  play(game,event){
-  const file=voices[game]?.[event];if(!file)return false;if(!this.enabled())return true;this.prepare();const pending=this.buffers.get(file);if(!pending)return true;
-  const generation=this.generation;pending.then(buffer=>{if(generation!==this.generation||!buffer||!this.enabled()||this.context.state!=='running')return;const source=this.context.createBufferSource(),gain=this.context.createGain();source.buffer=buffer;source.playbackRate.value=game==='mahjong'?1.12:game==='merge'?.88:1;gain.gain.value=.24;source.connect(gain);gain.connect(this.context.destination);this.sources.add(source);source.onended=()=>this.sources.delete(source);source.start();});return true;
+  const cue=cueFor(game,event);if(!cue)return false;if(!this.enabled())return true;
+  if(this.failed.has(cue.file)){this.prepare();return false;}
+  this.prepare();const pending=this.buffers.get(cue.file);if(!pending)return false;
+  const generation=this.generation,rate=cue.rate*(1+(Math.random()*2-1)*(cue.jitter||0));
+  pending.then(buffer=>{if(generation!==this.generation||!buffer||!this.enabled()||this.context.state!=='running')return;const source=this.context.createBufferSource(),gain=this.context.createGain();source.buffer=buffer;source.playbackRate.value=rate;gain.gain.value=cue.gain;source.connect(gain);gain.connect(this.context.destination);this.sources.add(source);source.onended=()=>this.sources.delete(source);source.start();});return true;
  }
  stop(){this.generation++;for(const source of this.sources){try{source.stop();}catch{/* Already ended. */}}this.sources.clear();}
 }
