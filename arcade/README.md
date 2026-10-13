@@ -45,3 +45,16 @@ Open http://localhost:8775/#play.
 
 No GitHub Actions token or deployment hook is needed; Vercel's Git integration
 performs automatic builds and assigns the production domain after success.
+
+## Daily Play reference
+
+Play follows the supplied October 13 layout: campaign hero, monthly/yearly
+prizes, Peak Blocks / Sequence / Ridge Run rows, leaderboard preview, bottle
+customisation shortcut and extra-plays concept. `ui/play.css` scopes the layout
+to Play, preserving the other pages. Square game illustrations use `contain`
+with no cropping; original supplied images are preserved in `source-assets/`.
+
+The prototype tracks three free game launches per game per local calendar day
+on this device. A launch is counted when the instruction dialog's start button
+is pressed; cancelling instructions uses no play. In-game retries retain the
+existing engine behavior. Extra-play purchasing remains a Pricing TBC concept.
