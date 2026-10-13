@@ -15,7 +15,7 @@ const {SIM_STEP,createRandom}=await import('../dist/rng.js');
 const {replayRidge,replayMerge}=await import('../tools/replay.mjs');
 
 const noop=()=>{};
-function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:noop,set:(t,k,v)=>(t[k]=v,true)});return {getContext:()=>ctx,getBoundingClientRect:()=>({width,height,left:0,top:0}),addEventListener:noop,removeEventListener:noop,setPointerCapture:noop};}
+function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:()=>ctx,set:(t,k,v)=>(t[k]=v,true)});return {getContext:()=>ctx,getBoundingClientRect:()=>({width,height,left:0,top:0}),addEventListener:noop,removeEventListener:noop,setPointerCapture:noop};}
 function callbacks(onEnd){const out={result:null};out.cb={hud:noop,message:noop,sound:noop,effect:noop,progress:noop,ready:noop,topTier:noop,place:noop,end(r){out.result??=r;onEnd?.(r);}};return out;}
 
 // ---------- Peak Blocks ----------
@@ -61,55 +61,91 @@ test('Late Blocks trays draw evenly instead of piling onto the 2×3 block',()=>{
 });
 
 // ---------- Ridge Run ----------
-// A simple bot that keeps the vial near the next gate's centre.
-function ridgeBot(e){const next=e.gates.find(g=>!g.passed&&g.x+35>e.playerX-18);const target=next?next.center:(e.top+e.floor)/2;return e.y>target+8&&e.vy>-40;}
+const {RIDGE,RIDGE_VIAL,vialHalfWidth,hitsVial}=await import('../dist/tryout-games.js');
+// A simple bot that keeps the vial a little below the next gate's centre.
+function ridgeBot(e){const next=e.gates.find(g=>g.x+RIDGE.PW>e.px-RIDGE.R);const target=next?next.gy+12:300;return e.py>target&&e.vy>-60;}
 function playRidge({seed,hz,view=[480,720],maxSeconds=90}){
   const c=canvas(...view),out=callbacks(),e=new RidgeEngine(c,out.cb,{seed,motion:false});
   let now=1000;e.frame(now);e.action();
-  for(let f=0;f<maxSeconds*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&ridgeBot(e))e.action();}
-  if(!e.ended)e.finish();e.destroy();return out.result;
+  for(let f=0;f<maxSeconds*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&!e.dead&&ridgeBot(e))e.action();}
+  if(!e.ended)e.finish();e.destroy();return {result:out.result,engine:e};
 }
-test('Ridge Run replays to the same score at 30, 60 and 144 Hz',async()=>{
-  for(const hz of [30,60,144])for(const seed of [11,22,33]){
-    const live=playRidge({seed,hz});const again=await replayRidge(live.replay);
-    assert.equal(again.score,live.score,`seed ${seed} at ${hz} Hz`);assert.equal(again.unusedInputs,0);
+// The reference ramps, written out as flap.ts has them: the box-era gap less the room the vial outline
+// hands back, so the reskin is not also a difficulty change.
+const refGap=i=>(150-RIDGE.SLACK)-((150-RIDGE.SLACK)-(118-RIDGE.SLACK))*Math.min(1,Math.max(0,(i-10)/40));
+const refJump=i=>120+100*Math.min(1,Math.max(0,i/40));
+test('Ridge Run builds the Tryout Arcade course: 210 apart, openings 147.4 to 115.4, steps up to 120 rising to 220',()=>{
+  for(let seed=1;seed<=50;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false});
+    while(e.index<90)e.addGate();
+    for(let i=0;i<e.gates.length;i++){const g=e.gates[i],gap=refGap(i);
+      assert.ok(Math.abs(g.gap-gap)<1e-9,`gap at ${i}`);assert.ok(g.gy>=RIDGE.EDGE+gap/2-1e-9&&g.gy<=RIDGE.GROUND-RIDGE.EDGE-gap/2+1e-9);
+      if(i){assert.ok(Math.abs(g.x-e.gates[i-1].x-210)<1e-9);assert.ok(Math.abs(g.gy-e.gates[i-1].gy)<=refJump(i)+1e-9);}}
+    e.destroy();}
+});
+test('Ridge openings give back exactly the room the vial outline takes, and the first gate waits at 450',()=>{
+  assert.equal(RIDGE.SLACK,2.6);assert.equal(RIDGE.GROUND,570);assert.equal(RIDGE.R,13);assert.equal(RIDGE.FIRST_X,450);
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});
+  assert.ok(Math.abs(e.gapFor(0)-147.4)<1e-9);assert.ok(Math.abs(e.gapFor(50)-115.4)<1e-9);assert.ok(Math.abs(e.gapFor(90)-115.4)<1e-9);
+  assert.equal(e.gates[0].x,450);assert.ok(Math.abs(e.gates[1].x-660)<1e-9);e.destroy();
+});
+test('Ridge collision follows the vial outline: the neck is forgiving, the cap and body are not',()=>{
+  // Half-widths straight off the profile: cap 22, neck 15, shoulder ramping to 30, body 30.
+  assert.equal(vialHalfWidth(-1),-1);assert.equal(vialHalfWidth(0),RIDGE_VIAL.capW);assert.equal(vialHalfWidth(20),RIDGE_VIAL.neckW);
+  assert.equal(vialHalfWidth(RIDGE_VIAL.shoulder),RIDGE_VIAL.bodyW);assert.equal(vialHalfWidth(400),RIDGE_VIAL.bodyW);
+  assert.ok(Math.abs(vialHalfWidth(31)-(15+15*(31-24)/14))<1e-9,'shoulder ramps');
+  // How close the node may pass at each height. The neck is the most forgiving part of the glass, and
+  // every part of it is kinder than the 31-half-width box the outline replaced.
+  const capY=200,cx=100,clearance=d=>{let dx=0;while(dx<80&&hitsVial(cx+dx,capY+d,RIDGE.R,cx,capY,1))dx+=.1;return dx;};
+  const neck=clearance(20),body=clearance(60),cap=clearance(8),box=31+RIDGE.R*.9;
+  assert.ok(neck<cap&&neck<body,`neck ${neck.toFixed(1)} is the forgiving part (cap ${cap.toFixed(1)}, body ${body.toFixed(1)})`);
+  assert.ok(body<box,`even the body ${body.toFixed(1)} clears inside the old box ${box.toFixed(1)}`);
+  assert.equal(hitsVial(cx+28,capY+60,RIDGE.R,cx,capY,1),true,'the body still stops a close pass');
+  // Direction flips for the hanging vial, whose body runs up off the top of the screen.
+  assert.equal(hitsVial(cx,capY-60,RIDGE.R,cx,capY,-1),true);assert.equal(hitsVial(cx,capY+60,RIDGE.R,cx,capY,-1),false);
+});
+test('A Ridge gate is only scored once the whole gate is behind the vial',()=>{
+  const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:4,motion:false});
+  for(const g of e.gates)g.x=1e6;e.nextX=1e7;
+  const g=e.gates[0];g.x=e.px-RIDGE.PW+1;g.gy=e.py;g.gap=300; // wide open, still overlapping the vial
+  e.action();e.step(SIM_STEP);assert.equal(e.score,0,'not scored while the gate still overlaps');
+  g.x=e.px-RIDGE.PW-RIDGE.R-1;e.step(SIM_STEP);assert.equal(e.score,1);e.destroy();
+});
+test('Ridge Run speed rises from 165 to 230 by gate 60, with Tryout Arcade gravity and flap',()=>{
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false});assert.equal(e.speed,165);e.score=30;assert.equal(e.speed,197.5);e.score=90;assert.equal(e.speed,230);e.score=0;
+  e.action();assert.equal(e.vy,-430);e.step(SIM_STEP);assert.ok(Math.abs(e.vy-(-430+1450*SIM_STEP))<1e-9);e.destroy();
+});
+test('Every screen gets the same Ridge course',()=>{
+  const course=view=>{const e=new RidgeEngine(canvas(...view),callbacks().cb,{seed:9,motion:false});while(e.index<40)e.addGate();const out=e.gates.map(g=>[Math.round(g.gy*1000),g.gap]);e.destroy();return JSON.stringify(out);};
+  assert.equal(course([480,720]),course([390,844]));assert.equal(course([480,720]),course([1280,800]));
+});
+test('The Ridge ceiling stops the vial; the ground ends the run after a short fall',()=>{
+  const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:2,motion:false});for(const g of e.gates)g.x=1e6;e.nextX=1e7;e.action();e.py=5;e.vy=-400;e.step(SIM_STEP);
+  assert.equal(e.dead,false);assert.equal(e.py,RIDGE.R);
+  e.py=RIDGE.GROUND;e.step(SIM_STEP);assert.equal(e.dead,true);assert.equal(e.py,RIDGE.GROUND-RIDGE.R,'settles on the ground');assert.equal(out.result,null,'falls for a moment first');
+  for(let i=0;i<120;i++)e.step(SIM_STEP);assert.ok(out.result);assert.equal(out.result.score,0);e.destroy();
+});
+test('Ridge Run replays to the same score at 30, 60 and 144 Hz, on any screen',async()=>{
+  for(const [hz,view] of [[30,[480,720]],[60,[390,844]],[144,[1280,800]]])for(const seed of [11,22,33]){
+    const {result}=playRidge({seed,hz,view});const again=await replayRidge(result.replay);
+    assert.equal(again.score,result.score,`seed ${seed} at ${hz} Hz`);assert.equal(again.unusedInputs,0);
   }
 });
-test('Ridge Run flap height no longer depends on frame rate',()=>{
-  // Sample at the same game moment (after 0.5 s) at each frame rate; the old variable step drifted by a few px.
-  const at=hz=>{const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false});let now=1000;e.frame(now);e.action();for(let f=0;f<hz/2;f++){now+=1000/hz;e.frame(now);}const out=[e.ticks,e.y];e.destroy();return out;};
-  const [t30,y30]=at(30),[t60,y60]=at(60),[t144,y144]=at(144);
-  assert.equal(t30,60);assert.equal(t60,60);assert.equal(t144,60);assert.equal(y30,y60);assert.equal(y60,y144);
-});
-test('Every Ridge gate is reachable from the last one, on standard and tall screens',()=>{
-  for(const view of [[480,720],[390,844],[1280,800]])for(let seed=1;seed<=60;seed++){
-    const e=new RidgeEngine(canvas(...view),callbacks().cb,{seed,motion:false});
-    for(let score=0;score<=120;score+=2){
-      e.score=score;e.speed=Math.min(300,148+score*3.2);const gap=e.gap,interval=Math.max(1.02,1.9-score*.014);
-      const prev=e.lastCenter;e.lastInterval=interval;const c=e.nextCenter(gap);e.lastCenter=c;
-      if(prev===null)continue;
-      const travel=interval-(70+34)/e.speed,slack=(gap-58)/2;
-      const climb=e.flap*travel+slack,fall=.5*640*travel*travel+slack;
-      assert.ok(prev-c<=climb+1e-6,`${view} seed ${seed} score ${score}: climb ${prev-c} > ${climb}`);
-      assert.ok(c-prev<=fall+1e-6,`${view} seed ${seed} score ${score}: drop ${c-prev} > ${fall}`);
-      assert.ok(Math.abs(c-prev)<=240+1e-6,'same maximum swing on every screen');
-    }
-    e.destroy();
-  }
+test('The Ridge bot clears plenty of gates, so the course is playable',()=>{
+  let total=0;for(const seed of [1,2,3,4,5]){const {result}=playRidge({seed,hz:60,maxSeconds:60});total+=result.score;}
+  assert.ok(total/5>=15,`average ${total/5} gates`);
 });
 test('Ridge Run waits for a tap after resuming instead of falling straight away',()=>{
   const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});e.action();for(let i=0;i<30;i++)e.step(SIM_STEP);
-  e.pause(true);e.pause(false);const y=e.y;for(let i=0;i<240;i++)e.step(SIM_STEP);
-  assert.equal(e.y,y);assert.equal(e.ended,false);e.action();e.step(SIM_STEP);assert.notEqual(e.y,y);e.destroy();
+  e.pause(true);e.pause(false);const y=e.py,xs=e.gates.map(g=>g.x);for(let i=0;i<240;i++)e.step(SIM_STEP);
+  assert.equal(e.py,y,'holds still where it was');assert.deepEqual(e.gates.map(g=>g.x),xs,'the course waits too');assert.equal(e.ended,false);e.action();assert.equal(e.vy,-430);e.destroy();
 });
 test('Ending a run inside a frame does not schedule another frame',()=>{
   let e;const out=callbacks(()=>e.destroy());e=new RidgeEngine(canvas(),out.cb,{seed:4,motion:false});
-  e.action();e.y=e.floor;e.frame(5000);const before=rafCalls;e.frame(5100);
+  e.action();e.py=RIDGE.GROUND;e.dead=true;e.deadT=.79;e.frame(5000);const before=rafCalls;e.frame(5100);
   assert.ok(out.result);assert.equal(rafCalls,before,'no rAF after destroy');
 });
 test('A doctored Ridge score does not survive replay',async()=>{
-  const live=playRidge({seed:77,hz:60});const claimed=live.score+50;
-  assert.notEqual((await replayRidge(live.replay)).score,claimed);
+  const {result}=playRidge({seed:77,hz:60});assert.notEqual((await replayRidge(result.replay)).score,result.score+50);
 });
 
 // ---------- Vial Merge ----------
@@ -136,4 +172,101 @@ test('Vial Merge never spawns tiers that cannot merge',()=>{
   const e=new MergeEngine(canvas(),callbacks().cb,{seed:8,motion:false});const seen=new Set();
   for(let i=0;i<2000;i++){e.cooldown=0;e.bodies.length=0;e.action();seen.add(e.preview);seen.add(e.next);}
   assert.ok(Math.max(...seen)<MERGE_SPAWN_TIERS,`spawned ${[...seen]}`);e.destroy();
+});
+
+// ---------- Bond ----------
+const {BondEngine,BOND_HIT,BOND_MAX_FIXED,BOND_FIXED_GAP,bondVials,bondClock}=await import('../dist/tryout-games.js');
+const {replayBond}=await import('../tools/replay.mjs');
+const angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+// The ring's wobble follows run time from chain 4 (stage 3) on, exactly as the engine does.
+const bondWobble=(e,t)=>e.index>=3?Math.sin(t*1.15)*1.3+.35:1;
+// Fires only when the vial, 0.12 s from now, would land clear of every vial on the ring.
+function bondSafe(e,margin=.04){let t=e.time,rot=e.rotation,p=0;while(p<1){t+=SIM_STEP;rot+=e.base*bondWobble(e,t)*SIM_STEP;p+=SIM_STEP/.12;} // same steps as the engine
+  return e.pins.every(a=>angDist(a,Math.PI/2-rot)>=BOND_HIT+margin);}
+// About to be timed out: one tick of clock left.
+const urgent=e=>e.clockLive&&e.clock<=.15;
+// A careful player: throws into a clear gap, and rather than let the shot clock run out, throws anyway.
+function playBond(e,seconds,chance=0){const rand=createRandom(99);
+  for(let i=0;i<seconds*120&&!e.ended;i++){
+    if(!e.flights.length&&e.clearT<=0&&(bondSafe(e)||(e.clockLive&&e.clock<=.15)||rand()<chance))e.action();
+    e.step(SIM_STEP);}}
+test('Bond chains follow the Tryout Arcade stage rules: 5 + stage vials, seeded fixed vials, faster spin, wobble from chain 4',()=>{
+  for(let seed=1;seed<=40;seed++){const e=new BondEngine(canvas(),callbacks().cb,{seed,motion:false});
+    for(let chain=1;chain<=9;chain++){const s=chain-1;
+      assert.equal(e.stage,chain);assert.equal(e.index,s);assert.equal(e.left,bondVials(s));
+      assert.ok(e.pins.length<=BOND_MAX_FIXED,`fixed vials ${e.pins.length}`);assert.equal(e.fixed,e.pins.length);
+      for(let i=0;i<e.pins.length;i++)for(let j=i+1;j<e.pins.length;j++)assert.ok(angDist(e.pins[i],e.pins[j])>BOND_FIXED_GAP,'fixed vials start a gap apart');
+      assert.ok(Math.abs(Math.abs(e.base)-(1.7+.22*s))<1e-9,`spin at chain ${chain}`);
+      if(s<3)assert.equal(e.wobble,1);else assert.ok(e.wobble>=-.95-1e-9&&e.wobble<=1.65+1e-9,`wobble ${e.wobble}`);
+      e.left=0;e.clearT=.001;e.step(SIM_STEP);}
+    e.destroy();}
+});
+test('Bond vial counts keep climbing past the knee, so a run always ends eventually',()=>{
+  assert.deepEqual([...Array(11).keys()].map(bondVials),[5,6,7,8,9,10,11,12,13,14,15]);
+});
+test('Bond shot clock eases from 4 s to 2.5 s, and does not run until the first throw',()=>{
+  assert.equal(bondClock(0),4);assert.equal(bondClock(5),4);assert.equal(bondClock(20),2.5);assert.equal(bondClock(30),2.5);
+  assert.ok(Math.abs(bondClock(10)-3.5)<1e-9);
+  // Idle before the first throw: the clock is dead, so reading the tutorial cannot spend the run.
+  const idle=new BondEngine(canvas(),callbacks().cb,{seed:4,motion:false});
+  for(let i=0;i<120*10;i++)idle.step(SIM_STEP);
+  assert.equal(idle.ended,false,'idle before the first throw is free');assert.equal(idle.clockLive,false);idle.destroy();
+  // After a throw it runs, and a player who never throws again is timed out.
+  const out=callbacks(),e=new BondEngine(canvas(),out.cb,{seed:4,motion:false});e.pins=[];e.fixed=0;e.action();
+  assert.equal(e.clockLive,true);assert.equal(e.clock,e.clockLimit,'a throw refills the clock');
+  const during=e.clock;for(let i=0;i<10;i++)e.step(SIM_STEP);
+  assert.equal(e.clock,during,'paused while the vial flies');
+  while(e.flights.length)e.step(SIM_STEP);
+  assert.equal(e.clock,during,'still full when the vial lands');
+  for(let i=0;i<120*(e.clockLimit+1)&&!e.ended;i++)e.step(SIM_STEP);
+  assert.equal(e.ended,true,'the shot clock ends a run that stalls');
+  assert.equal(out.result.timeout,true,'the result says it was the clock');e.destroy();
+});
+test('Bond completes a chain when every vial is used, then starts the next after the 0.45 s pause',()=>{
+  const e=new BondEngine(canvas(),callbacks().cb,{seed:5,motion:false});const start=e.left;
+  while(e.stage===1&&!e.ended){if(!e.flights.length&&e.clearT<=0&&(bondSafe(e)||urgent(e)))e.action();e.step(SIM_STEP);}
+  assert.equal(e.ended,false);assert.equal(e.stage,2);assert.equal(e.bonds,start);assert.equal(e.score,start*100);e.destroy();
+});
+test('Only one Bond vial flies at a time, so a double tap cannot hit itself',()=>{
+  const e=new BondEngine(canvas(),callbacks().cb,{seed:2,motion:false});e.action();e.action();assert.equal(e.flights.length,1);assert.equal(e.inputs.length,1);e.destroy();
+});
+// The Tryout Arcade's ring runs out of safe arc as the vial count climbs, so a run ends however well it is
+// played. What matters is that careful play is rewarded with a long run, not that it survives for ever.
+test('A careful Bond player clears chain after chain until the ring runs out of room',()=>{
+  for(const seed of [12,5,99]){const e=new BondEngine(canvas(),callbacks().cb,{seed,motion:false});playBond(e,180);
+    assert.ok(e.stage>=10,`seed ${seed} only reached chain ${e.stage}`);
+    assert.ok(e.bonds>=100,`seed ${seed} landed ${e.bonds} vials`);e.destroy();}
+});
+test('Bond replays to the same score at 30, 60 and 144 Hz',async()=>{
+  for(const hz of [30,60,144])for(const seed of [1,2]){
+    const out=callbacks(),e=new BondEngine(canvas(),out.cb,{seed,motion:false});const rand=createRandom(seed);let now=1000;e.frame(now);
+    for(let f=0;f<60*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&!e.flights.length&&e.clearT<=0&&(bondSafe(e)||urgent(e)||rand()<.004))e.action();}
+    if(!e.ended)e.finish();e.destroy();
+    const again=await replayBond(out.result.replay);assert.equal(again.score,out.result.score,`seed ${seed} at ${hz} Hz`);
+  }
+});
+
+// ---------- Sequence feel ----------
+const {SequenceEngine}=await import('../dist/tryout-games.js');
+const {sequenceExchange,sequenceMatches}=await import('../dist/sequence-rules.js');
+function seqGame(){const handlers={},c=canvas();c.addEventListener=(n,h)=>{handlers[n]=h;};const out=callbacks(),e=new SequenceEngine(c,out.cb,{seed:1,motion:true});return {e,handlers};}
+test('Sequence swaps as soon as a drag crosses a third of a tile, before the finger lifts',()=>{
+  const {e,handlers}=seqGame(),[i,to]=e.findMove(),g=e.geometry();
+  const at=k=>({clientX:(g.x+(k%7+.5)*g.cell)*e.scale,clientY:(g.y+(Math.floor(k/7)+.5)*g.cell)*e.scale,pointerId:1});
+  handlers.pointerdown(at(i));const dest=at(to),from=at(i);
+  handlers.pointermove({clientX:from.clientX+(dest.clientX-from.clientX)*.4,clientY:from.clientY+(dest.clientY-from.clientY)*.4});
+  assert.equal(e.phase,'swap','swap started mid-drag');e.destroy();
+});
+test('Sequence matches shrink out before the gap opens, and longer drops take longer',()=>{
+  const {e}=seqGame(),[i,to]=e.findMove();e.choose(i,to);
+  while(e.phase==='swap')e.step(SIM_STEP);
+  assert.equal(e.phase,'clear');const cleared=[...e.clearing];assert.ok(cleared.every(k=>e.board[k]>=0),'tiles still drawn while popping');
+  assert.equal(e.popups.length,1);assert.match(e.popups[0].text,/^\+\d+$/);
+  while(e.phase==='clear')e.step(SIM_STEP);
+  assert.equal(e.phase,'fall');const longest=Math.max(...[...e.falls.values()].map(Math.abs));assert.ok(Math.abs(e.fallDur-(.12+.05*longest))<1e-9);e.destroy();
+});
+test('Sequence shows a working hint after 5 idle seconds and clears it on the next touch',()=>{
+  const {e,handlers}=seqGame();for(let t=0;t<4.9;t+=SIM_STEP)e.step(SIM_STEP);assert.equal(e.hintPair,null);
+  for(let t=0;t<.3;t+=SIM_STEP)e.step(SIM_STEP);assert.ok(e.hintPair);const [a,b]=e.hintPair;assert.ok(sequenceMatches(sequenceExchange(e.board,a,b)).size>0);
+  handlers.pointerdown({clientX:0,clientY:0,pointerId:1});assert.equal(e.hintPair,null);e.destroy();
 });

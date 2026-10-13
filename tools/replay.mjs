@@ -19,20 +19,34 @@ const MAX_TICKS=120*60*60; // one hour of play
 
 export async function replayRidge(rep){
   installStubs();
-  if(rep?.game!=='ridge'||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
+  if(rep?.game!=='ridge'||rep.v!==2||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
   const {RidgeEngine}=await import('../dist/tryout-games.js');
-  const canvas=stubCanvas([...rep.view]),out=collector(),e=new RidgeEngine(canvas,out.cb,{seed:rep.seed,motion:false});
-  const taps=[...rep.taps],resizes=(rep.resizes||[]).map(x=>x),resumes=[...(rep.resumes||[])];
+  // The course runs in fixed world units, so the screen size doesn't matter here.
+  const e=new RidgeEngine(stubCanvas([480,720]),collector().cb,{seed:rep.seed,motion:false});
+  const taps=[...rep.taps],resumes=[...(rep.resumes||[])],stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
   for(let i=1;i<taps.length;i++)if(taps[i]<taps[i-1])throw new Error('Taps out of order');
-  while(!e.ended&&e.ticks<MAX_TICKS){
-    while(resizes.length&&resizes[0][0]===e.ticks){canvas.view=[...resizes.shift()[1]];e.resize();}
+  while(!e.ended&&e.ticks<stop){
     while(resumes.length&&resumes[0]===e.ticks){resumes.shift();e.pause(true);e.pause(false);}
     while(taps.length&&taps[0]===e.ticks){taps.shift();e.action();}
-    if(!e.started&&!taps.length)break; // waiting for a tap that never comes
     e.step(SIM_STEP);
   }
   e.destroy();
   return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length};
+}
+
+export async function replayBond(rep){
+  installStubs();
+  if(rep?.game!=='bond'||rep.step!==SIM_STEP)throw new Error('Not a Bond replay for this build');
+  const {BondEngine}=await import('../dist/tryout-games.js');
+  const out=collector(),e=new BondEngine(stubCanvas([...rep.view]),out.cb,{seed:rep.seed,motion:false});
+  const taps=[...rep.taps];let rejected=0;
+  const stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
+  while(!e.ended&&e.ticks<stop){
+    while(taps.length&&taps[0]===e.ticks){taps.shift();const before=e.inputs.length;e.action();if(e.inputs.length===before)rejected++;}
+    e.step(SIM_STEP);
+  }
+  e.destroy();
+  return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length+rejected};
 }
 
 export async function replayMerge(rep){

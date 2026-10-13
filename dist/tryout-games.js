@@ -4,9 +4,39 @@ import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 
 const TAU=Math.PI*2;
+export const BOND_HIT=.17,BOND_KNEE=6,BOND_MAX_FIXED=5,BOND_FIXED_GAP=.55,BOND_CLOCK_MAX=4,BOND_CLOCK_MIN=2.5,BOND_CLOCK_FROM=5,BOND_CLOCK_TO=20;
+const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d);
+// Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
+// Every number here is the Tryout Arcade's Flap Dash, in its fixed 360x640 world: ground H-70, a node of
+// radius 13 at x 100, and gates whose openings are the box-era 150..118 less VIAL_SLACK, the room the
+// vial-shaped collision below hands back. Shrinking the gap by exactly that keeps the vial a reskin
+// rather than an easier game.
+const RIDGE=Object.freeze({H:640,W:360,GROUND:570,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,
+ SLACK:2.6,GAP:150,GAP_TO:118,GAP_START:10,GAP_END:50,JUMP:120,JUMP_TO:220,JUMP_END:40,EDGE:60,R:13,FIRST_X:450});
+// The vial profile in pixels down from the crimp cap: cap 0-16 at half-width 22, neck 16-24 at 15,
+// shoulder 24-38 ramping 15 to 30, body 30 beyond. The drawing and the collision read the same numbers.
+export const RIDGE_VIAL=Object.freeze({cap:16,neck:24,shoulder:38,capW:22,neckW:15,bodyW:30});
+export function vialHalfWidth(d){if(d<0)return -1;const V=RIDGE_VIAL;
+ if(d<V.cap)return V.capW;if(d<V.neck)return V.neckW;
+ if(d<V.shoulder)return V.neckW+(V.bodyW-V.neckW)*((d-V.neck)/(V.shoulder-V.neck));
+ return V.bodyW;}
+// Twelve points round the node's rim, slightly inside it, against the profile above: cheap, deterministic,
+// and forgiving at the neck, which is where threading a gate close to the glass should be possible.
+const RIDGE_SAMPLES=12,RIDGE_INSET=.9;
+export function hitsVial(bx,by,r,cx,capY,dir){
+ for(let i=0;i<RIDGE_SAMPLES;i++){const a=i*TAU/RIDGE_SAMPLES,px=bx+Math.cos(a)*r*RIDGE_INSET,py=by+Math.sin(a)*r*RIDGE_INSET;
+  const hw=vialHalfWidth((py-capY)*dir);if(hw>0&&Math.abs(px-cx)<hw)return true;}
+ return false;}
+export {RIDGE};
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const angularDistance=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+// Bond stage rules, taken from the Tryout Arcade's Log Hit. `s` is its 0-based stage, which is
+// chain number - 1 here. Vials climb by one a stage and never stop climbing: past the knee the ring
+// runs out of safe arc, which is what ends a run however well it is played.
+export const bondVials=s=>s<=BOND_KNEE?5+s:5+BOND_KNEE+(s-BOND_KNEE);
+// Seconds allowed per vial: 4 s until stage 5, easing to 2.5 s flat from stage 20.
+export const bondClock=s=>clamp(BOND_CLOCK_MAX-(BOND_CLOCK_MAX-BOND_CLOCK_MIN)*(s-BOND_CLOCK_FROM)/(BOND_CLOCK_TO-BOND_CLOCK_FROM),BOND_CLOCK_MIN,BOND_CLOCK_MAX);
 function rounded(c,x,y,w,h,r){c.beginPath();c.roundRect(x,y,w,h,r);}
 function ring(c,x,y,r,rotation=0){
  c.save();c.shadowColor='#00d9ff';c.shadowBlur=20;c.lineWidth=12;c.strokeStyle='#b8f6ff';c.beginPath();c.arc(x,y,r,0,TAU);c.stroke();c.shadowBlur=0;c.lineWidth=5;c.strokeStyle='#0752a8';c.stroke();c.lineWidth=2;c.strokeStyle='#ffffffb0';c.beginPath();c.arc(x,y,r-8,0,TAU);c.stroke();
@@ -80,58 +110,130 @@ export class OrbitEngine extends MiniEngine{
 }
 
 export class RidgeEngine extends MiniEngine{
- constructor(canvas,cb,options){super(canvas,cb,options);this.y=this.top+(this.h-this.top-this.bottom)*.5;this.vy=0;this.started=false;this.gates=[];this.speed=148;this.spawn=0;this.trail=[];this.lastCenter=null;this.lastInterval=0;this.inputs=[];this.resizes=[];this.resumes=[];this.startView=this.view;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
- get playerX(){return Math.min(170,this.w*.28);}
- get floor(){return this.h;}
- get gap(){return Math.max(140,Math.min(245,(this.floor-this.top)*.36)-this.score*2.8);}
- get flap(){return Math.sqrt((this.floor-this.top)/430)*282;}
- action(){if(this.paused||this.ended)return;this.inputs.push(this.ticks);this.started=true;this.vy=-this.flap;this.cb.sound('flap');this.cb.message('');}
+ // Course and physics copied from the Tryout Arcade's Ridge Run. Gameplay runs in a fixed 640-unit-tall world
+ // (ground at 582), scaled to fit the screen, so every phone and desktop gets the same course.
+ // Gravity 1450, a tap sets climb speed to 430, gates 62 wide every 210 units, speed 165 rising to 230 by
+ // gate 60, openings 150 shrinking to 118 between gates 10 and 50, and each opening a random step of up to
+ // 120 (rising to 220 by gate 40) from the last. The ceiling stops you instead of ending the run.
+ constructor(canvas,cb,options){super(canvas,cb,options);this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.trail=[];this.tilt=0;
+  this.inputs=[];this.resumes=[];this.nextX=RIDGE.FIRST_X;for(let i=0;i<4;i++)this.addGate();this.fillGates();
+  this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
+ get ws(){return this.h/RIDGE.H;}
+ get worldW(){return this.w/this.ws;}
+ get speed(){return RIDGE.SPEED+RIDGE.SPEED_GAIN*clamp(this.score/60,0,1);}
+ // Gap and reach ramp off the gate's own index, not the live score, so the course is the same for everyone
+ // however well they are playing.
+ gapFor(i){return(RIDGE.GAP-RIDGE.SLACK)-(RIDGE.GAP-RIDGE.GAP_TO)*clamp((i-RIDGE.GAP_START)/(RIDGE.GAP_END-RIDGE.GAP_START),0,1);}
+ jumpFor(i){return RIDGE.JUMP+(RIDGE.JUMP_TO-RIDGE.JUMP)*clamp(i/RIDGE.JUMP_END,0,1);}
+ // The reachable band is clamped to the playfield first and the centre drawn inside it, so a gate near an
+ // edge still uses its whole remaining range instead of piling up on the margin.
+ addGate(){const i=this.index++,jump=this.jumpFor(i),gap=this.gapFor(i),lo=RIDGE.EDGE+gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-gap/2;
+  const a=Math.max(lo,this.lastGy-jump),b=Math.min(hi,this.lastGy+jump),gy=a+this.random()*(b-a);
+  this.lastGy=gy;this.gates.push({x:this.nextX,gy,gap,passed:false});this.nextX+=RIDGE.SPACE;}
+ // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.
+ fillGates(){while(this.nextX<this.worldW+RIDGE.PW*2)this.addGate();}
+ action(){if(this.paused||this.ended||this.dead)return;this.inputs.push(this.ticks);this.started=true;this.waiting=false;this.vy=-RIDGE.FLAP;this.cb.sound('flap');this.cb.message('');}
+ // Broad phase on the gate's column, then the two vial outlines themselves.
+ hits(g){const R=RIDGE.R;if(!(this.px+R>g.x&&this.px-R<g.x+RIDGE.PW))return false;const cx=g.x+RIDGE.PW/2;
+  return hitsVial(this.px,this.py,R,cx,g.gy+g.gap/2,1)||hitsVial(this.px,this.py,R,cx,g.gy-g.gap/2,-1);}
  update(dt){
-  if(!this.started)return;this.speed=Math.min(300,148+this.score*3.2);this.vy+=640*dt;this.y+=this.vy*dt;this.spawn-=dt;
-  if(this.spawn<=0){const gap=this.gap,center=this.nextCenter(gap);this.gates.push({x:this.w+40,center,gap,passed:false});this.lastCenter=center;this.spawn=this.lastInterval=Math.max(1.02,1.9-this.score*.014);}
-  for(const g of this.gates){const gap=g.gap??this.gap;g.x-=this.speed*dt;if(!g.passed&&g.x+35<this.playerX-18){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.playerX,this.y,'#8fffff',12);}
-   if(g.x-35<this.playerX+17&&g.x+35>this.playerX-17&&(this.y-29<g.center-gap/2||this.y+29>g.center+gap/2)){this.crash();return;}}
-  this.gates=this.gates.filter(g=>g.x>-60);if(this.y-28<0||this.y+28>this.floor)this.crash();
-  if(this.motion){this.trail.push({x:this.playerX,y:this.y});for(const p of this.trail)p.x-=this.speed*dt;if(this.trail.length>24)this.trail.shift();}
+  if(this.waiting)return; // holds still where it was paused until the next tap
+  if(!this.started){this.py=300+Math.sin(this.time*3)*8;return;}
+  this.vy+=RIDGE.GRAVITY*dt;this.py+=this.vy*dt;this.tilt=clamp(this.vy*.0011,-.35,.7);
+  if(this.dead){this.deadT+=dt;if(this.py>RIDGE.GROUND-RIDGE.R)this.py=RIDGE.GROUND-RIDGE.R;if(this.deadT>.8)this.end({score:this.score,gates:this.score,replay:this.replay()});return;}
+  const sp=this.speed;
+  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px-RIDGE.R){g.passed=true;this.score++;this.cb.hud(this.score,this.score,`${Math.min(9,1+Math.floor(this.score/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.py*this.ws,'#8fffff',12);}}
+  this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-RIDGE.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
+  if(this.py<RIDGE.R){this.py=RIDGE.R;this.vy=0;}
+  if(this.py+RIDGE.R>RIDGE.GROUND){this.py=RIDGE.GROUND-RIDGE.R;this.crash();}else if(this.gates.some(g=>this.hits(g)))this.crash();
+  if(this.motion){this.trail.push({x:this.px,y:this.py});for(const p of this.trail)p.x-=sp*dt;if(this.trail.length>14)this.trail.shift();}
  }
- // Every gate must be reachable from the one before. The vial gets the time between leaving one gate and
- // entering the next; a human tapping fast climbs about 75% of the flap speed, and falls at most what gravity
- // allows. Half the spare room inside the gap counts too. MAX_SHIFT also stops tall phones getting bigger swings.
- nextCenter(gap){
-  const margin=gap/2+38,lo=this.top+margin,hi=Math.max(lo+1,this.floor-margin);
-  let a=lo,b=hi;
-  if(this.lastCenter!==null){
-   const travel=Math.max(.2,this.lastInterval-(70+34)/this.speed),slack=Math.max(0,gap-58)/2,MAX_SHIFT=240;
-   const up=Math.min(MAX_SHIFT,.75*this.flap*travel+slack),down=Math.min(MAX_SHIFT,.75*.5*640*travel*travel+slack);
-   a=Math.max(lo,this.lastCenter-up);b=Math.min(hi,this.lastCenter+down);if(b<a)a=b=clamp(this.lastCenter,lo,hi);
-  }
-  return a+this.random()*(b-a);
- }
- replay(){return {v:1,game:'ridge',seed:this.seed,view:this.startView,step:SIM_STEP,taps:[...this.inputs],resizes:this.resizes.map(([t,v])=>[t,[...v]]),resumes:[...this.resumes]};}
+ crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.py*this.ws,'#ffd383');this.cb.sound('miss');}
+ replay(){return {v:2,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
  // After a pause the vial waits for a tap instead of resuming mid-fall.
- pause(value=true){super.pause(value);if(!value&&this.started&&!this.ended){this.resumes.push(this.ticks);this.started=false;this.vy=0;this.cb.message('Tap to keep flying.');}}
- crash(){if(this.ended)return;this.burst(this.playerX,this.y,'#ffd383');this.cb.sound('miss');this.end({score:this.score,gates:this.score,replay:this.replay()});}
- onResize(oldW,oldH){this.resizes?.push([this.ticks,this.view]);this.y*=this.h/oldH;for(const g of this.gates){g.x*=this.w/oldW;g.center*=this.h/oldH;}}
- gateSegments(g){const gap=g.gap??this.gap;return{top:g.center-gap/2,bottom:g.center+gap/2};}
- draw(){const c=this.ctx;c.save();if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.28;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.16,0,TAU);c.fill();}c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;for(const g of this.gates){const{top,bottom}=this.gateSegments(g);drawBottleObstacle(c,g.x,top,top,70,true);drawBottleObstacle(c,g.x,bottom,this.h-bottom,70,false);}c.shadowColor='#8fffff';c.shadowBlur=16;const bob=this.started?0:Math.sin(this.time*2.8)*6;drawSprite(c,'vial-cyan',this.playerX,this.y+bob,48,80,clamp(this.vy*.0011,-.28,.6));c.restore();}
- finish(){this.crash();}
+ pause(value=true){super.pause(value);if(!value&&this.started&&!this.dead&&!this.ended){this.resumes.push(this.ticks);this.waiting=true;this.vy=0;this.cb.message('Tap to keep flying.');}}
+ draw(){const c=this.ctx,k=this.ws;c.save();c.scale(k,k);
+  if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.3;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.25,0,TAU);c.fill();}
+  c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;
+  for(const g of this.gates){const top=g.gy-g.gap/2,bottom=g.gy+g.gap/2,cx=g.x+RIDGE.PW/2;drawBottleObstacle(c,cx,top,top,RIDGE.PW,true);drawBottleObstacle(c,cx,bottom,RIDGE.GROUND-bottom,RIDGE.PW,false);}
+  c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,RIDGE.GROUND);c.lineTo(this.worldW,RIDGE.GROUND);c.stroke();
+  c.shadowColor='#8fffff';c.shadowBlur=16;drawSprite(c,'vial-cyan',this.px,this.py,RIDGE.R*2,RIDGE.R*2.6,this.tilt);
+  c.restore();}
+ finish(){if(!this.ended)this.end({score:this.score,gates:this.score,replay:this.replay()});}
 }
 
 export class BondEngine extends MiniEngine{
- constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.speed=2.1;this.bonds=0;this.pins=[Math.PI*.25,Math.PI*.75,Math.PI*1.25,Math.PI*1.75];this.flights=[];this.cooldown=0;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,this.pins.length,'1×');cb.message('Tap anywhere to send a vial into a clear gap.');}
+ // Stage design copied from the Tryout Arcade's Bond (Log Hit), whose stages count from 0: chain n here is
+ // its stage n-1. A chain hands you 5 + stage vials, climbing by one a chain without an upper limit, and can
+ // start with up to 5 fixed vials (faded) seeded at least 0.55 rad apart. Spin is 1.7 + 0.22 × stage in a
+ // random direction from a random angle; from stage 3 the ring speeds up, stalls and swings back
+ // (sin(t × 1.15) × 1.3 + 0.35, so it can run backwards). One vial flies at a time, and a shot clock of 4 s,
+ // easing to 2.5 s by stage 20, runs while a vial waits — it is armed by the first throw of the run.
+ constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.bonds=0;this.stage=0;this.inputs=[];this.flights=[];this.clearT=0;this.bump=0;this.clockLive=false;this.nextStage();this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.message('Tap anywhere to send a vial into a clear gap.');}
  geometry(){const room=this.h-this.top-this.bottom;return{x:this.w/2,y:this.top+room*.37,r:Math.min(155,room*.26,this.w*.31),launch:this.h-this.bottom-60};}
- action(){if(this.paused||this.ended||this.cooldown>0)return;this.flights.push({progress:0,sprite:vialSprites[(this.pins.length+this.flights.length)%4]});this.cooldown=.065;this.cb.sound('launch');this.cb.message('');}
- update(dt){this.rotation+=this.speed*dt;this.cooldown=Math.max(0,this.cooldown-dt);for(const flight of this.flights){flight.progress+=dt/.12;if(flight.progress<1)continue;const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<.22);if(collision){this.flights=[];this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds});return;}this.pins.push(target);this.bonds++;this.score+=100;this.speed=Math.min(4.2,2.1+this.bonds*.04);const g=this.geometry();this.burst(g.x,g.y+g.r);this.cb.hud(this.score,this.pins.length,`${Math.min(9,1+Math.floor(this.score/300))}×`);this.cb.sound('bond');this.cb.effect?.('BONDED!','bond');}this.flights=this.flights.filter(f=>f.progress<1);}
- draw(){const c=this.ctx,g=this.geometry();ring(c,g.x,g.y,g.r,this.rotation);c.save();const glow=c.createRadialGradient(g.x,g.y,4,g.x,g.y,50);glow.addColorStop(0,'#dcffff');glow.addColorStop(.4,'#00c9ff');glow.addColorStop(1,'#024fc7');c.fillStyle=glow;c.shadowColor='#03d9ff';c.shadowBlur=24;c.beginPath();c.arc(g.x,g.y,47,0,TAU);c.fill();c.strokeStyle='#c1ffff';c.lineWidth=3;c.stroke();c.shadowBlur=0;
-  for(let i=0;i<this.pins.length;i++){const a=this.pins[i]+this.rotation,px=g.x+Math.cos(a)*g.r,py=g.y+Math.sin(a)*g.r;c.strokeStyle='#a1ecffb0';c.lineWidth=3;c.beginPath();c.moveTo(g.x+Math.cos(a)*48,g.y+Math.sin(a)*48);c.lineTo(px,py);c.stroke();drawSprite(c,vialSprites[i%4],px,py,30,52,a-Math.PI/2);}
-  c.shadowColor='#8fffff';c.shadowBlur=18;drawSprite(c,vialSprites[(this.pins.length+this.flights.length)%4],g.x,g.launch,45,78);for(const flight of this.flights){const y=g.launch-(g.launch-g.y-g.r)*Math.min(1,flight.progress);drawSprite(c,flight.sprite,g.x,y,45,78);}c.restore();}
- finish(){this.end({score:this.score,bonds:this.bonds});}
+ get round(){return this.stage;}
+ get index(){return this.stage-1;}
+ get clockLimit(){return bondClock(this.index);}
+ // The wobble follows run time, not stage time, exactly as the Tryout Arcade does.
+ get wobble(){return this.index>=3?Math.sin(this.time*1.15)*1.3+.35:1;}
+ nextStage(){this.stage++;const s=this.index;this.left=bondVials(s);this.pins=[];this.stageTime=0;
+  // Up to five seeded fixed vials, each kept a gap clear of the others, 24 tries apiece, so a chain
+  // never starts already crowded. Fewer than asked for is normal once the ring is busy.
+  const want=Math.floor(this.random()*(BOND_MAX_FIXED+1));
+  for(let i=0;i<want;i++)for(let t=0;t<24;t++){const a=this.random()*TAU;if(this.pins.every(p=>angularDistance(p,a)>BOND_FIXED_GAP)){this.pins.push(a);break;}}
+  this.fixed=this.pins.length;
+  this.base=(1.7+s*.22)*(this.random()<.5?-1:1);this.rotation=this.random()*TAU;this.clock=this.clockLimit;
+  this.cb.hud(this.score,this.left,String(this.stage));if(this.stage>1)this.cb.message(`Chain ${this.stage}. ${this.left} vials.`);}
+ get speed(){return Math.abs(this.base*this.wobble);}
+ replay(){return {v:1,game:'bond',seed:this.seed,view:this.view,step:SIM_STEP,taps:[...this.inputs],endTick:this.ticks};}
+ // A refused tap is not a throw, so the shot clock is armed and reset here rather than on every tap.
+ action(){if(this.paused||this.ended||this.flights.length||this.clearT>0||this.left<=0)return;this.inputs.push(this.ticks);this.flights.push({progress:0,sprite:vialSprites[(this.pins.length)%4]});this.clockLive=true;this.clock=this.clockLimit;this.cb.sound('launch');this.cb.message('');}
+ update(dt){
+  this.stageTime+=dt;this.bump=Math.max(0,this.bump-dt*6);
+  if(this.clearT>0){this.clearT-=dt;if(this.clearT<=0)this.nextStage();return;}
+  this.rotation=(this.rotation+this.base*this.wobble*dt)%TAU;
+  const flying=this.flights.length>0;
+  for(const flight of this.flights){flight.progress+=dt/.12;if(flight.progress<1)continue;
+   const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<BOND_HIT);
+   if(collision){this.flights=[];this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds,round:this.stage,replay:this.replay()});return;}
+   this.pins.push(target);this.bonds++;this.left--;this.score+=100;this.bump=1;this.clock=bondClock(this.stage);const g=this.geometry();this.burst(g.x,g.y+g.r);
+   this.cb.hud(this.score,this.left,String(this.stage));this.cb.sound('bond');
+   if(this.left===0){this.clearT=.45;this.burst(g.x,g.y,'#ffd24d',36);this.cb.sound('perfect');this.cb.effect?.('CHAIN COMPLETE!','bond');}else this.cb.effect?.('BONDED!','bond');}
+  this.flights=this.flights.filter(f=>f.progress<1);
+  // Shot clock, only while a vial waits at the launcher. A frame that carried a vial in flight does not
+  // spend clock, so the time in the air is never counted against the next throw.
+  if(!flying&&!this.ended&&this.clearT<=0&&this.left>0&&this.clockLive){this.clock-=dt;
+   if(this.clock<=0){this.clock=0;this.cb.sound('miss');this.cb.message('Out of time.');this.cb.effect?.('OUT OF TIME','bond');this.end({score:this.score,bonds:this.bonds,round:this.stage,timeout:true,replay:this.replay()});}}}
+ draw(){const c=this.ctx,g=this.geometry(),gy=g.y-this.bump*8;
+  if(this.clearT<=0){ring(c,g.x,gy,g.r,this.rotation);c.save();const glow=c.createRadialGradient(g.x,gy,4,g.x,gy,50);glow.addColorStop(0,'#dcffff');glow.addColorStop(.4,'#00c9ff');glow.addColorStop(1,'#024fc7');c.fillStyle=glow;c.shadowColor='#03d9ff';c.shadowBlur=24;c.beginPath();c.arc(g.x,gy,47,0,TAU);c.fill();c.strokeStyle='#c1ffff';c.lineWidth=3;c.stroke();c.shadowBlur=0;
+   for(let i=0;i<this.pins.length;i++){const a=this.pins[i]+this.rotation,px=g.x+Math.cos(a)*g.r,py=gy+Math.sin(a)*g.r;c.globalAlpha=i<this.fixed?.6:1;c.strokeStyle='#a1ecffb0';c.lineWidth=3;c.beginPath();c.moveTo(g.x+Math.cos(a)*48,gy+Math.sin(a)*48);c.lineTo(px,py);c.stroke();drawSprite(c,vialSprites[i%4],px,py,24,42,a-Math.PI/2);c.globalAlpha=1;}c.restore();}
+  else{c.save();c.globalAlpha=Math.min(1,this.clearT*3);c.textAlign='center';c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font='900 30px Inter, sans-serif';c.fillText('CHAIN COMPLETE',g.x,g.y);c.restore();}
+  c.save();c.shadowColor='#8fffff';c.shadowBlur=18;if(!this.flights.length&&this.left>0&&this.clearT<=0){drawSprite(c,vialSprites[this.pins.length%4],g.x,g.launch,45,78);
+   // The shot clock as a draining ring round the waiting vial, cyan until the last second, then warm.
+   if(this.clockLive&&!this.ended){const left=clamp(this.clock/this.clockLimit,0,1),urgent=this.clock<=1;c.shadowBlur=0;
+    c.strokeStyle='#ffffff26';c.lineWidth=3;c.beginPath();c.arc(g.x,g.launch,38,0,TAU);c.stroke();
+    c.strokeStyle=urgent?'#ff8d6b':'#8fffff';c.lineWidth=4;c.beginPath();c.arc(g.x,g.launch,38,-Math.PI/2,-Math.PI/2+TAU*left);c.stroke();c.shadowBlur=18;}}
+  for(const flight of this.flights){const y=g.launch-(g.launch-gy-g.r)*Math.min(1,flight.progress);drawSprite(c,flight.sprite,g.x,y,45,78);}c.restore();
+  // Shots left: a big number on the left with one vial per shot underneath, like the Tryout Arcade.
+  const total=Math.min(bondVials(this.index),14),lx=38,top=g.y-g.r*.55,room=this.h-this.bottom-40-(top+48),gap=Math.min(30,room/total);
+  c.save();c.textAlign='center';c.textBaseline='middle';c.fillStyle='#ffffff';c.shadowColor='#00c9ff';c.shadowBlur=14;c.font='900 36px Inter, sans-serif';c.fillText(String(this.left),lx,top);
+  c.shadowBlur=0;c.font='800 11px Inter, sans-serif';c.fillStyle='#bfefff';c.fillText('SHOTS',lx,top+26);c.restore();
+  for(let i=0;i<total;i++){c.save();c.globalAlpha=i<this.left?1:.22;drawSprite(c,vialSprites[i%4],lx,top+56+i*gap,Math.min(18,gap*.62),Math.min(30,gap*.95));c.restore();}
+  // Shot clock bar above the launcher.
+  const bw=Math.min(240,g.r*1.6),bx=g.x-bw/2,by=g.launch-62,limit=this.clockLimit,frac=!this.clockLive?1:clamp(this.clock/limit,0,1),low=this.clockLive&&this.clock<1.2;
+  c.save();c.fillStyle='#03183dcc';rounded(c,bx,by,bw,10,5);c.fill();c.fillStyle=low?'#ff6b8a':'#5ff3ff';c.shadowColor=c.fillStyle;c.shadowBlur=low?14:8;if(frac>0){rounded(c,bx,by,bw*frac,10,5);c.fill();}
+  c.shadowBlur=0;c.fillStyle='#e8fbff';c.font='800 12px Inter, sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(!this.clockLive?'TIMER STARTS ON YOUR FIRST SHOT':`${Math.max(0,this.clock).toFixed(1)}s`,g.x,by-4);c.restore();}
+ finish(){this.end({score:this.score,bonds:this.bonds,round:this.stage,replay:this.replay()});}
 }
 
 export class SequenceEngine extends MiniEngine{
  constructor(canvas,cb,options){
-  super(canvas,cb,options);this.board=createSequenceBoard(this.level);this.palette=Math.min(7,4+Math.floor((this.level-1)/5));this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;
-  this.onpointerdown=e=>{this.keyboard=false;this.pointerStart=this.pointer(e);canvas.setPointerCapture?.(e.pointerId);};this.onpointerup=e=>{if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),[x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];this.pointerStart=null;if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10){this.choose(start);return;}const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointercancel=()=>{this.pointerStart=null;};for(const name of ['pointerdown','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
+  super(canvas,cb,options);this.board=createSequenceBoard(this.level);this.palette=Math.min(7,4+Math.floor((this.level-1)/5));this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  this.onpointerdown=e=>{this.keyboard=false;this.idle=0;this.hintPair=null;this.pointerStart=this.pointer(e);this.pressed=this.pending?null:this.cellAt(...this.pointerStart);canvas.setPointerCapture?.(e.pointerId);};
+  // Swaps fire as soon as the finger has moved a third of a tile, instead of waiting for it to lift.
+  this.onpointermove=e=>{if(!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;
+   const start=this.cellAt(...this.pointerStart);this.pointerStart=null;this.pressed=null;if(start===null)return;const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));
+   if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointerup=e=>{this.pressed=null;if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),[x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];this.pointerStart=null;if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10){this.choose(start);return;}const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointercancel=()=>{this.pointerStart=null;this.pressed=null;};for(const name of ['pointerdown','pointermove','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
  }
  geometry(){const size=Math.min(this.w-36,this.h-this.top-this.bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:this.top+(this.h-this.top-this.bottom-size)/2,size,cell};}
  cellAt(x,y){const g=this.geometry();if(x<g.x||x>=g.x+g.size||y<g.y||y>=g.y+g.size)return null;return Math.floor((y-g.y)/g.cell)*7+Math.floor((x-g.x)/g.cell);}
@@ -141,30 +243,52 @@ export class SequenceEngine extends MiniEngine{
   if(this.selection===index&&swapWith===null){this.selection=null;return;}
   const from=this.selection,to=swapWith??index,next=sequenceExchange(this.board,from,to);
   if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message('Swap neighbours to make a line of three.');return;}
-  const matched=sequenceMatches(next).size>0;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=this.motion?.16:.001;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
+  const matched=sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=SEQ_SWAP;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
  }
- resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();for(const i of matches)this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);this.board=this.board.map((v,i)=>matches.has(i)?-1:v);this.score+=matches.size*50*(1+this.chain);this.chain++;this.cb.sound('crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=this.motion?.24:.001;}
+ // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
+ resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();let sx=0,sy=0;
+  for(const i of matches){this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);sx+=i%7;sy+=Math.floor(i/7);}
+  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;
+  this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
+  if(this.chain>1)this.banner={text:`Chain ×${this.chain}`,t:0};if(matches.size>=8&&this.motion)this.shake=1;
+  this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
+ // Any swap that makes a line, for the idle hint.
+ findMove(){for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
  finishMove(){
-  this.phase=null;this.pending=0;this.falls.clear();this.cb.hud(this.score,this.moves,this.target);
+  this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.cb.hud(this.score,this.moves,this.target);
   if(this.score>=this.target){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:true});return;}if(this.moves<=0){this.end({score:this.score,moves:SEQUENCE_MOVES,won:false});return;}
   if(!hasSequenceMove(this.board)){this.board=createSequenceBoard(this.level);this.cb.message('Fresh crystals. No move used.');}else this.cb.message(`${this.moves} moves left. ${Math.max(0,this.target-this.score)} points to go.`);
  }
+ tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
+  if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
  update(dt){
-  if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
-  if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=this.motion?.16:.001;return;}this.swap=null;this.resolveMatches();return;}
+  this.tickEffects(dt);if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
+  if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=SEQ_SWAP;return;}this.swap=null;this.resolveMatches();return;}
   if(this.phase==='return'){this.board=this.swap.original;this.swap=null;this.phase=null;this.pending=0;this.cb.sound('undo');this.cb.message('Try another pair. No move used.');return;}
-  if(this.phase==='clear'){this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,Math.random,7,this.palette);this.phase='fall';this.pending=this.motion?.28:.001;return;}
+  if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,Math.random,7,this.palette);this.phase='fall';
+   // Crystals fall like they have weight: each one accelerates and takes longer the further it drops.
+   this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
   if(this.phase==='fall'){this.falls.clear();if(this.score>=this.target)this.finishMove();else this.resolveMatches();}
  }
  moveSelection(key){this.keyboard=true;let r=Math.floor(this.cursor/7),c=this.cursor%7;if(key==='ArrowUp')r=(r+6)%7;if(key==='ArrowDown')r=(r+1)%7;if(key==='ArrowLeft')c=(c+6)%7;if(key==='ArrowRight')c=(c+1)%7;this.cursor=r*7+c;if(this.selection!==null)this.choose(this.cursor);else this.cb.message(`Row ${r+1}, column ${c+1}. Press Enter to select.`);}
  action(){if(this.paused||this.ended||this.pending)return;this.keyboard=true;this.choose(this.cursor);}
  draw(){
-  const c=this.ctx,g=this.geometry();c.save();c.fillStyle='#03183de8';rounded(c,g.x-5,g.y-5,g.size+10,g.size+10,16);c.fill();c.strokeStyle='#8cefff77';c.lineWidth=2;c.stroke();c.save();rounded(c,g.x,g.y,g.size,g.size,12);c.clip();
+  const c=this.ctx,g=this.geometry();c.save();if(this.shake)c.translate(Math.sin(this.time*90)*this.shake*4,Math.cos(this.time*70)*this.shake*3);c.fillStyle='#03183de8';rounded(c,g.x-5,g.y-5,g.size+10,g.size+10,16);c.fill();c.strokeStyle='#8cefff77';c.lineWidth=2;c.stroke();c.save();rounded(c,g.x,g.y,g.size,g.size,12);c.clip();
   for(let i=0;i<this.board.length;i++){const row=Math.floor(i/7),col=i%7,v=this.board[i];let x=g.x+(col+.5)*g.cell,y=g.y+(row+.5)*g.cell;c.fillStyle='#123965a0';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();if(v<0)continue;
-   if((this.phase==='swap'||this.phase==='return')&&(i===this.swap.from||i===this.swap.to)){const to=i===this.swap.from?this.swap.to:this.swap.from,t=1-clamp(this.pending/.16,0,1);x+=((to%7)-col)*g.cell*t;y+=(Math.floor(to/7)-row)*g.cell*t;}
-   if(this.phase==='fall')y+=(this.falls.get(i)||0)*g.cell*(clamp(this.pending/.28,0,1)**2);drawSprite(c,crystalSprites[v],x,y,g.cell*.86,g.cell*.86);
+   if((this.phase==='swap'||this.phase==='return')&&(i===this.swap.from||i===this.swap.to)){const to=i===this.swap.from?this.swap.to:this.swap.from,t=1-clamp(this.pending/SEQ_SWAP,0,1);x+=((to%7)-col)*g.cell*t;y+=(Math.floor(to/7)-row)*g.cell*t;}
+   if(this.phase==='fall'){const d=this.falls.get(i)||0;if(d){const k=clamp((this.fallDur-this.pending)/fallTime(d),0,1);y+=d*g.cell*(1-k*k);}}
+   let size=g.cell*.86;const held=this.pressed===i||(this.phase==='swap'&&this.swap&&i===this.swap.from);if(held){size*=1.1;c.save();c.shadowColor='#ffe77a';c.shadowBlur=18;c.fillStyle='#ffe77a33';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();c.restore();}
+   if(this.clearing?.has(i)){const p=1-clamp(this.pending/SEQ_CLEAR,0,1),s=1-p*p;size*=s;c.globalAlpha=s;}
+   drawSprite(c,crystalSprites[v],x,y,size,size);c.globalAlpha=1;
    if(this.selection===i||(this.keyboard&&this.cursor===i)){c.strokeStyle=this.selection===i?'#ffe77a':'#e6ffff';c.lineWidth=3;rounded(c,g.x+col*g.cell+3,g.y+row*g.cell+3,g.cell-6,g.cell-6,9);c.stroke();}
-  }c.restore();c.restore();
+  }
+  // Idle hint: after a few seconds without a move, one swap that works pulses gently.
+  if(this.hintPair&&!this.pending){const a=.45+.35*Math.sin(this.time*5);c.strokeStyle=`rgba(255,231,122,${a})`;c.lineWidth=3;for(const i of this.hintPair)rounded(c,g.x+i%7*g.cell+3,g.y+Math.floor(i/7)*g.cell+3,g.cell-6,g.cell-6,9),c.stroke();}
+  c.restore();
+  c.textAlign='center';c.textBaseline='middle';
+  for(const p of this.popups){c.globalAlpha=Math.max(0,1-p.t/.9);c.fillStyle='#ffffff';c.shadowColor='#00c9ff';c.shadowBlur=10;c.font=`800 ${Math.round(g.cell*.36)}px Inter, sans-serif`;c.fillText(p.text,p.x,p.y-p.t*g.cell*.7);}
+  if(this.banner){const t=this.banner.t,a=Math.min(1,t*6,(1.1-t)*3);c.globalAlpha=Math.max(0,a);c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font=`900 ${Math.round(g.cell*.5)}px Inter, sans-serif`;c.fillText(this.banner.text.toUpperCase(),g.x+g.size/2,g.y+g.size/2-(1-Math.min(1,t*5))*12);}
+  c.globalAlpha=1;c.shadowBlur=0;c.restore();
  }
  finish(){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:this.score>=this.target});}
 }

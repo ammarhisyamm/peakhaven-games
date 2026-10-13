@@ -69,3 +69,16 @@ body.game-open #app{position:fixed;inset:0;width:min(100%,480px);height:100dvh;m
 .block-drag-preview{position:fixed;z-index:8;pointer-events:none;grid-template-columns:repeat(var(--cols),var(--cell));grid-template-rows:repeat(var(--rows),var(--cell));filter:drop-shadow(0 5px 8px #001b4a88)}
 .block-drag-preview i{width:var(--cell);height:var(--cell)}
 @media(max-height:540px){.in-game .game-loading{gap:8px;padding:16px 24px;grid-template-columns:1fr 1.3fr;grid-template-rows:auto 1fr}.in-game .loading-brand{width:min(100%,140px)}.in-game .game-loading>.mascot{grid-column:1;grid-row:2;max-height:190px}.in-game .loading-copy{grid-column:2;grid-row:1/3;align-self:center;padding:22px 18px 14px}.in-game .loading-copy h1{font-size:17px}}
+/* Peak Blocks drag: the lifted piece matches the board's cell size and gaps, pops up when picked, and dims
+   when it can't land. Lines a drop would clear glow; pieces that fit nowhere fade in the tray. */
+.block-drag-preview{gap:var(--gap,0px);transform-origin:50% 100%;animation:block-lift .12s ease-out;transition:opacity .1s}
+.block-drag-preview.invalid{opacity:.55}
+@keyframes block-lift{from{transform:scale(.55);opacity:.4}to{transform:scale(1);opacity:1}}
+.block-cell.clear-preview{background-color:#40ecff40;box-shadow:inset 0 0 0 2px #90ffffaa,0 0 12px #40ecffaa;z-index:1}
+.block-cell.filled.clear-preview{filter:brightness(1.35) drop-shadow(0 0 6px #6ff6ff)}
+.shape-slot.lifted .shape-preview{opacity:.2}
+.shape-slot.no-fit .shape-preview{opacity:.3;filter:grayscale(.6)}
+@media (prefers-reduced-motion:reduce){.block-drag-preview{animation:none}}
+/* Beats the smaller in-game tray sizes so the lifted piece is exactly board-cell size. */
+.in-game .shape-preview.block-drag-preview,.shape-preview.block-drag-preview{grid-template-columns:repeat(var(--cols),var(--cell));grid-template-rows:repeat(var(--rows),var(--cell))}
+.in-game .shape-preview.block-drag-preview i,.shape-preview.block-drag-preview i{width:var(--cell);height:var(--cell)}
