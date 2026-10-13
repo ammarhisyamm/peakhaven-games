@@ -63,8 +63,10 @@ test('Bond fires one vial at a time: taps during a flight are ignored, and pause
  game.update(.2);game.pause();game.action();assert.equal(game.flights.length,0,'pause blocks new shots');game.destroy();
 });
 
-test('Bond starts with a clear lane and supports two well-timed rapid throws',()=>{
- const h=harness(),game=new BondEngine(h.canvas,h.cb,{motion:false});game.action();tick(game,.12);assert.equal(game.bonds,1);game.action();tick(game,.12);assert.equal(game.bonds,2);assert.equal(game.score,200);assert.equal(h.result(),null);game.destroy();
+// Chain 1 can start with seeded fixed vials, as every stage does in the Tryout Arcade, so the lane is
+// cleared here to test the throws rather than the seeding.
+test('Bond supports two well-timed rapid throws into a clear lane',()=>{
+ const h=harness(),game=new BondEngine(h.canvas,h.cb,{seed:7,motion:false});game.pins=[];game.fixed=0;game.action();tick(game,.12);assert.equal(game.bonds,1);game.action();tick(game,.12);assert.equal(game.bonds,2);assert.equal(game.score,200);assert.equal(h.result(),null);game.destroy();
 });
 
 test('Sequence animates any neighbour swap back without spending a move if it makes no match',()=>{

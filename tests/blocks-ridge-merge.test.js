@@ -175,23 +175,54 @@ test('Vial Merge never spawns tiers that cannot merge',()=>{
 });
 
 // ---------- Bond ----------
-const {BondEngine,BOND_MAX_VIALS,BOND_HIT,bondClock}=await import('../dist/tryout-games.js');
+const {BondEngine,BOND_HIT,BOND_MAX_FIXED,BOND_FIXED_GAP,bondVials,bondClock}=await import('../dist/tryout-games.js');
 const {replayBond}=await import('../tools/replay.mjs');
 const angDist=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+// The ring's wobble follows run time from chain 4 (stage 3) on, exactly as the engine does.
+const bondWobble=(e,t)=>e.index>=3?Math.sin(t*1.15)*1.3+.35:1;
 // Fires only when the vial, 0.12 s from now, would land clear of every vial on the ring.
-function bondSafe(e,margin=.04){let t=e.stageTime,rot=e.rotation,p=0;while(p<1){t+=SIM_STEP;rot+=e.base*(1+e.wob*Math.sin(t*1.4))*SIM_STEP;p+=SIM_STEP/.12;} // same steps as the engine
+function bondSafe(e,margin=.04){let t=e.time,rot=e.rotation,p=0;while(p<1){t+=SIM_STEP;rot+=e.base*bondWobble(e,t)*SIM_STEP;p+=SIM_STEP/.12;} // same steps as the engine
   return e.pins.every(a=>angDist(a,Math.PI/2-rot)>=BOND_HIT+margin);}
-const urgent=e=>e.clock!==null&&e.clock<.05;
-function playBond(e,seconds,chance=0){const rand=createRandom(99);for(let i=0;i<seconds*120&&!e.ended;i++){if(!e.flights.length&&e.clearT<=0&&(bondSafe(e)||urgent(e)||rand()<chance))e.action();e.step(SIM_STEP);}}
-test('Bond chains follow the Tryout Arcade design: 5 + chain vials, up to 3 fixed vials, faster spin, wobble from chain 3',()=>{
+// About to be timed out: one tick of clock left.
+const urgent=e=>e.clockLive&&e.clock<=.15;
+// A careful player: throws into a clear gap, and rather than let the shot clock run out, throws anyway.
+function playBond(e,seconds,chance=0){const rand=createRandom(99);
+  for(let i=0;i<seconds*120&&!e.ended;i++){
+    if(!e.flights.length&&e.clearT<=0&&(bondSafe(e)||(e.clockLive&&e.clock<=.15)||rand()<chance))e.action();
+    e.step(SIM_STEP);}}
+test('Bond chains follow the Tryout Arcade stage rules: 5 + stage vials, seeded fixed vials, faster spin, wobble from chain 4',()=>{
   for(let seed=1;seed<=40;seed++){const e=new BondEngine(canvas(),callbacks().cb,{seed,motion:false});
-    for(let stage=1;stage<=9;stage++){
-      assert.equal(e.stage,stage);assert.equal(e.left,Math.min(5+stage,BOND_MAX_VIALS));assert.ok(e.pins.length<=Math.min(3,stage-1),'fixed vials');
-      assert.ok(Math.abs(Math.abs(e.base)-(1.6+.2*stage))<1e-9);assert.equal(e.wob>0,stage>=3);if(stage>=3)assert.ok(e.wob>=.6&&e.wob<=1.7);
+    for(let chain=1;chain<=9;chain++){const s=chain-1;
+      assert.equal(e.stage,chain);assert.equal(e.index,s);assert.equal(e.left,bondVials(s));
+      assert.ok(e.pins.length<=BOND_MAX_FIXED,`fixed vials ${e.pins.length}`);assert.equal(e.fixed,e.pins.length);
+      for(let i=0;i<e.pins.length;i++)for(let j=i+1;j<e.pins.length;j++)assert.ok(angDist(e.pins[i],e.pins[j])>BOND_FIXED_GAP,'fixed vials start a gap apart');
+      assert.ok(Math.abs(Math.abs(e.base)-(1.7+.22*s))<1e-9,`spin at chain ${chain}`);
+      if(s<3)assert.equal(e.wobble,1);else assert.ok(e.wobble>=-.95-1e-9&&e.wobble<=1.65+1e-9,`wobble ${e.wobble}`);
       e.left=0;e.clearT=.001;e.step(SIM_STEP);}
     e.destroy();}
 });
-test('Bond completes a chain when every vial is used, then starts the next after a short pause',()=>{
+test('Bond vial counts keep climbing past the knee, so a run always ends eventually',()=>{
+  assert.deepEqual([...Array(11).keys()].map(bondVials),[5,6,7,8,9,10,11,12,13,14,15]);
+});
+test('Bond shot clock eases from 4 s to 2.5 s, and does not run until the first throw',()=>{
+  assert.equal(bondClock(0),4);assert.equal(bondClock(5),4);assert.equal(bondClock(20),2.5);assert.equal(bondClock(30),2.5);
+  assert.ok(Math.abs(bondClock(10)-3.5)<1e-9);
+  // Idle before the first throw: the clock is dead, so reading the tutorial cannot spend the run.
+  const idle=new BondEngine(canvas(),callbacks().cb,{seed:4,motion:false});
+  for(let i=0;i<120*10;i++)idle.step(SIM_STEP);
+  assert.equal(idle.ended,false,'idle before the first throw is free');assert.equal(idle.clockLive,false);idle.destroy();
+  // After a throw it runs, and a player who never throws again is timed out.
+  const out=callbacks(),e=new BondEngine(canvas(),out.cb,{seed:4,motion:false});e.pins=[];e.fixed=0;e.action();
+  assert.equal(e.clockLive,true);assert.equal(e.clock,e.clockLimit,'a throw refills the clock');
+  const during=e.clock;for(let i=0;i<10;i++)e.step(SIM_STEP);
+  assert.equal(e.clock,during,'paused while the vial flies');
+  while(e.flights.length)e.step(SIM_STEP);
+  assert.equal(e.clock,during,'still full when the vial lands');
+  for(let i=0;i<120*(e.clockLimit+1)&&!e.ended;i++)e.step(SIM_STEP);
+  assert.equal(e.ended,true,'the shot clock ends a run that stalls');
+  assert.equal(out.result.timeout,true,'the result says it was the clock');e.destroy();
+});
+test('Bond completes a chain when every vial is used, then starts the next after the 0.45 s pause',()=>{
   const e=new BondEngine(canvas(),callbacks().cb,{seed:5,motion:false});const start=e.left;
   while(e.stage===1&&!e.ended){if(!e.flights.length&&e.clearT<=0&&(bondSafe(e)||urgent(e)))e.action();e.step(SIM_STEP);}
   assert.equal(e.ended,false);assert.equal(e.stage,2);assert.equal(e.bonds,start);assert.equal(e.score,start*100);e.destroy();
@@ -199,18 +230,12 @@ test('Bond completes a chain when every vial is used, then starts the next after
 test('Only one Bond vial flies at a time, so a double tap cannot hit itself',()=>{
   const e=new BondEngine(canvas(),callbacks().cb,{seed:2,motion:false});e.action();e.action();assert.equal(e.flights.length,1);assert.equal(e.inputs.length,1);e.destroy();
 });
-test('A careful Bond player clears several chains inside the shot clock',()=>{
-  let best=0;for(const seed of [12,13,14,15,16]){const e=new BondEngine(canvas(),callbacks().cb,{seed,motion:false});playBond(e,180);best=Math.max(best,e.stage);e.destroy();}
-  assert.ok(best>=6,`best run reached chain ${best}`);
-});
-test('Bond shot clock: starts on the first shot, refills on landing, pauses mid-flight and between chains, ends the run at zero',()=>{
-  const out=callbacks(),e=new BondEngine(canvas(),out.cb,{seed:3,motion:false});
-  for(let i=0;i<120*10;i++)e.step(SIM_STEP);assert.equal(e.clock,null,'no clock before the first shot');assert.equal(e.ended,false);
-  e.action();assert.equal(e.clock,6);const during=e.clock;for(let i=0;i<10;i++)e.step(SIM_STEP);assert.equal(e.clock,during,'paused while the vial flies');
-  while(e.flights.length)e.step(SIM_STEP);assert.equal(e.clock,6,'refilled on landing');
-  for(let i=0;i<120*3;i++)e.step(SIM_STEP);assert.ok(Math.abs(e.clock-3)<.02);
-  for(let i=0;i<120*3+2&&!e.ended;i++)e.step(SIM_STEP);assert.ok(e.ended);assert.equal(out.result.timeout,true);e.destroy();
-  assert.equal(bondClock(1),6);assert.equal(bondClock(4),4.5);assert.equal(bondClock(20),2.5);
+// The Tryout Arcade's ring runs out of safe arc as the vial count climbs, so a run ends however well it is
+// played. What matters is that careful play is rewarded with a long run, not that it survives for ever.
+test('A careful Bond player clears chain after chain until the ring runs out of room',()=>{
+  for(const seed of [12,5,99]){const e=new BondEngine(canvas(),callbacks().cb,{seed,motion:false});playBond(e,180);
+    assert.ok(e.stage>=10,`seed ${seed} only reached chain ${e.stage}`);
+    assert.ok(e.bonds>=100,`seed ${seed} landed ${e.bonds} vials`);e.destroy();}
 });
 test('Bond replays to the same score at 30, 60 and 144 Hz',async()=>{
   for(const hz of [30,60,144])for(const seed of [1,2]){

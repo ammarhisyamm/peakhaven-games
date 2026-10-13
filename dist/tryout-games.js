@@ -4,9 +4,7 @@ import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 
 const TAU=Math.PI*2;
-export const BOND_MAX_VIALS=11,BOND_HIT=.17;
-// Shot clock: time allowed for each shot, 6 s on chain 1, 0.5 s less each chain, never under 2.5 s.
-export const bondClock=stage=>Math.max(2.5,6-.5*(stage-1));
+export const BOND_HIT=.17,BOND_KNEE=6,BOND_MAX_FIXED=5,BOND_FIXED_GAP=.55,BOND_CLOCK_MAX=4,BOND_CLOCK_MIN=2.5,BOND_CLOCK_FROM=5,BOND_CLOCK_TO=20;
 const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d);
 // Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
 // Every number here is the Tryout Arcade's Flap Dash, in its fixed 360x640 world: ground H-70, a node of
@@ -33,6 +31,12 @@ export {RIDGE};
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const angularDistance=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+// Bond stage rules, taken from the Tryout Arcade's Log Hit. `s` is its 0-based stage, which is
+// chain number - 1 here. Vials climb by one a stage and never stop climbing: past the knee the ring
+// runs out of safe arc, which is what ends a run however well it is played.
+export const bondVials=s=>s<=BOND_KNEE?5+s:5+BOND_KNEE+(s-BOND_KNEE);
+// Seconds allowed per vial: 4 s until stage 5, easing to 2.5 s flat from stage 20.
+export const bondClock=s=>clamp(BOND_CLOCK_MAX-(BOND_CLOCK_MAX-BOND_CLOCK_MIN)*(s-BOND_CLOCK_FROM)/(BOND_CLOCK_TO-BOND_CLOCK_FROM),BOND_CLOCK_MIN,BOND_CLOCK_MAX);
 function rounded(c,x,y,w,h,r){c.beginPath();c.roundRect(x,y,w,h,r);}
 function ring(c,x,y,r,rotation=0){
  c.save();c.shadowColor='#00d9ff';c.shadowBlur=20;c.lineWidth=12;c.strokeStyle='#b8f6ff';c.beginPath();c.arc(x,y,r,0,TAU);c.stroke();c.shadowBlur=0;c.lineWidth=5;c.strokeStyle='#0752a8';c.stroke();c.lineWidth=2;c.strokeStyle='#ffffffb0';c.beginPath();c.arc(x,y,r-8,0,TAU);c.stroke();
@@ -159,47 +163,66 @@ export class RidgeEngine extends MiniEngine{
 }
 
 export class BondEngine extends MiniEngine{
- // Stage design copied from the Tryout Arcade's Bond (Log Hit): each chain hands you 5 + chain vials (max 11).
- // Use them all to complete the chain and start the next. Chains 2 and up can start with up to 3 fixed vials
- // already on the ring; spin speed is 1.6 + 0.2 × chain in a random direction, and from chain 3 the ring
- // speeds up, slows and can swing back (wobble 0.6 to 1.7). One vial flies at a time.
- constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.bonds=0;this.stage=0;this.inputs=[];this.flights=[];this.clearT=0;this.bump=0;this.clock=null;this.nextStage();this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.message('Tap anywhere to send a vial into a clear gap.');}
+ // Stage design copied from the Tryout Arcade's Bond (Log Hit), whose stages count from 0: chain n here is
+ // its stage n-1. A chain hands you 5 + stage vials, climbing by one a chain without an upper limit, and can
+ // start with up to 5 fixed vials (faded) seeded at least 0.55 rad apart. Spin is 1.7 + 0.22 × stage in a
+ // random direction from a random angle; from stage 3 the ring speeds up, stalls and swings back
+ // (sin(t × 1.15) × 1.3 + 0.35, so it can run backwards). One vial flies at a time, and a shot clock of 4 s,
+ // easing to 2.5 s by stage 20, runs while a vial waits — it is armed by the first throw of the run.
+ constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.bonds=0;this.stage=0;this.inputs=[];this.flights=[];this.clearT=0;this.bump=0;this.clockLive=false;this.nextStage();this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.message('Tap anywhere to send a vial into a clear gap.');}
  geometry(){const room=this.h-this.top-this.bottom;return{x:this.w/2,y:this.top+room*.37,r:Math.min(155,room*.26,this.w*.31),launch:this.h-this.bottom-60};}
  get round(){return this.stage;}
- nextStage(){this.stage++;this.left=Math.min(5+this.stage,BOND_MAX_VIALS);this.pins=[];this.fixed=0;this.stageTime=0;
-  const pre=Math.floor(this.random()*Math.min(4,this.stage));for(let i=0;i<pre;i++)this.pins.push(this.random()*TAU);this.fixed=pre;
-  this.base=(1.6+this.stage*.2)*(this.random()<.5?1:-1);this.wob=this.stage>=3?.6+this.random()*1.1:0;
-  if(this.clock!==null)this.clock=bondClock(this.stage);this.cb.hud(this.score,this.left,String(this.stage));if(this.stage>1)this.cb.message(`Chain ${this.stage}. ${this.left} vials.`);}
- get speed(){return Math.abs(this.base*(1+this.wob*Math.sin(this.stageTime*1.4)));}
+ get index(){return this.stage-1;}
+ get clockLimit(){return bondClock(this.index);}
+ // The wobble follows run time, not stage time, exactly as the Tryout Arcade does.
+ get wobble(){return this.index>=3?Math.sin(this.time*1.15)*1.3+.35:1;}
+ nextStage(){this.stage++;const s=this.index;this.left=bondVials(s);this.pins=[];this.stageTime=0;
+  // Up to five seeded fixed vials, each kept a gap clear of the others, 24 tries apiece, so a chain
+  // never starts already crowded. Fewer than asked for is normal once the ring is busy.
+  const want=Math.floor(this.random()*(BOND_MAX_FIXED+1));
+  for(let i=0;i<want;i++)for(let t=0;t<24;t++){const a=this.random()*TAU;if(this.pins.every(p=>angularDistance(p,a)>BOND_FIXED_GAP)){this.pins.push(a);break;}}
+  this.fixed=this.pins.length;
+  this.base=(1.7+s*.22)*(this.random()<.5?-1:1);this.rotation=this.random()*TAU;this.clock=this.clockLimit;
+  this.cb.hud(this.score,this.left,String(this.stage));if(this.stage>1)this.cb.message(`Chain ${this.stage}. ${this.left} vials.`);}
+ get speed(){return Math.abs(this.base*this.wobble);}
  replay(){return {v:1,game:'bond',seed:this.seed,view:this.view,step:SIM_STEP,taps:[...this.inputs],endTick:this.ticks};}
- action(){if(this.paused||this.ended||this.flights.length||this.clearT>0||this.left<=0)return;this.inputs.push(this.ticks);this.clock??=bondClock(this.stage);this.flights.push({progress:0,sprite:vialSprites[(this.pins.length)%4]});this.cb.sound('launch');this.cb.message('');}
+ // A refused tap is not a throw, so the shot clock is armed and reset here rather than on every tap.
+ action(){if(this.paused||this.ended||this.flights.length||this.clearT>0||this.left<=0)return;this.inputs.push(this.ticks);this.flights.push({progress:0,sprite:vialSprites[(this.pins.length)%4]});this.clockLive=true;this.clock=this.clockLimit;this.cb.sound('launch');this.cb.message('');}
  update(dt){
-  this.stageTime+=dt;this.rotation+=this.base*(1+this.wob*Math.sin(this.stageTime*1.4))*dt;this.bump=Math.max(0,this.bump-dt*6);
+  this.stageTime+=dt;this.bump=Math.max(0,this.bump-dt*6);
   if(this.clearT>0){this.clearT-=dt;if(this.clearT<=0)this.nextStage();return;}
-  // The shot clock starts with your first shot, pauses while a vial is flying and refills when it lands.
-  if(this.clock!==null&&!this.flights.length){this.clock-=dt;if(this.clock<=0){this.clock=0;this.cb.sound('miss');this.cb.message('Out of time.');this.end({score:this.score,bonds:this.bonds,round:this.stage,timeout:true,replay:this.replay()});return;}}
+  this.rotation=(this.rotation+this.base*this.wobble*dt)%TAU;
+  const flying=this.flights.length>0;
   for(const flight of this.flights){flight.progress+=dt/.12;if(flight.progress<1)continue;
    const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<BOND_HIT);
    if(collision){this.flights=[];this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds,round:this.stage,replay:this.replay()});return;}
    this.pins.push(target);this.bonds++;this.left--;this.score+=100;this.bump=1;this.clock=bondClock(this.stage);const g=this.geometry();this.burst(g.x,g.y+g.r);
    this.cb.hud(this.score,this.left,String(this.stage));this.cb.sound('bond');
-   if(this.left===0){this.clearT=.9;this.burst(g.x,g.y,'#ffd24d',36);this.cb.sound('perfect');this.cb.effect?.('CHAIN COMPLETE!','bond');}else this.cb.effect?.('BONDED!','bond');}
-  this.flights=this.flights.filter(f=>f.progress<1);}
+   if(this.left===0){this.clearT=.45;this.burst(g.x,g.y,'#ffd24d',36);this.cb.sound('perfect');this.cb.effect?.('CHAIN COMPLETE!','bond');}else this.cb.effect?.('BONDED!','bond');}
+  this.flights=this.flights.filter(f=>f.progress<1);
+  // Shot clock, only while a vial waits at the launcher. A frame that carried a vial in flight does not
+  // spend clock, so the time in the air is never counted against the next throw.
+  if(!flying&&!this.ended&&this.clearT<=0&&this.left>0&&this.clockLive){this.clock-=dt;
+   if(this.clock<=0){this.clock=0;this.cb.sound('miss');this.cb.message('Out of time.');this.cb.effect?.('OUT OF TIME','bond');this.end({score:this.score,bonds:this.bonds,round:this.stage,timeout:true,replay:this.replay()});}}}
  draw(){const c=this.ctx,g=this.geometry(),gy=g.y-this.bump*8;
   if(this.clearT<=0){ring(c,g.x,gy,g.r,this.rotation);c.save();const glow=c.createRadialGradient(g.x,gy,4,g.x,gy,50);glow.addColorStop(0,'#dcffff');glow.addColorStop(.4,'#00c9ff');glow.addColorStop(1,'#024fc7');c.fillStyle=glow;c.shadowColor='#03d9ff';c.shadowBlur=24;c.beginPath();c.arc(g.x,gy,47,0,TAU);c.fill();c.strokeStyle='#c1ffff';c.lineWidth=3;c.stroke();c.shadowBlur=0;
    for(let i=0;i<this.pins.length;i++){const a=this.pins[i]+this.rotation,px=g.x+Math.cos(a)*g.r,py=gy+Math.sin(a)*g.r;c.globalAlpha=i<this.fixed?.6:1;c.strokeStyle='#a1ecffb0';c.lineWidth=3;c.beginPath();c.moveTo(g.x+Math.cos(a)*48,gy+Math.sin(a)*48);c.lineTo(px,py);c.stroke();drawSprite(c,vialSprites[i%4],px,py,24,42,a-Math.PI/2);c.globalAlpha=1;}c.restore();}
   else{c.save();c.globalAlpha=Math.min(1,this.clearT*3);c.textAlign='center';c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font='900 30px Inter, sans-serif';c.fillText('CHAIN COMPLETE',g.x,g.y);c.restore();}
-  c.save();c.shadowColor='#8fffff';c.shadowBlur=18;if(!this.flights.length&&this.left>0&&this.clearT<=0)drawSprite(c,vialSprites[this.pins.length%4],g.x,g.launch,45,78);
+  c.save();c.shadowColor='#8fffff';c.shadowBlur=18;if(!this.flights.length&&this.left>0&&this.clearT<=0){drawSprite(c,vialSprites[this.pins.length%4],g.x,g.launch,45,78);
+   // The shot clock as a draining ring round the waiting vial, cyan until the last second, then warm.
+   if(this.clockLive&&!this.ended){const left=clamp(this.clock/this.clockLimit,0,1),urgent=this.clock<=1;c.shadowBlur=0;
+    c.strokeStyle='#ffffff26';c.lineWidth=3;c.beginPath();c.arc(g.x,g.launch,38,0,TAU);c.stroke();
+    c.strokeStyle=urgent?'#ff8d6b':'#8fffff';c.lineWidth=4;c.beginPath();c.arc(g.x,g.launch,38,-Math.PI/2,-Math.PI/2+TAU*left);c.stroke();c.shadowBlur=18;}}
   for(const flight of this.flights){const y=g.launch-(g.launch-gy-g.r)*Math.min(1,flight.progress);drawSprite(c,flight.sprite,g.x,y,45,78);}c.restore();
   // Shots left: a big number on the left with one vial per shot underneath, like the Tryout Arcade.
-  const total=Math.min(5+this.stage,BOND_MAX_VIALS),lx=38,top=g.y-g.r*.55,room=this.h-this.bottom-40-(top+48),gap=Math.min(30,room/total);
+  const total=Math.min(bondVials(this.index),14),lx=38,top=g.y-g.r*.55,room=this.h-this.bottom-40-(top+48),gap=Math.min(30,room/total);
   c.save();c.textAlign='center';c.textBaseline='middle';c.fillStyle='#ffffff';c.shadowColor='#00c9ff';c.shadowBlur=14;c.font='900 36px Inter, sans-serif';c.fillText(String(this.left),lx,top);
   c.shadowBlur=0;c.font='800 11px Inter, sans-serif';c.fillStyle='#bfefff';c.fillText('SHOTS',lx,top+26);c.restore();
   for(let i=0;i<total;i++){c.save();c.globalAlpha=i<this.left?1:.22;drawSprite(c,vialSprites[i%4],lx,top+56+i*gap,Math.min(18,gap*.62),Math.min(30,gap*.95));c.restore();}
   // Shot clock bar above the launcher.
-  const bw=Math.min(240,g.r*1.6),bx=g.x-bw/2,by=g.launch-62,limit=bondClock(this.stage),frac=this.clock===null?1:clamp(this.clock/limit,0,1),low=this.clock!==null&&this.clock<1.2;
+  const bw=Math.min(240,g.r*1.6),bx=g.x-bw/2,by=g.launch-62,limit=this.clockLimit,frac=!this.clockLive?1:clamp(this.clock/limit,0,1),low=this.clockLive&&this.clock<1.2;
   c.save();c.fillStyle='#03183dcc';rounded(c,bx,by,bw,10,5);c.fill();c.fillStyle=low?'#ff6b8a':'#5ff3ff';c.shadowColor=c.fillStyle;c.shadowBlur=low?14:8;if(frac>0){rounded(c,bx,by,bw*frac,10,5);c.fill();}
-  c.shadowBlur=0;c.fillStyle='#e8fbff';c.font='800 12px Inter, sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(this.clock===null?'TIMER STARTS ON YOUR FIRST SHOT':`${Math.max(0,this.clock).toFixed(1)}s`,g.x,by-4);c.restore();}
+  c.shadowBlur=0;c.fillStyle='#e8fbff';c.font='800 12px Inter, sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(!this.clockLive?'TIMER STARTS ON YOUR FIRST SHOT':`${Math.max(0,this.clock).toFixed(1)}s`,g.x,by-4);c.restore();}
  finish(){this.end({score:this.score,bonds:this.bonds,round:this.stage,replay:this.replay()});}
 }
 
