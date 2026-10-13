@@ -55,6 +55,13 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
 .extra-plays{display:inline-flex;align-items:center;gap:10px;min-height:34px;padding:5px 12px;border:1px solid #e4e8ec;border-radius:12px;font-size:clamp(11px,1.9vw,14px);color:#18384f}
 .extra-plays>svg{width:20px;height:20px}
 .extra-plays>svg:last-child{width:14px;height:14px}
+@media(min-width:1000px){
+ .daily-games{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
+ .daily-game{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 1fr;gap:12px;min-height:0;padding:10px}
+ .daily-game-image{grid-column:1/-1}
+ .daily-game-copy{grid-column:1;grid-row:2;align-self:center}
+ .daily-play-button{grid-column:2;grid-row:2;width:clamp(84px,10vw,120px);padding-inline:12px}
+}
 @media(max-width:800px){
  body[data-page="play"] .brand-header{height:clamp(60px,11.5vw,82px);padding-inline:var(--gutter)}
  body[data-page="play"] .brand{width:clamp(152px,25vw,182px)}
