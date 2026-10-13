@@ -4,6 +4,7 @@ import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 
 const TAU=Math.PI*2;
+export const BOND_ROUND=8;
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const angularDistance=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
@@ -118,14 +119,25 @@ export class RidgeEngine extends MiniEngine{
 }
 
 export class BondEngine extends MiniEngine{
- constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.speed=2.1;this.bonds=0;this.pins=[Math.PI*.25,Math.PI*.75,Math.PI*1.25,Math.PI*1.75];this.flights=[];this.cooldown=0;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,this.pins.length,'1×');cb.message('Tap anywhere to send a vial into a clear gap.');}
+ constructor(canvas,cb,options){super(canvas,cb,options);this.rotation=0;this.speed=2.1;this.bonds=0;this.round=1;this.roundBonds=0;this.direction=1;this.inputs=[];this.pins=this.starterPins(1);this.flights=[];this.cooldown=0;this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,this.pins.length,'1×');cb.message('Tap anywhere to send a vial into a clear gap.');}
  geometry(){const room=this.h-this.top-this.bottom;return{x:this.w/2,y:this.top+room*.37,r:Math.min(155,room*.26,this.w*.31),launch:this.h-this.bottom-60};}
- action(){if(this.paused||this.ended||this.cooldown>0)return;this.flights.push({progress:0,sprite:vialSprites[(this.pins.length+this.flights.length)%4]});this.cooldown=.065;this.cb.sound('launch');this.cb.message('');}
- update(dt){this.rotation+=this.speed*dt;this.cooldown=Math.max(0,this.cooldown-dt);for(const flight of this.flights){flight.progress+=dt/.12;if(flight.progress<1)continue;const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<.22);if(collision){this.flights=[];this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds});return;}this.pins.push(target);this.bonds++;this.score+=100;this.speed=Math.min(4.2,2.1+this.bonds*.04);const g=this.geometry();this.burst(g.x,g.y+g.r);this.cb.hud(this.score,this.pins.length,`${Math.min(9,1+Math.floor(this.score/300))}×`);this.cb.sound('bond');this.cb.effect?.('BONDED!','bond');}this.flights=this.flights.filter(f=>f.progress<1);}
+ // The ring used to fill up: after ~16 bonds no safe gap was left and the run stalled with no game over.
+ // Now every BOND_ROUND bonds completes the chain, pays a bonus and starts a fresh ring with more starter
+ // vials, and from round 3 every other round spins the other way.
+ starterPins(round){if(round===1)return [Math.PI*.25,Math.PI*.75,Math.PI*1.25,Math.PI*1.75];const count=Math.min(7,3+round),pins=[];let guard=0;
+  while(pins.length<count&&guard++<500){const a=this.random()*TAU;if(pins.every(p=>angularDistance(p,a)>.7))pins.push(a);}return pins;}
+ completeRound(){const g=this.geometry(),bonus=200*this.round;this.score+=bonus;this.round++;this.roundBonds=0;this.flights=[];this.pins=this.starterPins(this.round);
+  this.direction=this.round>=3&&this.round%2===0?-1:1;this.burst(g.x,g.y,'#ffd24d',36);this.cb.sound('perfect');this.cb.effect?.('CHAIN COMPLETE!','bond');
+  this.cb.message(`Round ${this.round}. +${bonus} bonus.`);this.cb.hud(this.score,this.pins.length,`${Math.min(9,1+Math.floor(this.score/300))}×`);}
+ replay(){return {v:1,game:'bond',seed:this.seed,view:this.view,step:SIM_STEP,taps:[...this.inputs]};}
+ // Taps closer together than the ring needs to move one vial-width apart are ignored, so a double tap
+ // no longer sends two vials into the same spot and ends the run.
+ action(){if(this.paused||this.ended||this.cooldown>0)return;this.inputs.push(this.ticks);this.flights.push({progress:0,sprite:vialSprites[(this.pins.length+this.flights.length)%4]});this.cooldown=Math.max(.065,.24/this.speed);this.cb.sound('launch');this.cb.message('');}
+ update(dt){this.rotation+=this.direction*this.speed*dt;this.cooldown=Math.max(0,this.cooldown-dt);for(const flight of this.flights){flight.progress+=dt/.12;if(flight.progress<1)continue;const target=Math.PI/2-this.rotation,collision=this.pins.some(a=>angularDistance(a,target)<.22);if(collision){this.flights=[];this.cb.sound('miss');this.end({score:this.score,bonds:this.bonds,round:this.round,replay:this.replay()});return;}this.pins.push(target);this.bonds++;this.roundBonds++;this.score+=100;this.speed=Math.min(4.2,2.1+this.bonds*.04);const g=this.geometry();this.burst(g.x,g.y+g.r);this.cb.hud(this.score,this.pins.length,`${Math.min(9,1+Math.floor(this.score/300))}×`);this.cb.sound('bond');this.cb.effect?.('BONDED!','bond');if(this.roundBonds>=BOND_ROUND){this.completeRound();return;}}this.flights=this.flights.filter(f=>f.progress<1);}
  draw(){const c=this.ctx,g=this.geometry();ring(c,g.x,g.y,g.r,this.rotation);c.save();const glow=c.createRadialGradient(g.x,g.y,4,g.x,g.y,50);glow.addColorStop(0,'#dcffff');glow.addColorStop(.4,'#00c9ff');glow.addColorStop(1,'#024fc7');c.fillStyle=glow;c.shadowColor='#03d9ff';c.shadowBlur=24;c.beginPath();c.arc(g.x,g.y,47,0,TAU);c.fill();c.strokeStyle='#c1ffff';c.lineWidth=3;c.stroke();c.shadowBlur=0;
   for(let i=0;i<this.pins.length;i++){const a=this.pins[i]+this.rotation,px=g.x+Math.cos(a)*g.r,py=g.y+Math.sin(a)*g.r;c.strokeStyle='#a1ecffb0';c.lineWidth=3;c.beginPath();c.moveTo(g.x+Math.cos(a)*48,g.y+Math.sin(a)*48);c.lineTo(px,py);c.stroke();drawSprite(c,vialSprites[i%4],px,py,30,52,a-Math.PI/2);}
   c.shadowColor='#8fffff';c.shadowBlur=18;drawSprite(c,vialSprites[(this.pins.length+this.flights.length)%4],g.x,g.launch,45,78);for(const flight of this.flights){const y=g.launch-(g.launch-g.y-g.r)*Math.min(1,flight.progress);drawSprite(c,flight.sprite,g.x,y,45,78);}c.restore();}
- finish(){this.end({score:this.score,bonds:this.bonds});}
+ finish(){this.end({score:this.score,bonds:this.bonds,round:this.round,replay:this.replay()});}
 }
 
 export class SequenceEngine extends MiniEngine{

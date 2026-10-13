@@ -35,6 +35,21 @@ export async function replayRidge(rep){
   return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length};
 }
 
+export async function replayBond(rep){
+  installStubs();
+  if(rep?.game!=='bond'||rep.step!==SIM_STEP)throw new Error('Not a Bond replay for this build');
+  const {BondEngine}=await import('../dist/tryout-games.js');
+  const out=collector(),e=new BondEngine(stubCanvas([...rep.view]),out.cb,{seed:rep.seed,motion:false});
+  const taps=[...rep.taps];let rejected=0;
+  while(!e.ended&&e.ticks<MAX_TICKS){
+    while(taps.length&&taps[0]===e.ticks){taps.shift();const before=e.inputs.length;e.action();if(e.inputs.length===before)rejected++;}
+    if(!taps.length&&!e.flights.length)break; // nothing left in the air and no more taps: the run was finished from pause
+    e.step(SIM_STEP);
+  }
+  e.destroy();
+  return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length+rejected};
+}
+
 export async function replayMerge(rep){
   installStubs();
   if(rep?.game!=='merge'||rep.step!==SIM_STEP)throw new Error('Not a Vial Merge replay for this build');

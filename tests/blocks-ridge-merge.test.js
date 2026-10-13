@@ -15,7 +15,7 @@ const {SIM_STEP,createRandom}=await import('../dist/rng.js');
 const {replayRidge,replayMerge}=await import('../tools/replay.mjs');
 
 const noop=()=>{};
-function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:noop,set:(t,k,v)=>(t[k]=v,true)});return {getContext:()=>ctx,getBoundingClientRect:()=>({width,height,left:0,top:0}),addEventListener:noop,removeEventListener:noop,setPointerCapture:noop};}
+function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:()=>ctx,set:(t,k,v)=>(t[k]=v,true)});return {getContext:()=>ctx,getBoundingClientRect:()=>({width,height,left:0,top:0}),addEventListener:noop,removeEventListener:noop,setPointerCapture:noop};}
 function callbacks(onEnd){const out={result:null};out.cb={hud:noop,message:noop,sound:noop,effect:noop,progress:noop,ready:noop,topTier:noop,place:noop,end(r){out.result??=r;onEnd?.(r);}};return out;}
 
 // ---------- Peak Blocks ----------
@@ -136,4 +136,34 @@ test('Vial Merge never spawns tiers that cannot merge',()=>{
   const e=new MergeEngine(canvas(),callbacks().cb,{seed:8,motion:false});const seen=new Set();
   for(let i=0;i<2000;i++){e.cooldown=0;e.bodies.length=0;e.action();seen.add(e.preview);seen.add(e.next);}
   assert.ok(Math.max(...seen)<MERGE_SPAWN_TIERS,`spawned ${[...seen]}`);e.destroy();
+});
+
+// ---------- Bond ----------
+const {BondEngine,BOND_ROUND}=await import('../dist/tryout-games.js');
+const {replayBond}=await import('../tools/replay.mjs');
+// Fires only when the vial would land clear of every pinned and in-flight vial.
+function bondSafe(e,margin=.05){const land=r=>Math.PI/2-r;const t=land(e.rotation+e.direction*e.speed*.12);
+  const pending=e.flights.map(f=>land(e.rotation+e.direction*e.speed*(1-f.progress)*.12));
+  const d=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+  return [...e.pins,...pending].every(a=>d(a,t)>=.22+margin);}
+test('Bond no longer fills up and stalls: a careful player keeps finding gaps round after round',()=>{
+  const e=new BondEngine(canvas(),callbacks().cb,{seed:12,motion:false});let sinceShot=0,longestWait=0;
+  for(let i=0;i<120*180&&!e.ended;i++){if(e.cooldown===0&&bondSafe(e)){e.action();longestWait=Math.max(longestWait,sinceShot);sinceShot=0;}else sinceShot+=SIM_STEP;e.step(SIM_STEP);}
+  assert.equal(e.ended,false,'safe shots never crash');assert.ok(e.bonds>=60,`bonds ${e.bonds}`);assert.ok(e.round>=8,`round ${e.round}`);
+  assert.ok(longestWait<3,`longest wait for a gap ${longestWait.toFixed(2)} s`);e.destroy();
+});
+test('Bond rounds pay a bonus, reset the ring and reverse from round 3',()=>{
+  const e=new BondEngine(canvas(),callbacks().cb,{seed:3,motion:false});
+  while(e.round===1){if(e.cooldown===0&&bondSafe(e))e.action();e.step(SIM_STEP);}
+  assert.equal(e.score,BOND_ROUND*100+200);assert.equal(e.pins.length,5);assert.equal(e.direction,1);
+  while(e.round===2){if(e.cooldown===0&&bondSafe(e))e.action();e.step(SIM_STEP);}assert.equal(e.direction,1);
+  while(e.round===3){if(e.cooldown===0&&bondSafe(e))e.action();e.step(SIM_STEP);}assert.equal(e.direction,-1,'round 4 spins the other way');e.destroy();
+});
+test('Bond replays to the same score at 30, 60 and 144 Hz',async()=>{
+  for(const hz of [30,60,144])for(const seed of [1,2]){
+    const out=callbacks(),e=new BondEngine(canvas(),out.cb,{seed,motion:false});const rand=createRandom(seed);let now=1000;e.frame(now);
+    for(let f=0;f<60*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&e.cooldown===0&&(bondSafe(e)||rand()<.004))e.action();}
+    if(!e.ended)e.finish();e.destroy();
+    const again=await replayBond(out.result.replay);assert.equal(again.score,out.result.score,`seed ${seed} at ${hz} Hz`);
+  }
 });
