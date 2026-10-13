@@ -19,7 +19,7 @@ const MAX_TICKS=120*60*60; // one hour of play
 
 export async function replayRidge(rep){
   installStubs();
-  if(rep?.game!=='ridge'||rep.v!==2||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
+  if(rep?.game!=='ridge'||rep.v!==3||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
   const {RidgeEngine}=await import('../dist/tryout-games.js');
   // The course runs in fixed world units, so the screen size doesn't matter here.
   const e=new RidgeEngine(stubCanvas([480,720]),collector().cb,{seed:rep.seed,motion:false});
