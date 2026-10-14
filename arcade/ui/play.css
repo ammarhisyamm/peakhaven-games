@@ -25,27 +25,31 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
 .daily-game-copy>p{font-size:clamp(11px,2.45vw,18px);line-height:1.35;color:#445965;margin-top:5px}
 .plays-left{display:flex;gap:7px;align-items:center;font-size:clamp(12px,2.7vw,19px);line-height:1.2;color:#006aab;font-weight:650;margin-top:7px;font-variant-numeric:tabular-nums}
 .plays-left svg{width:clamp(18px,3.7vw,27px);height:clamp(18px,3.7vw,27px);color:#004778;flex:none;stroke-width:2}
-.daily-play-button{width:clamp(72px,19vw,136px);min-height:clamp(36px,6.6vw,48px);font-size:clamp(13px,3vw,20px);padding:8px 12px;gap:7px;font-weight:600}
+.daily-play-button{width:clamp(72px,19vw,136px);min-height:clamp(36px,6.6vw,48px);font-size:clamp(13px,3vw,20px);padding:8px 12px;gap:7px;font-weight:600;white-space:nowrap;flex-wrap:nowrap}
 .daily-play-button svg{width:clamp(17px,3vw,24px);height:clamp(17px,3vw,24px);flex:none}
 .daily-play-button:disabled{background:#e0edf2;color:#516875;font-size:12px}
 .daily-play-button:disabled svg{display:none}
 .play-shortcuts{display:grid;gap:8px;margin-top:14px}
 .play-shortcut{display:grid;align-items:center;background:#f6fbfe;border:1px solid #e4edf1;border-radius:14px;padding:8px 14px;gap:12px;min-height:74px}
-.leaderboard-shortcut{grid-template-columns:clamp(34px,7.5vw,58px) minmax(0,1fr) clamp(112px,29vw,210px) auto}
+.leaderboard-shortcut{grid-template-columns:clamp(34px,7.5vw,58px) minmax(0,1fr) auto;grid-template-rows:auto auto auto;column-gap:14px;row-gap:8px;padding:12px 16px}
 .play-leaderboard-preview{grid-column:1/-1;border-top:1px solid #dcebf1;font-size:clamp(11px,1.65vw,14px)}
-.play-leaderboard-preview th{padding:5px 8px;font-size:clamp(10px,1.45vw,12px)}
-.play-leaderboard-preview td{padding:5px 8px}
+.play-leaderboard-preview th{padding:7px 10px;font-size:clamp(10px,1.45vw,12px)}
+.play-leaderboard-preview td{padding:8px 10px}
 .play-leaderboard-preview .player-cell{gap:8px}
 .play-leaderboard-preview .player-cell img{width:24px;height:26px}
 .shortcut-icon{display:grid;place-items:center;background:#e0f7fe;border-radius:10px;height:clamp(38px,8.5vw,60px);color:#005a9a}
+.leaderboard-shortcut .shortcut-icon{grid-column:1;grid-row:1/3}
 .shortcut-icon svg{width:clamp(22px,4.6vw,34px);height:clamp(22px,4.6vw,34px);stroke-width:5}
 .shortcut-copy{min-width:0}
+.leaderboard-shortcut .shortcut-copy{grid-column:2;grid-row:1}
 .shortcut-copy h3{font-size:clamp(14px,2.6vw,20px);letter-spacing:-.02em;line-height:1.2;font-weight:700}
 .shortcut-copy p{font-size:clamp(10px,2vw,15px);color:#526775;line-height:1.3;margin-top:3px}
 .shortcut-period{min-width:0;height:clamp(34px,7vw,48px)}
+.leaderboard-shortcut .shortcut-period{grid-column:2;grid-row:2;justify-self:start;width:min(220px,100%)}
 .shortcut-period button{font-size:clamp(10px,1.8vw,14px);padding:4px;min-height:0}
 .shortcut-period button[aria-selected=true]{background:linear-gradient(#087fc1,#004375);color:#fff}
 .ranks-preview{font-size:clamp(10px,1.8vw,14px);gap:6px;white-space:nowrap}
+.leaderboard-shortcut .ranks-preview{grid-column:3;grid-row:2;justify-self:end}
 .ranks-preview svg{width:17px;height:17px}
 .bottle-shortcut{grid-template-columns:clamp(52px,13vw,90px) minmax(0,1fr) auto;padding-block:3px}
 .shortcut-bottle{height:clamp(56px,10vw,75px);width:100%;object-fit:contain}
@@ -60,7 +64,11 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
  .daily-game{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 1fr;gap:12px;min-height:0;padding:10px}
  .daily-game-image{grid-column:1/-1}
  .daily-game-copy{grid-column:1;grid-row:2;align-self:center}
- .daily-play-button{grid-column:2;grid-row:2;width:clamp(84px,10vw,120px);padding-inline:12px}
+ .daily-play-button{grid-column:2;grid-row:2;width:max-content;min-width:132px;padding-inline:12px}
+ .leaderboard-shortcut{column-gap:16px;row-gap:9px;padding:16px 20px}
+ .leaderboard-shortcut .shortcut-copy{display:flex;align-items:baseline;gap:14px}
+ .leaderboard-shortcut .shortcut-copy p{white-space:nowrap;margin:0}
+ .leaderboard-shortcut .play-leaderboard-preview td{padding-block:9px}
 }
 @media(max-width:800px){
  body[data-page="play"] .brand-header{height:clamp(60px,11.5vw,82px);padding-inline:var(--gutter)}
@@ -73,17 +81,28 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
  body[data-page="play"] .nav-link[aria-current=page]:after{bottom:7px;left:15%;right:15%;height:3px}
  body[data-page="play"] #main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
  .play-shortcut{gap:8px;padding-inline:8px;min-height:64px}
+ .leaderboard-shortcut{grid-template-columns:clamp(38px,8.5vw,58px) minmax(0,1fr) auto;column-gap:10px;row-gap:7px;padding:12px}
+ .leaderboard-shortcut .shortcut-icon{grid-row:1/3}
+ .leaderboard-shortcut .shortcut-copy{grid-column:2;grid-row:1}
+ .leaderboard-shortcut .shortcut-period{grid-column:2;grid-row:2;width:min(220px,100%)}
+ .leaderboard-shortcut .ranks-preview{grid-column:3;grid-row:2}
  .daily-intro{margin:14px 0}
  .play-end{font-size:10px}
 }
+@media(max-width:800px){
+ .daily-game{grid-template-columns:clamp(96px,34vw,224px) minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:8px 12px;padding:8px}
+ .daily-game-image{grid-column:1;grid-row:1/3}
+ .daily-game-copy{grid-column:2;grid-row:1;align-self:end}
+ .daily-play-button{grid-column:2;grid-row:2;justify-self:start;align-self:start;width:max-content;min-width:132px;min-height:42px;padding:8px 13px;font-size:15px}
+}
 @media(max-width:370px){
- .daily-game{gap:7px;padding-right:7px;grid-template-columns:clamp(96px,34vw,126px) minmax(0,1fr) auto}
+ .daily-game{gap:7px 9px;padding:7px;grid-template-columns:clamp(96px,34vw,126px) minmax(0,1fr)}
  .daily-game-copy h3{font-size:16px}
  .daily-game-copy>p{font-size:11px}
- .daily-play-button{width:68px;padding-inline:8px}
+ .daily-play-button{min-width:126px;padding-inline:10px;font-size:14px}
  .leaderboard-shortcut{grid-template-columns:30px minmax(0,1fr) auto}
  .shortcut-period{grid-column:2;grid-row:2;max-width:130px}
  .leaderboard-shortcut .shortcut-icon{grid-row:1/3}
- .ranks-preview{grid-column:3;grid-row:1/3}
+ .leaderboard-shortcut .ranks-preview{grid-column:3;grid-row:2}
  .customise-link{padding-inline:10px;gap:5px}
 }
