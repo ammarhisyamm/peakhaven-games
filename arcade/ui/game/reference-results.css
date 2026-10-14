@@ -1,0 +1,124 @@
+/* October 2026 client references. Live UI owns all state and copy. */
+.reference-dialog{--rr-ink:#07183e;--rr-cyan:#00c7ed;--rr-line:#a3edff;--rr-gap:12px;color:var(--rr-ink);font-family:Inter,sans-serif;padding:0;margin:auto;border:2px solid var(--rr-line);border-radius:24px;width:calc(100% - 40px);max-width:380px;max-height:calc(100dvh - 40px);background:#eefbff;box-shadow:0 18px 60px #00112788;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#27d9f0 #0c3766;box-sizing:border-box}
+.reference-dialog::backdrop{background:#02172f26;backdrop-filter:none}
+.reference-dialog *{box-sizing:border-box}
+.reference-dialog button,.reference-dialog input{font-family:inherit}
+.reference-dialog button{cursor:pointer;touch-action:manipulation}
+.reference-dialog :focus-visible{outline:3px solid #ffd24d;outline-offset:4px}
+.reference-dialog ::selection{background:#00d7fa;color:#07183e}
+.reference-panel{position:relative;padding:20px;background:radial-gradient(ellipse at 50% 0,#fff,#f1fbff 70%)}
+.rr-icon{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.rr-close{position:absolute;top:12px;right:12px;z-index:3;width:44px;height:44px;min-width:44px;display:grid;place-items:center;padding:8px;border:1.5px solid #118dd9;border-radius:50%;background:#f1fcff;color:#0a285a}
+.run-summary{text-align:center;display:flex;flex-direction:column;align-items:stretch;gap:12px}
+.run-art{position:relative;height:126px;flex:none;background:var(--mountains) center/contain no-repeat}
+.run-art img{position:relative;display:block;width:100%;height:100%;object-fit:contain;z-index:1}
+.run-spark{position:absolute;color:#ffe276;width:20px;height:20px;top:35%;z-index:2}
+.run-spark-one{left:18%}.run-spark-two{right:13%;top:13%}
+.run-heading h2{font-family:Anybody,Inter,sans-serif;font-size:30px;font-weight:900;font-variation-settings:'wdth' 115;line-height:1.05;margin:0;color:#aef7ff;text-shadow:0 2px 0 #078dd9;text-transform:uppercase;letter-spacing:-.025em}
+.run-game-name img{display:block;width:100%;height:52px;object-fit:contain}
+.run-heading h1{font-family:Inter,sans-serif;font-size:28px;font-weight:900;line-height:1.08;letter-spacing:-.025em;margin:7px 0 0;color:inherit;text-shadow:none}
+.run-level{font-size:12px;line-height:1.5;letter-spacing:.15em;text-transform:uppercase;color:inherit;margin:8px 0 0}
+.run-intro{font-size:14px;line-height:1.45;margin:0;color:inherit}
+.run-intro:empty{display:none}
+.run-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:12px 0;margin:0;border-block:1px solid #4bdaf066;gap:0}
+.run-metrics>div{display:flex;flex-direction:column-reverse;gap:2px;min-width:0;padding:0 4px}
+.run-metrics>div+div{border-left:1px solid #4bdaf0b0}
+.run-metrics dt{font-size:13px;line-height:1.4;color:inherit;font-weight:500}
+.run-metrics dd{font-size:27px;font-weight:900;line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin:0;color:inherit}
+.blue-coin-art{display:block;background-image:var(--coin-atlas);background-size:200% 200%;background-repeat:no-repeat;aspect-ratio:1;width:100%;flex:none}
+.coin-art-0{background-position:0 0}.coin-art-1{background-position:100% 0}.coin-art-2{background-position:0 100%}.coin-art-3{background-position:100% 100%}
+.run-wallet{display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #82e5fa;border-radius:18px;padding:4px 10px;background:#14599799;color:#f5fcff}
+.run-wallet>.blue-coin-art{width:72px}.run-wallet p{margin:0;font-size:17px;line-height:1.2;font-weight:700;white-space:nowrap}.run-wallet small{font-size:12px;line-height:1.4;color:#a3e6ff}.wallet-count{font-variant-numeric:tabular-nums}
+.rr-primary,.rr-secondary,.rr-shop-back,.rr-buy{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;border-radius:30px;width:100%;padding:12px 14px;font-weight:800;line-height:1.2;text-align:center}
+.rr-primary{min-height:64px;border:2px solid #b6ffff;background:linear-gradient(160deg,#00e6fa,#0091fa 54%,#0357f5);box-shadow:inset 0 3px 5px #ffffff80,0 5px 18px #008bef66;color:#fff;font-size:23px;letter-spacing:-.025em}
+.rr-primary .rr-icon{width:30px;height:30px}
+.rr-primary:hover{filter:brightness(1.08)}
+.rr-primary:active,.rr-buy:active{transform:translateY(2px)}
+.rr-secondary{background:linear-gradient(#154d8ddd,#0c315ded);border:1px solid #87ddf7;color:#fff;font-size:15px;min-height:48px}
+.run-availability{color:#80e9ff;font-size:13px;font-weight:600;line-height:1.4;margin:-3px 0 0}
+.rr-coins-link{background:none;border:0;text-decoration:underline;text-underline-offset:5px;display:flex;align-items:center;justify-content:center;gap:4px;min-height:44px;font-size:15px;font-weight:700;color:#29dffc;padding:4px}
+.shop-content{display:none;text-align:center;min-width:0}
+.shop-heading{display:flex;align-items:center;gap:4px;text-align:left;min-height:100px;padding:12px 0 8px;background:var(--mountains) center/contain no-repeat}
+.shop-mascot{width:100px;height:94px;object-fit:contain;flex:none;display:block}
+.shop-heading h2{font-family:Inter,sans-serif;font-variation-settings:normal;font-size:clamp(23px,5.5vw,32px);font-weight:900;letter-spacing:-.025em;line-height:1.03;color:#03090f;margin:0;text-align:left}
+.shop-heading p{font-size:12px;line-height:1.4;font-weight:500;color:#193c70;margin:5px 0 0}
+.shop-run-note{padding:8px;border-radius:12px;background:#dff6ff;color:#1a3d77;font-size:12px;line-height:1.5;margin:0 0 8px}
+.shop-wallet{display:flex;align-items:center;justify-content:center;gap:6px;min-height:48px;margin:0 0 10px;background:#dff6ff;border-radius:14px;color:#091e45}
+.shop-wallet>.blue-coin-art{width:55px}.shop-wallet span{font-size:16px;font-weight:650}.shop-wallet strong{font-size:22px;color:#009ede;margin-left:4px}
+.coin-packs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;border:0;margin:0;padding:0;min-width:0;text-align:center}
+.coin-pack{position:relative;min-width:0;cursor:pointer}
+.coin-pack input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
+.coin-pack input:focus-visible{outline:0}.coin-pack:has(input:focus-visible){outline:3px solid #ffd24d;outline-offset:4px;border-radius:14px}
+.pack-body{display:flex;flex-direction:column;align-items:center;justify-content:end;position:relative;height:100%;min-height:168px;gap:0;padding:10px 2px 7px;border:1px solid #aaedff;border-radius:13px;background:var(--mountains) center 72%/auto 60% no-repeat,#f2fcff;color:#081b4c}
+.coin-pack input:checked+.pack-body{border:2px solid #00ccef;padding:9px 1px 6px;background-color:#fff;box-shadow:0 3px 8px #007bad15}
+.pack-popular{position:absolute;left:-2px;right:-2px;top:-15px;border-radius:12px 12px 0 0;background:#00bade;color:white;font-size:9px;line-height:1.2;font-weight:800;padding:5px 2px;min-height:24px;display:grid;place-items:center;white-space:nowrap}
+.pack-count{font-size:clamp(29px,7.5vw,43px);font-weight:900;line-height:1.05;color:#00b5e8;letter-spacing:-.04em;margin-top:3px}
+.pack-unit{font-size:10px;font-weight:850;line-height:1.15;color:#0a2252}
+.pack-body>.blue-coin-art{width:100%;max-width:104px;margin:2px 0}
+.pack-prototype{font-size:9px;line-height:1.35;color:#456082;font-weight:500;margin-top:2px}
+.pack-price{font-size:14px;font-weight:900;color:#060c16;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
+.coin-rule{color:#254474;font-size:12px;line-height:1.45;margin:10px 0 8px}
+.rr-buy{color:#fff;background:linear-gradient(#13202c,#030709);border:2px solid #61e6ff;box-shadow:inset 0 2px 3px #ffffff66,0 4px 10px #1367a233;font-size:20px;min-height:52px}
+.purchase-note{font-size:11px;line-height:1.45;color:#315385;margin:6px 0 10px}
+.rr-shop-back{min-height:44px;background:#f0fbff;border:1.5px solid #267cd9;color:#0a285a;font-size:16px}
+.prototype-note{font-size:11px;line-height:1.4;margin:8px 0 0;color:#456082}
+.rr-feedback{font-size:12px;font-weight:600;color:#16427a;line-height:1.4;margin:8px 0 0}
+.rr-feedback:empty{display:none}
+.rr-sr-only{position:absolute;width:1px;height:1px;padding:0;border:0;clip-path:inset(50%);overflow:hidden;white-space:nowrap}
+.reference-dialog[data-mode=result]{color:#fff;background:#06264ec4;backdrop-filter:blur(8px);border-color:#6df7ff;box-shadow:inset 0 1px 2px #a4ffff,0 14px 50px #00142a9c}
+.reference-dialog[data-mode=result] .reference-panel{background:none}
+.reference-dialog[data-mode=result] .run-art{background:none}
+.reference-dialog[data-mode=shop] .shop-content{display:block}
+.reference-dialog[data-mode=shop] .run-summary{display:none}
+.reference-ridge .coin-packs{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.reference-ridge .pack-body{min-height:136px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto;align-content:center;padding:12px 6px 8px}
+.reference-ridge .pack-count{grid-column:1;grid-row:1;font-size:33px}.reference-ridge .pack-unit{grid-column:1;grid-row:2;font-size:10px}.reference-ridge .pack-body>.blue-coin-art{grid-column:2;grid-row:1/3}.reference-ridge .pack-price{grid-column:1/-1;grid-row:3;font-size:18px;padding-top:3px}
+.reference-ridge .popular{margin-top:10px}
+.reference-sequence .run-heading h2{font-family:Inter,sans-serif;font-size:16px;letter-spacing:.12em;color:#80ddff;text-shadow:none}
+.reference-sequence .run-heading h1{font-size:25px}
+.shop-only .shop-run-note{display:none}.shop-only .purchase-note{display:none}
+@media(min-width:760px){
+ .reference-dialog[data-mode=shop]{max-width:720px;width:calc(100% - 64px);border-radius:22px}
+ .reference-dialog[data-mode=shop] .reference-panel{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.3fr);gap:24px;padding:24px}
+ .reference-dialog[data-mode=shop] .run-summary{display:flex;justify-content:center;gap:14px}
+ .reference-dialog[data-mode=shop] .run-art{height:155px}
+ .reference-dialog[data-mode=shop] .run-game-name img{height:64px}
+ .reference-dialog[data-mode=shop] .run-heading h1{font-size:28px}
+ .reference-dialog[data-mode=shop] .run-heading h2{color:#0a2755;text-shadow:none;font-size:28px}
+ .reference-dialog[data-mode=shop] .run-intro,.reference-dialog[data-mode=shop] .run-wallet,.reference-dialog[data-mode=shop] .rr-primary,.reference-dialog[data-mode=shop] .run-availability,.reference-dialog[data-mode=shop] .rr-secondary,.reference-dialog[data-mode=shop] .rr-coins-link,.reference-dialog[data-mode=shop] .run-level{display:none}
+ .reference-dialog[data-mode=shop] .run-metrics{padding:10px 0;color:#071e4a;border:1px solid #afdef3;border-radius:12px;background:#f0fbff}
+ .reference-dialog[data-mode=shop] .run-metrics dd{font-size:24px}.reference-dialog[data-mode=shop] .run-metrics dt{font-size:11px}
+ .shop-heading{min-height:60px;margin-bottom:4px;background:none;padding:0 38px 0 0;display:block}.shop-heading h2{font-size:29px;text-align:left}.shop-heading p{font-size:13px}
+ .shop-mascot,.shop-run-note{display:none}.shop-wallet{min-height:44px;background:#e6f7ff}.shop-wallet>.blue-coin-art{width:44px}
+ .pack-body{min-height:178px}.pack-count{font-size:40px}.pack-unit{font-size:11px}.pack-price{font-size:15px}.pack-popular{font-size:10px}
+ .reference-ridge[data-mode=shop]{max-width:620px}.reference-sequence[data-mode=shop]{max-width:660px}
+ .reference-sequence[data-mode=shop] .run-heading h2{font-family:Inter,sans-serif;font-size:14px;letter-spacing:.1em}
+ .reference-sequence[data-mode=shop] .run-heading h1{font-size:20px;white-space:nowrap}
+ .reference-sequence[data-mode=shop][data-outcome=lost] .run-heading h1{color:#be143b}
+ .reference-ridge[data-mode=shop] .reference-panel,.reference-sequence[data-mode=shop] .reference-panel{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:22px}
+ .reference-sequence .coin-packs{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .reference-sequence .pack-body{min-height:164px;padding:9px 5px 7px;display:flex}.reference-sequence .pack-count{font-size:26px}.reference-sequence .pack-body>.blue-coin-art{width:75px}.reference-sequence .pack-price{padding-top:3px}.reference-sequence .popular{margin-top:10px}
+ .reference-dialog.shop-only[data-mode=shop] .reference-panel{display:block;padding:28px}.shop-only .shop-heading{display:flex;justify-content:center}.shop-only .shop-mascot{display:block;width:120px}.shop-only .shop-heading h2{font-size:34px}.shop-only .shop-wallet{margin:14px auto;width:70%}.shop-only .coin-packs{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:22px}.shop-only .pack-body{display:flex;min-height:210px}.shop-only .pack-body>.blue-coin-art{width:100%}.shop-only .rr-buy{max-width:440px;margin:12px auto 0}.shop-only .rr-shop-back{max-width:440px;margin:10px auto 0}
+}
+@media(max-width:420px){.reference-dialog{width:calc(100% - 36px)}.reference-panel{padding:18px}.pack-price{font-size:12px}.pack-popular{font-size:8px}.shop-mascot{width:85px}.shop-heading h2{font-size:24px}}
+@media(max-width:370px){.reference-dialog{width:calc(100% - 32px);max-height:calc(100dvh - 32px)}.reference-panel{padding:16px}.coin-packs{gap:6px}.pack-count{font-size:31px}.pack-price{font-size:11px}.run-metrics dd{font-size:24px}.run-heading h1{font-size:26px}.run-wallet p{font-size:15px}.run-wallet small{font-size:11px}.shop-mascot{width:72px}.shop-heading h2{font-size:22px}}
+@media(max-height:700px){.reference-dialog[data-mode=result] .run-art{height:96px}.reference-dialog[data-mode=result] .run-summary{gap:9px}.reference-dialog[data-mode=result] .reference-panel{padding-block:16px}.reference-dialog[data-mode=result] .run-heading h1{font-size:25px}.reference-dialog[data-mode=result] .run-game-name img{height:42px}.reference-dialog[data-mode=result] .run-wallet>.blue-coin-art{width:52px}.reference-dialog[data-mode=result] .rr-primary{min-height:56px}.reference-dialog[data-mode=result] .rr-secondary{min-height:44px}}
+@media(prefers-reduced-motion:reduce){.reference-dialog,.reference-dialog *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Sequence's shared wallet belongs beside the mascot in its blue result panel. */
+.sequence-wallet,.sequence-coin-cluster,.sequence-coin-rule{display:none}
+.reference-sequence[data-mode=result] .run-wallet{display:none}
+.reference-sequence[data-mode=result] .run-art{height:150px}
+.reference-sequence[data-mode=result] .run-art img{width:76%;margin-left:-8px}
+.reference-sequence[data-mode=result] .sequence-wallet{display:flex;position:absolute;right:0;top:4px;z-index:2;flex-direction:column;gap:2px;padding:8px 7px;border:2px solid #73f6ff;border-radius:14px;background:#0058acdd;color:white;box-shadow:0 0 10px #00dfff55}
+.sequence-wallet strong{font-size:29px;line-height:1;font-weight:900}.sequence-wallet span{font-size:9px;font-weight:800}
+.reference-sequence[data-mode=result] .sequence-coin-cluster{display:block;position:absolute;width:100px;right:-4px;bottom:12px;z-index:2}
+.reference-sequence[data-mode=result] .sequence-coin-rule{display:block;position:absolute;right:0;bottom:-4px;z-index:2;text-align:right;font-size:10px;line-height:1.25;color:#b2efff}
+.reference-ridge .pack-prototype{grid-column:1/-1;grid-row:4}
+@media(max-width:759px){
+ .reference-ridge .pack-body{display:flex;min-height:190px;padding:12px 6px 8px}
+ .reference-ridge .pack-body>.blue-coin-art{width:96px}
+ .reference-ridge .pack-price{padding-top:0}
+}
+
+.reference-sequence[data-mode=result] .run-spark-two{right:39%;top:26%}
