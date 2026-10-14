@@ -1,58 +1,125 @@
 import {sequenceTarget} from './sequence-rules.js';
 import {COIN_PACKS,playWallet,freePlaysLeft,availablePlays,consumePlay,simulateCoinPurchase} from './play-credits.js';
 
-const names={blocks:'Peak Blocks',ridge:'Ridge Run',sequence:'Sequence'};
-const paths={back:'<path d="M20 12H4m6-6-6 6 6 6"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',play:'<path d="m8 5 11 7-11 7z"/>',restart:'<path d="M4 9a9 9 0 1 1-1 7m1-13v6h6"/>',ranks:'<path d="M5 20V11m7 9V4m7 16V8"/>',arrow:'<path d="m9 5 7 7-7 7"/>',spark:'<path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/>'};
-const svg=name=>`<svg class="rr-icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
+// One Keep Going component for Peak Blocks, Ridge Run and Sequence. Layout, sizes and behaviour are shared;
+// each game only supplies the copy and the three statistics below.
+const GAMES={
+ blocks:{
+  name:'Peak Blocks',
+  title:()=>'RUN OVER',
+  intro:()=>'Clear more lines to beat your best.',
+  stats:({result,best})=>[[result?.score,'Score'],[best,'Best'],[result?.moves,'Moves']],
+  retry:()=>'Play again',
+  after:()=>'start a fresh board',
+ },
+ ridge:{
+  name:'Ridge Run',
+  title:()=>'RUN OVER',
+  intro:()=>'Start a fresh run. Chase your best.',
+  stats:({result,best})=>[[result?.score,'Score'],[result?.gates,'Gates'],[best,'Best']],
+  retry:()=>'Play again',
+  after:()=>'start a new run',
+ },
+ sequence:{
+  name:'Sequence',
+  eyebrow:({level})=>`Sequence · Level ${level}`,
+  title:({won})=>won?'LEVEL CLEARED':'LEVEL NOT CLEARED',
+  intro:({won})=>won?'Lovely work. The next level is ready.':'Try this level again with a fresh board.',
+  stats:({result,level})=>[[result?.score,'Score'],[sequenceTarget(level),'Goal'],[Math.max(0,25-(result?.moves||0)),'Moves']],
+  retry:({won,level})=>won?`Play Level ${level+1}`:`Retry Level ${level}`,
+  after:({won,level})=>won?`play Level ${level+1}`:`retry Level ${level}`,
+ },
+};
+const paths={back:'<path d="M20 12H4m6-6-6 6 6 6"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',restart:'<path d="M4 9a9 9 0 1 1-1 7m1-13v6h6"/>',next:'<path d="M5 12h14m-6-6 6 6-6 6"/>',ranks:'<path d="M5 20V11m7 9V4m7 16V8"/>',arrow:'<path d="m9 5 7 7-7 7"/>',spark:'<path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/>'};
+const svg=name=>`<svg class="kg-icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
 const fmt=n=>Math.max(0,Number(n)||0).toLocaleString('en-AU');
-const coinArt=(index,cls='')=>`<span class="blue-coin-art coin-art-${index} ${cls}" aria-hidden="true"></span>`;
+const plural=(n,one,many)=>`${n} ${n===1?one:many}`;
+const coinArt=(index,cls='')=>`<span class="kg-coin kg-coin-${index} ${cls}" aria-hidden="true"></span>`;
+
+// What the result panel offers once a run ends. The coin shop only opens by itself after the
+// day's free plays for this game and every shared coin are spent.
+export function keepGoingOffer(free,coins){
+ if(free>0)return 'free';
+ if(coins>0)return 'coin';
+ return 'shop';
+}
 
 export function showReferenceResults({game='blocks',result=null,best=0,level=1,onReplay,onExit,onRanks,shopOnly=false,assetBase='assets/',motion=true}){
- document.querySelector('.reference-dialog')?.remove();
- const dialog=document.createElement('dialog');dialog.className=`reference-dialog reference-${game}`;dialog.setAttribute('aria-labelledby','rr-title');
- dialog.style.setProperty('--coin-atlas',`url("${assetBase}ui/blue-coins-atlas.png")`);
- dialog.style.setProperty('--mountains',`url("${assetBase}ui/result-mountains.webp")`);
- dialog.dataset.outcome=result?.won?'won':'lost';
- const won=Boolean(result?.won),name=names[game],title=game==='sequence'?(won?'LEVEL CLEARED':'LEVEL NOT CLEARED'):'RUN OVER';
- const metrics=game==='sequence'?[[result?.score,'Score'],[sequenceTarget(level),'Goal'],[Math.max(0,25-(result?.moves||0)),'Moves']]:[[result?.score,'Score'],[game==='ridge'?result?.gates:best,game==='ridge'?'Gates':'Best'],[game==='ridge'?best:result?.moves,game==='ridge'?'Best':'Moves']];
- dialog.innerHTML=`<div class="reference-panel"><button class="rr-close" aria-label="Close coin shop">${svg('close')}</button><section class="run-summary"><div class="run-art"><img src="${assetBase}ui/run-over-mascot.png" alt="Peak Haven bottle mascot taking a rest" width="1456" height="1056">${game==='sequence'?`<div class="sequence-wallet"><strong class="wallet-count">0</strong><span>SHARED COINS</span></div>${coinArt(2,'sequence-coin-cluster')}<small class="sequence-coin-rule">1 coin = 1 play<br>in any game</small>`:''}<span class="run-spark run-spark-one" aria-hidden="true">${svg('spark')}</span><span class="run-spark run-spark-two" aria-hidden="true">${svg('spark')}</span></div><div class="run-heading"><h2 class="run-game-name">${game==='sequence'?`Sequence · Level ${level}`:`<img src="${assetBase}ui/logo-${game==='blocks'?'peak-blocks':'ridge-run'}.png" alt="${name}" width="900" height="270">`}</h2><h1 id="rr-title">${title}</h1></div><p class="run-intro">${game==='sequence'?(won?'Lovely work. The next level is ready.':'Try this level again with a fresh board.'):game==='ridge'?'Start a fresh run. Chase your best.':''}</p><dl class="run-metrics">${metrics.map(([value,label])=>`<div><dt>${label}</dt><dd>${fmt(value)}</dd></div>`).join('')}</dl><div class="run-wallet">${coinArt(2)}<div><p><strong class="wallet-count">0</strong> <span>shared coins</span></p><small>1 coin = 1 play in any game</small></div></div><button class="rr-primary" id="rr-replay">${svg(game==='blocks'?'play':'restart')}<span>${won?'NEXT LEVEL':'KEEP GOING'}</span></button><p class="run-availability"></p><button class="rr-secondary" id="rr-ranks">${svg('ranks')}View ${name} ranks</button><button class="rr-secondary" id="rr-exit">${svg('back')}Back to arcade</button><button class="rr-coins-link" id="rr-get-coins">Get blue coins ${svg('arrow')}</button></section><section class="shop-content" aria-labelledby="shop-title"><header class="shop-heading"><img class="shop-mascot" src="${assetBase}ui/run-over-mascot.png" alt="" width="1456" height="1056"><div><h2 id="shop-title">KEEP GOING?</h2><p>One balance. Play any of the three games.</p></div></header><div class="shop-run-note">${name}${game==='sequence'?` · Level ${level}`:''} · ${title.toLowerCase()} · ${fmt(result?.score)} pts</div><div class="shop-wallet">${coinArt(0)}<span>Shared coins: <strong class="wallet-count">0</strong></span></div><fieldset class="coin-packs"><legend class="rr-sr-only">Choose a blue coin pack</legend>${COIN_PACKS.map((pack,index)=>`<label class="coin-pack ${pack.popular?'popular':''}"><input type="radio" name="coin-pack" value="${pack.coins}" ${pack.popular?'checked':''}><span class="pack-body">${pack.popular?'<span class="pack-popular">MOST POPULAR</span>':''}<span class="pack-count">${pack.coins}</span><span class="pack-unit">${pack.coins===1?'COIN':'COINS'}</span>${coinArt(index)}<span class="pack-price">${pack.price}</span><small class="pack-prototype">Prototype</small></span></label>`).join('')}</fieldset><p class="coin-rule">1 coin = 1 play • Works in all 3 games.</p><button class="rr-buy" id="rr-buy">BUY &amp; PLAY AGAIN</button><p class="purchase-note">Purchase confirmed first. Then ${game==='sequence'?`retry Level ${level}`:game==='ridge'?'start a new run':'start a fresh board'}.</p><button class="rr-shop-back" id="rr-shop-back">Back to arcade</button><p class="prototype-note">Prototype purchase · no payment is taken.</p><p class="rr-feedback" role="status" aria-live="polite"></p></section></div>`;
+ document.querySelector('.kg-dialog')?.remove();
+ const cfg=GAMES[game]||GAMES.blocks,won=Boolean(result?.won),ctx={won,level,result,best};
+ const dialog=document.createElement('dialog');
+ dialog.className=`kg-dialog kg-${game}`;
+ const mascot=cls=>`<img class="${cls}" src="${assetBase}ui/run-over-mascot.png" alt="" width="1456" height="1056" decoding="async">`;
+ const title=cfg.title(ctx),eyebrow=cfg.eyebrow?.(ctx)||cfg.name;
+ dialog.innerHTML=`
+<section class="kg-result" aria-labelledby="kg-result-title">
+ <div class="kg-art">${mascot('kg-mascot')}<span class="kg-spark kg-spark-a">${svg('spark')}</span><span class="kg-spark kg-spark-b">${svg('spark')}</span></div>
+ <header class="kg-head"><p class="kg-eyebrow">${eyebrow}</p><h1 id="kg-result-title" class="kg-title">${title}</h1><p class="kg-intro">${cfg.intro(ctx)}</p></header>
+ <dl class="kg-stats">${cfg.stats(ctx).map(([value,label])=>`<div><dt>${label}</dt><dd>${fmt(value)}</dd></div>`).join('')}</dl>
+ <button class="kg-primary" id="kg-replay" type="button">${svg(won?'next':'restart')}<span class="kg-primary-copy"><strong class="kg-primary-label"></strong><small class="kg-primary-note"></small></span></button>
+ <div class="kg-actions"><button class="kg-secondary" id="kg-ranks" type="button">${svg('ranks')}<span>View ${cfg.name} ranks</span></button><button class="kg-secondary" id="kg-exit" type="button">${svg('back')}<span>Back to arcade</span></button></div>
+ <div class="kg-wallet" hidden>${coinArt(0)}<p><strong class="kg-wallet-count">0</strong> shared coins<small>1 coin = 1 play</small></p><button class="kg-link" id="kg-get-coins" type="button">Get more ${svg('arrow')}</button></div>
+</section>
+<section class="kg-shop" aria-labelledby="kg-shop-title">
+ <button class="kg-close" type="button" aria-label="Close coin shop">${svg('close')}</button>
+ <header class="kg-shop-head">${mascot('kg-shop-mascot')}<div><h2 id="kg-shop-title" class="kg-shop-title">KEEP GOING?</h2><p>One balance. Play any of the three games.</p><span class="kg-pill">1 blue coin = 1 play</span></div></header>
+ <p class="kg-run-note">${eyebrow} · ${title.toLowerCase()} · ${fmt(result?.score)} pts</p>
+ <p class="kg-out-note">Your free plays are used up for today.</p>
+ <p class="kg-balance">${coinArt(0)}<span>Shared coins</span><strong class="kg-wallet-count">0</strong></p>
+ <fieldset class="kg-packs"><legend class="kg-sr-only">Choose a blue coin pack</legend>${COIN_PACKS.map((pack,index)=>`<label class="kg-pack${pack.popular?' is-popular':''}"><input type="radio" name="kg-pack" value="${pack.coins}"${pack.popular?' checked':''}><span class="kg-pack-body"><span class="kg-pack-badge">${pack.popular?'MOST POPULAR':''}</span><span class="kg-pack-count">${pack.coins}</span><span class="kg-pack-unit">${pack.coins===1?'PLAY COIN':'PLAY COINS'}</span>${coinArt(index,'kg-pack-coin')}<span class="kg-pack-price">${pack.price}</span><small class="kg-pack-proto">Prototype</small></span></label>`).join('')}</fieldset>
+ <p class="kg-rule">Coins work across all three games.</p>
+ <button class="kg-buy" id="kg-buy" type="button">${shopOnly?'GET BLUE COINS':'BUY &amp; PLAY AGAIN'}</button>
+ <p class="kg-buy-note">Purchase confirmed first. Then ${cfg.after(ctx)}.</p>
+ <button class="kg-ghost" id="kg-shop-exit" type="button">Back to arcade</button>
+ <p class="kg-proto-note">Prototype purchase · no payment is taken.</p>
+ <p class="kg-feedback" role="status" aria-live="polite"></p>
+</section>`;
  document.body.append(dialog);
  let busy=false;
- const feedback=message=>{dialog.querySelector('.rr-feedback').textContent=message;};
+ const $=s=>dialog.querySelector(s);
+ const feedback=message=>{$('.kg-feedback').textContent=message;};
  const refresh=()=>{
-  const w=playWallet(),free=freePlaysLeft(game);dialog.querySelectorAll('.wallet-count').forEach(el=>el.textContent=fmt(w.coins));
-  dialog.querySelector('.run-availability').textContent=free?`${won?'Next level':game==='sequence'?`Retry Level ${level}`:'Play again'} • ${free} free ${free===1?'play':'plays'} left`:w.coins?'Play again • Uses 1 shared coin':'Your free plays refresh tomorrow.';
-  dialog.querySelector('#rr-replay span').textContent=availablePlays(game)?won?'NEXT LEVEL':'KEEP GOING':'GET BLUE COINS';
+  const coins=playWallet().coins,free=freePlaysLeft(game),offer=keepGoingOffer(free,coins);
+  dialog.querySelectorAll('.kg-wallet-count').forEach(el=>el.textContent=fmt(coins));
+  dialog.dataset.offer=offer;
+  $('.kg-primary-label').textContent=offer==='shop'?'GET BLUE COINS':won?'NEXT LEVEL':'KEEP GOING';
+  $('.kg-primary-note').textContent=offer==='free'?`${cfg.retry(ctx)} • ${plural(free,'free play','free plays')} left`:offer==='coin'?`${cfg.retry(ctx)} • uses 1 coin`:'Free plays are used up for today';
+  // Coins only come into play once today's free plays are gone.
+  $('.kg-wallet').hidden=offer==='free';
  };
  const setMode=mode=>{
-  dialog.dataset.mode=mode;dialog.setAttribute('aria-labelledby',mode==='shop'?'shop-title':'rr-title');
-  dialog.querySelector('.rr-close').hidden=mode!=='shop';refresh();dialog.scrollTop=0;
-  requestAnimationFrame(()=>dialog.querySelector(mode==='shop'?'input:checked':'#rr-replay')?.focus({preventScroll:true}));
+  dialog.dataset.mode=mode;
+  dialog.setAttribute('aria-labelledby',mode==='shop'?'kg-shop-title':'kg-result-title');
+  refresh();dialog.scrollTop=0;
+  requestAnimationFrame(()=>$(mode==='shop'?'input:checked':'#kg-replay')?.focus({preventScroll:true}));
  };
  const close=()=>{dialog.close();dialog.remove();};
  const exit=()=>{close();onExit?.();};
  const replay=()=>{
   if(busy)return;
   if(!availablePlays(game)){setMode('shop');return;}
-  const use=consumePlay(game);if(!use.ok){setMode('shop');feedback(use.reason==='storage'?'Your browser could not save play credits. Please allow site storage and try again.':'No plays left. Choose a blue coin pack.');return;}
+  const use=consumePlay(game);
+  if(!use.ok){setMode('shop');feedback(use.reason==='storage'?'Your browser could not save play credits. Please allow site storage and try again.':'No plays left. Choose a blue coin pack.');return;}
   busy=true;close();onReplay?.();
  };
- dialog.querySelector('#rr-replay').onclick=replay;
- dialog.querySelector('#rr-get-coins').onclick=()=>setMode('shop');
- dialog.querySelector('#rr-exit').onclick=exit;dialog.querySelector('#rr-shop-back').onclick=exit;
- dialog.querySelector('#rr-ranks').onclick=()=>{close();onRanks?.(game);};
- dialog.querySelector('.rr-close').onclick=()=>shopOnly?exit():setMode('result');
- dialog.addEventListener('cancel',event=>{event.preventDefault();if(dialog.dataset.mode==='shop'&&!shopOnly)setMode('result');else if(shopOnly)exit();else exit();});
- dialog.querySelector('#rr-buy').textContent=shopOnly?'GET BLUE COINS':'BUY & PLAY AGAIN';
- dialog.querySelector('#rr-buy').onclick=()=>{
+ $('#kg-replay').onclick=replay;
+ $('#kg-get-coins').onclick=()=>setMode('shop');
+ $('#kg-exit').onclick=exit;$('#kg-shop-exit').onclick=exit;
+ $('#kg-ranks').onclick=()=>{close();onRanks?.(game);};
+ $('.kg-close').onclick=()=>shopOnly?exit():setMode('result');
+ dialog.addEventListener('cancel',event=>{event.preventDefault();if(dialog.dataset.mode==='shop'&&!shopOnly)setMode('result');else exit();});
+ $('#kg-buy').onclick=()=>{
   if(busy)return;
-  const coins=Number(dialog.querySelector('input:checked')?.value)||10;
-  const purchase=simulateCoinPurchase(coins);if(!purchase.ok){feedback('Your browser could not save the coins. No payment was taken. Please allow site storage and try again.');return;}
-  refresh();if(shopOnly){feedback(`${coins} prototype blue coins added. No payment was taken.`);return;}
+  const coins=Number($('input:checked')?.value)||10;
+  const purchase=simulateCoinPurchase(coins);
+  if(!purchase.ok){feedback('Your browser could not save the coins. No payment was taken. Please allow site storage and try again.');return;}
+  refresh();
+  if(shopOnly){feedback(`${coins} prototype blue coins added. No payment was taken.`);return;}
   replay();
  };
- if(shopOnly){dialog.classList.add('shop-only');dialog.querySelector('.shop-run-note').hidden=true;}
- dialog.showModal();setMode(shopOnly||!availablePlays(game)?'shop':'result');
- if(motion&&!matchMedia('(prefers-reduced-motion: reduce)').matches)dialog.animate([{opacity:.65,transform:'translateY(12px) scale(.98)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:260,easing:'cubic-bezier(.16,1,.3,1)'});
+ if(shopOnly)dialog.classList.add('kg-shop-only');
+ dialog.showModal();
+ setMode(shopOnly||keepGoingOffer(freePlaysLeft(game),playWallet().coins)==='shop'?'shop':'result');
+ if(motion&&!matchMedia('(prefers-reduced-motion: reduce)').matches)dialog.animate([{opacity:.65,transform:'translateY(12px) scale(.98)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.16,1,.3,1)'});
  return {close,dialog};
 }
