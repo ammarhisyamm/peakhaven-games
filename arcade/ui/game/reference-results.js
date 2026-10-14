@@ -49,6 +49,9 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
  const cfg=GAMES[game]||GAMES.blocks,won=Boolean(result?.won),ctx={won,level,result,best};
  const dialog=document.createElement('dialog');
  dialog.className=`kg-dialog kg-${game}`;
+ const assetUrl=file=>new URL(file,new URL(assetBase,document.baseURI)).href;
+ dialog.style.setProperty('--kg-coin-atlas',`url("${assetUrl('ui/blue-coins-atlas.png')}")`);
+ dialog.style.setProperty('--kg-mountains',`url("${assetUrl('ui/result-mountains.webp')}")`);
  const mascot=cls=>`<img class="${cls}" src="${assetBase}ui/run-over-mascot.png" alt="" width="1456" height="1056" decoding="async">`;
  const title=cfg.title(ctx),eyebrow=cfg.eyebrow?.(ctx)||cfg.name;
  dialog.innerHTML=`

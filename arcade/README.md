@@ -104,3 +104,16 @@ Running the competition (Supabase SQL editor):
 insert into public.invites (code, max_uses, note) values ('PEAK-7Q2X', 1, 'for Sam');      -- new invite
 select * from public.runs where flagged or status = 'rejected' order by updated_at desc;     -- review
 ```
+
+## Temporary guest prototype
+
+The invite/sign-in screen also offers **Continue as guest** with a player icon.
+Guest mode lasts for the current browser tab (including reloads) and uses local
+play credits, scores and demo standings. It creates no account, sends no ranked
+start/finish/profile requests, and uses no competition token. The footer’s
+**Sign in** action returns to the existing invite flow; a real sign-in takes
+precedence over a saved guest session.
+
+Keep Going uses the existing snowy mountain asset behind its shop header and
+result mascot. Coin and mountain URLs resolve from the supplied asset base, so
+opening the component from Play or the game iframe loads the same materials.

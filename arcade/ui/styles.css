@@ -64,3 +64,9 @@ body[data-page="play"] .attempt-note{margin-top:32px;justify-content:center}
 /* Competition sign-in and live leaderboard */
 .join-panel{max-width:460px;margin:14px auto 28px;display:grid;gap:12px}.join-panel h2{margin:0}.join-panel form{display:grid;gap:10px}.join-panel .name-field{border-top:0;padding-top:0}.join-panel .primary{width:100%;margin:4px 0 0}.join-note{min-height:20px;margin:0;color:#0052b2;font-weight:600;font-size:14px}.join-note.error{color:#b42318}.join-small{margin:0;color:var(--muted);font-size:13px;text-align:center}
 tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.footer-signout{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;padding:0}
+
+/* Temporary guest entry uses the established form actions and icon system. */
+.guest-entry{display:grid;gap:8px;padding-top:16px;border-top:1px solid var(--line)}
+.guest-continue{width:100%;min-height:48px;gap:10px}
+.guest-continue svg{width:20px;height:20px;flex:none}
+#guest-sign-in{min-height:44px;padding:8px 12px}
