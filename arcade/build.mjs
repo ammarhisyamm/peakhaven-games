@@ -31,7 +31,10 @@ async function validateModules(directory) {
   }
 }
 await validateModules(output);
-for (const path of ['index.html', 'app.js', 'styles.css', 'game/index.html', 'game/puzzle-games.js', 'game/tryout-games.js']) {
+// Supabase's browser bundle, for sign-in. Copied after validation because it's a prebuilt third-party file.
+await mkdir(join(output, 'vendor'), {recursive: true});
+await cp(join(root, 'node_modules', '@supabase', 'supabase-js', 'dist', 'umd', 'supabase.js'), join(output, 'vendor', 'supabase.js'));
+for (const path of ['index.html', 'app.js', 'account.js', 'vendor/supabase.js', 'styles.css', 'game/index.html', 'game/puzzle-games.js', 'game/tryout-games.js']) {
   await stat(join(output, path));
 }
 let commit = process.env.VERCEL_GIT_COMMIT_SHA;

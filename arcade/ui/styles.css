@@ -61,3 +61,6 @@ body[data-page="play"] .attempt-note{margin-top:32px;justify-content:center}
 @media(max-width:900px){.games-grid{gap:24px}}
 @media(max-width:600px){.games-grid{grid-template-columns:minmax(0,1fr);gap:28px}.game-choice{max-width:420px;margin-inline:auto}.game-choice-copy{padding-top:4px}.game-choice-title{font-size:21px}.game-choice-subtitle{font-size:14px;margin-top:6px}.play-heading{margin-bottom:16px}body[data-page="play"] .attempt-note{margin-top:28px;justify-content:flex-start}}
 @media(prefers-reduced-motion:reduce){.game-choice-art{transition:none}.game-choice:hover .game-choice-art{transform:none}}
+/* Competition sign-in and live leaderboard */
+.join-panel{max-width:460px;margin:14px auto 28px;display:grid;gap:12px}.join-panel h2{margin:0}.join-panel form{display:grid;gap:10px}.join-panel .name-field{border-top:0;padding-top:0}.join-panel .primary{width:100%;margin:4px 0 0}.join-note{min-height:20px;margin:0;color:#0052b2;font-weight:600;font-size:14px}.join-note.error{color:#b42318}.join-small{margin:0;color:var(--muted);font-size:13px;text-align:center}
+tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.footer-signout{background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;padding:0}
