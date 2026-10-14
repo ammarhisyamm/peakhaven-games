@@ -28,8 +28,11 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .in-game .hud strong{font-size:clamp(16px,calc(30px - var(--digits,1)*3px),27px);overflow:visible;text-overflow:clip;font-weight:900;text-shadow:0 1px 2px #06349e}
 .in-game .scene-blocks .play-panel{padding-inline:max(var(--game-gutter),env(safe-area-inset-right));gap:12px}
 .in-game .block-board{border-radius:18px;background:#042449e8;border:2px solid #68f1ff;gap:4px;padding:8px;box-shadow:0 5px 18px #00142a70,inset 0 1px 8px #49dbff33}
-.in-game .block-cell{border-radius:7px;background:#092c53c9;border-color:#32679b;box-shadow:inset 0 1px 2px #70c8ee22}
+/* background-color only: the shorthand would wipe the .block-N tile image, leaving placed pieces invisible. */
+.in-game .block-cell{border-radius:7px;background-color:#092c53c9;border-color:#32679b;box-shadow:inset 0 1px 2px #70c8ee22}
 .in-game .block-cell.filled{background-color:transparent;border:0;box-shadow:none}
+.in-game .block-cell.ghost{background-color:#40ecff59}
+.in-game .block-cell.clear-preview:not(.filled){background-color:#40ecff40}
 .in-game .block-tray{background:#073774a6;border:1px solid #90eaff;border-radius:16px;padding:8px;min-height:80px}
 .in-game .block-tray .shape-slot{border-radius:11px;background:transparent;border:1px solid #6acaff44;min-height:62px;flex:1}
 .in-game .block-tray .shape-slot[aria-pressed=true]{border:2px solid #ffde68;background:#147fd72e;box-shadow:none}

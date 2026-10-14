@@ -10,8 +10,8 @@ The original crystal-cave, alpine-sunrise and brass crystal-laboratory backgroun
 | --- | --- |
 | Arena | Centered portrait column, maximum 480px; iframe spans the viewport so desktop dialogs can extend outside it |
 | Gutters | 20px; 18px at 420px and below; 16px at 370px and below |
-| Result dialog | Maximum 380px width; 24px corners; cyan rim; navy `#06264ec4` with 8px internal backdrop blur |
-| Shop dialog | Snowy white surface; desktop breakpoint 760px; maximum width 720px Blocks, 620px Ridge, 660px Sequence |
+| Result dialog | Maximum 400px width; 24px padding (16px at 370px and below); 24px corners; cyan rim; navy glass with 10px backdrop blur |
+| Shop dialog | Snowy white surface; 440px on phones, 680px from 720px wide for every game |
 | Dialog safety | Maximum viewport height minus 40px (32px on narrow phones), internal scroll, no horizontal overflow |
 | Type | Locally hosted Inter for live copy; raster ice wordmarks for Blocks/Ridge; live Sequence level label |
 | HUD | Three glossy cyan/blue metrics, 64px minimum card height; tabular values scale by digit count; values above 10,000 use compact notation with full accessible label |
@@ -19,7 +19,13 @@ The original crystal-cave, alpine-sunrise and brass crystal-laboratory backgroun
 | Focus | Gold 3px outline, 4px offset |
 | Motion | Result entrance 260ms, `cubic-bezier(.16,1,.3,1)`; respects device preference and saved decorative-motion setting |
 
-Blue results show actual final statistics above retry, ranks and exit actions. The frozen live board remains underneath. Sequence places its shared-coin count and overlapping coin cluster at the upper right beside the mascot.
+Blue results show actual final statistics above retry, ranks and exit actions. The frozen live board remains underneath.
+
+### One Keep Going component
+
+`ui/game/reference-results.js` renders a single Keep Going component for all three games. The structure, sizes and spacing are identical; each game only supplies its copy and statistics (`GAMES` config): eyebrow (game name, plus level for Sequence), title, one intro line, three stats (Blocks Score/Best/Moves, Ridge Score/Gates/Best, Sequence Score/Goal/Moves) and the retry wording. Result card max 400px; shop max 440px on phones and 680px from 720px viewport width, where the four packs sit in one row (2×2 below that).
+
+The coin shop is gated on the play balance (`keepGoingOffer`): while free plays remain, the result only offers the free replay and shows no coin wallet; once free plays are gone and shared coins remain, the replay uses a coin and a wallet row with "Get more" appears; with no free plays and no coins, the KEEP GOING? shop opens directly. Desktop and mobile share the same rule.
 
 Desktop white shops pair run statistics with selectable packs. Blocks uses four packs across. Ridge uses two columns with horizontal quantity/art on desktop and vertical quantity, unit, coin art and price on mobile. Sequence uses two columns with vertical contents on desktop and four packs across on mobile. These bounded viewport adaptations preserve the spacing and touch-target guidelines; short devices scroll rather than compressing controls. Small pack-unit/prototype captions are auxiliary labels, not a general body-text scale.
 
