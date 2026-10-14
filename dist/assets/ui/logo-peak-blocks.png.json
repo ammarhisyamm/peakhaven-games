@@ -1,0 +1,12 @@
+{
+  "tool": "image_gen.imagegen",
+  "mode": "built-in",
+  "prompt": "Use case: background-extraction. Extract/recreate ONLY the PEAK BLOCKS game wordmark from this supplied reference as a complete transparent-alpha logo asset. Preserve the large faceted ice-crystal lettering, bright white tops and cyan cobalt facets exactly. Text verbatim: \"PEAK BLOCKS\". Output a wide horizontal game logo with full lettering, close matching the reference design, with generous transparent edges. No extra lettering, no RUN OVER label, no mascot, no mountains scenery, no panel, buttons, shadows field, background or game pieces. Glossy high quality 3D game logo, transparent background.",
+  "reference": "/Users/mac/Downloads/PH Arcade UX/Peak Blocks/peak-blocks-keep-going-mobile.png",
+  "sourcePath": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-8699f5bb-6d30-459d-8088-a787445dfcbb.png",
+  "sourceSha256": "5c32d3efa0a1130160e7a2bf140c02f81e2b2764bedc49c0381641949c5235f0",
+  "derivation": "Trimmed transparent canvas margins; proportional 900px resize.",
+  "width": 900,
+  "height": 152,
+  "transparent": true
+}

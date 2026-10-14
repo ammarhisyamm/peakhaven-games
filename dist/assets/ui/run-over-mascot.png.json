@@ -1,0 +1,12 @@
+{
+  "tool": "image_gen.imagegen",
+  "mode": "built-in",
+  "prompt": "Use case: background-extraction. Production game sprite, transparent alpha background. Recreate ONLY the seated defeated silver-capped Peak Haven glass vial mascot and the one blue coin from the top left of the reference. Exactly preserve this character's shape, seated pose, tilted silver cap, navy label with official white Peak Haven arrow/molecule mark, blue round hands and feet, pink cheeks, black X eyes and tiny open mouth. Center complete character and coin with ample transparent margin. No mountains, backdrop, panel, glow field, text, letters or controls. High quality glossy 3D game render closely matching the supplied illustration. Transparent background, clean full silhouette, do not crop.",
+  "reference": "/Users/mac/Downloads/PH Arcade UX/universal-play-coins-sheet.png",
+  "sourcePath": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-24c91899-07de-4b07-b387-7eea0a689bd8.png",
+  "sourceSha256": "68da3bc35581fbf49df128819aefb7ade50f96d4821e7005b9d146b476515d81",
+  "derivation": "Copied without content edits.",
+  "width": 1448,
+  "height": 1086,
+  "transparent": true
+}

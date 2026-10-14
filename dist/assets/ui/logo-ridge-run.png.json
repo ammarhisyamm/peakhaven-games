@@ -1,0 +1,12 @@
+{
+  "tool": "image_gen.imagegen",
+  "mode": "built-in",
+  "prompt": "Use case: background-extraction. Extract/recreate ONLY the RIDGE RUN game wordmark from this supplied reference as a complete transparent-alpha logo asset. Preserve the italic white/cyan-to-cobalt lettering with a small angular blue mountain above, dark navy outline exactly. Text verbatim: \"RIDGE RUN\". Output a wide horizontal game logo with full lettering, close matching the reference design, with generous transparent edges. No extra lettering, no RUN OVER label, no mascot, no mountains scenery, no panel, buttons, shadows field, background or game pieces. Glossy high quality 3D game logo, transparent background.",
+  "reference": "/Users/mac/Downloads/PH Arcade UX/Ridge Run/ridge-run-mobile.png",
+  "sourcePath": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-6803663d-ce6b-4df4-a554-c6dfc0f8a2ba.png",
+  "sourceSha256": "3dac30a00c1c894e5c859bda4b836d02b38b3789314f779855589766cf4eb82c",
+  "derivation": "Trimmed transparent canvas margins; proportional 900px resize.",
+  "width": 900,
+  "height": 241,
+  "transparent": true
+}

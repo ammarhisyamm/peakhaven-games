@@ -1,0 +1,12 @@
+{
+  "tool": "image_gen.imagegen",
+  "mode": "built-in",
+  "prompt": "Use case: background-extraction. Production game asset atlas, 2 columns and 2 rows, each quadrant equally sized, genuine transparent alpha background. Extract/recreate the four glossy electric-blue coin groups from this reference preserving EXACTLY the blue metallic coins, cyan beveled rims and white Peak Haven arrow/molecule brand mark. Top-left: one tilted coin. Top-right: a neat stack of five coins. Bottom-left: tall coin stack with one leaning coin in front for the ten coin pack. Bottom-right: two piles with leaning front coin for the twenty-five coin pack. Center each full group within its own quadrant with 12 percent empty transparent margins on all sides; no overlap between quadrants. All groups viewed from the same 3/4 angle and rendered in matching glossy 3D game style. NO lettering, numbers, panels, mountains, background, buttons or borders. Only four distinct complete coin groups. Square atlas composition.",
+  "reference": "/Users/mac/Downloads/PH Arcade UX/universal-play-coins-sheet.png",
+  "sourcePath": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-06b1e9b7-ef4f-4160-a3c1-83434afd5e87.png",
+  "sourceSha256": "6f65956ad3ef8c1292a8066d1c89d8a71a9dd5bfa53efb75867aea8e4690f2e8",
+  "derivation": "Copied without content edits.",
+  "width": 1254,
+  "height": 1254,
+  "transparent": true
+}
