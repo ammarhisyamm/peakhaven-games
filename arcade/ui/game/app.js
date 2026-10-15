@@ -41,14 +41,38 @@ function rankedResults(id,level){return {subscribe(fn){rankedListeners.add(fn);f
  async nextLevel(){rankedListeners.clear();if(await rankedNextLevel(id,level+1))beginGame(id,level+1);else{toast('This run could not continue. Your verified score still counts.');route('freeplay');}}};}
 // Phone haptics. Android vibrates; on iPhone, Safari has no vibration API, but toggling a hidden switch control gives
 // a light system tap (iOS 18 and later), which is used for the same moments. Off with the Vibration setting.
-const HAPTICS={drop:[8],crystal:[12],bond:[12],perfect:[20],merge:[28],invalid:[10,40,10],miss:[35,45,35],win:[18,60,30]};
+const HAPTICS={drop:[8],crystal:[12],bond:[12],perfect:[20],merge:[28],invalid:[10,40,10],miss:[35,45,35],win:[18,60,30],combo2:[16,20,24],combo3:[18,24,36]};
 let hapticAt=0,hapticSwitch=null;
-function haptic(type){const pattern=active==='ridge'&&type==='perfect'?[8]:HAPTICS[type];// every Ridge gate is a lighter tick
- if(!pattern||data.haptics===false)return;const now=performance.now();if(now-hapticAt<45)return;hapticAt=now;
+function haptic(type,force=false){const pattern=active==='ridge'&&type==='perfect'?[8]:HAPTICS[type];// every Ridge gate is a lighter tick
+ if(!pattern||data.haptics===false)return;const now=performance.now();if(!force&&now-hapticAt<45)return;hapticAt=now;
  try{if(navigator.vibrate){navigator.vibrate(pattern);return;}
   if(!hapticSwitch){const label=document.createElement('label');label.setAttribute('aria-hidden','true');label.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden';label.innerHTML='<input type="checkbox" switch tabindex="-1">';document.body.append(label);hapticSwitch=label;}
   hapticSwitch.click();}catch{/* Haptics are optional. */}}
 
+// First-play hints: in a player's first two games of Peak Blocks, Sequence and Ridge Run, a touch marker shows the
+// opening gesture (drag a piece, swap two crystals, tap to fly). It goes on the first touch and never affects play.
+const HINT_GAMES={blocks:'Drag a piece onto the board',sequence:'Swipe a crystal to swap it',ridge:'Tap anywhere to fly'},HINT_RUNS=2;
+let hintCleanup=null;
+function clearHint(){hintCleanup?.();hintCleanup=null;}
+function showFirstPlayHint(id){
+ clearHint();if(!HINT_GAMES[id]||!engine)return;
+ data.hintRuns=data.hintRuns&&typeof data.hintRuns==='object'?data.hintRuns:{};if((data.hintRuns[id]||0)>=HINT_RUNS)return;
+ const world=$('.game-world');if(!world)return;
+ const wr=world.getBoundingClientRect(),pt=(x,y)=>[x-wr.left,y-wr.top];let from,to=null;
+ if(id==='blocks'){const slot=world.querySelector('[data-shape]:not([disabled])'),board=$('#block-board');if(!slot||!board)return;const a=slot.getBoundingClientRect(),b=board.getBoundingClientRect();from=pt(a.left+a.width/2,a.top+a.height/2);to=pt(b.left+b.width/2,b.top+b.height/2);}
+ else if(id==='sequence'){const pair=engine.findMove?.(),canvas=$('#game-canvas');if(!pair||!canvas||!engine.geometry)return;const g=engine.geometry(),r=canvas.getBoundingClientRect(),k=engine.scale,cell=i=>pt(r.left+(g.x+(i%7+.5)*g.cell)*k,r.top+(g.y+(Math.floor(i/7)+.5)*g.cell)*k);from=cell(pair[0]);to=cell(pair[1]);}
+ else{const canvas=$('#game-canvas');if(!canvas)return;const r=canvas.getBoundingClientRect();from=pt(r.left+r.width*.5,r.top+r.height*.6);}
+ data.hintRuns[id]=(data.hintRuns[id]||0)+1;save();
+ const dot=document.createElement('div'),caption=document.createElement('div');
+ dot.className='hint-touch';dot.setAttribute('aria-hidden','true');dot.style.left=`${from[0]}px`;dot.style.top=`${from[1]}px`;
+ caption.className='hint-caption';caption.textContent=HINT_GAMES[id];caption.style.top=`${Math.max(84,from[1]-(id==='blocks'?92:70))}px`;
+ world.append(dot,caption);
+ const dx=to?to[0]-from[0]:0,dy=to?to[1]-from[1]:0,base='translate(-50%,-50%)';
+ const anim=!motionAllowed()?null:to?dot.animate([{transform:`${base} scale(.8)`,opacity:0},{transform:`${base} scale(1)`,opacity:1,offset:.15},{transform:`${base} translate(${dx}px,${dy}px)`,opacity:1,offset:.7},{transform:`${base} translate(${dx}px,${dy}px)`,opacity:0}],{duration:1800,iterations:Infinity,easing:'ease-in-out'})
+  :dot.animate([{transform:`${base} scale(1)`},{transform:`${base} scale(.75)`,offset:.25},{transform:`${base} scale(1)`}],{duration:900,iterations:Infinity});
+ let timer=0;const done=()=>{anim?.cancel();dot.remove();caption.remove();world.removeEventListener('pointerdown',done,true);clearTimeout(timer);if(hintCleanup===done)hintCleanup=null;};
+ timer=setTimeout(done,15000);world.addEventListener('pointerdown',done,true);hintCleanup=done;
+}
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3500);}
 function earn(id){if(data.badges.includes(id))return false;data.badges.push(id);return true;}
 function streak(){let count=0,date=new Date();if(!data.days.includes(localDay(date)))date.setDate(date.getDate()-1);while(data.days.includes(localDay(date))){count++;date.setDate(date.getDate()-1);}return count;}
@@ -121,17 +145,22 @@ function mountGame(id,level=null){
  const options={motion:motionAllowed(),level:runningLevel,skin:SKINS.findIndex(s=>s.id===data.skin),...(ranked?{seed:ranked.seed}:{})};
  engine=id==='blocks'?startBlocks($('.game-world'),cb,options):id==='mahjong'?startMahjong($('.game-world'),cb,options):id==='tower'?new TowerEngine($('#game-canvas'),cb,options):id==='merge'?new MergeEngine($('#game-canvas'),cb,options):id==='orbit'?new OrbitEngine($('#game-canvas'),cb,options):id==='ridge'?new RidgeEngine($('#game-canvas'),cb,options):id==='bond'?new BondEngine($('#game-canvas'),cb,options):new SequenceEngine($('#game-canvas'),cb,options);
  $('#game-canvas')?.focus({preventScroll:true});
+ setTimeout(()=>{if(active===id)showFirstPlayHint(id);},700);
 }
 function blockImpactFeedback(label){
- if(!/LINE (?:CLEAR|BLAST)/.test(label))return label;
- const chain=parseInt($('#hud-combo')?.textContent,10)||1,board=$('#block-board');
+ if(!/LINE (?:CLEAR|BLAST)|PERFECT CLEAR/.test(label))return label;
+ const chain=parseInt($('#hud-combo')?.textContent,10)||1,board=$('#block-board'),lines=parseInt(label,10)||1,perfect=label.startsWith('PERFECT');
  if(board&&motionAllowed()){
   board.classList.remove('block-clearing','block-combo-2','block-combo-3');void board.offsetWidth;board.classList.add('block-clearing');
-  if(chain>1)board.classList.add(chain>=3?'block-combo-3':'block-combo-2');
+  if(chain>1||perfect)board.classList.add(chain>=3||perfect?'block-combo-3':'block-combo-2');
   setTimeout(()=>board.classList.remove('block-clearing','block-combo-2','block-combo-3'),520);
-  try{navigator.vibrate?.(chain>=3?[18,24,36]:chain>1?[16,20,24]:18);}catch{}
  }
- return chain>=3?`SUPER ×${chain}!`:chain>1?`COMBO ×${chain}!`:label;
+ haptic(perfect||chain>=3?'combo3':chain>1||lines>1?'combo2':'perfect',true);
+ if(perfect)return 'PERFECT CLEAR!';
+ // Combos climb: consecutive clears escalate the callout, and a multi-line clear says so too.
+ const combo=chain>=5?`UNSTOPPABLE ×${chain}!`:chain===4?'MEGA ×4!':chain===3?'SUPER ×3!':chain===2?'COMBO ×2!':'';
+ const multi=lines>=4?'QUAD':lines===3?'TRIPLE':lines===2?'DOUBLE':'';
+ return combo&&multi?`${multi} · ${combo}`:combo||(multi?`${multi} BLAST!`:label);
 }
 function impact(label,kind){const el=$('#impact-label');if(!el)return;if(kind==='blocks')label=blockImpactFeedback(label);el.textContent=label;el.className=`impact-label ${kind}`;if(motionAllowed()){el.getAnimations().forEach(a=>a.cancel());el.animate([{opacity:0,transform:'translateY(16px) scale(.65)'},{opacity:1,transform:'translateY(-8px) scale(1.12)',offset:.25},{opacity:1,transform:'translateY(-16px) scale(1)',offset:.65},{opacity:0,transform:'translateY(-44px) scale(1)'}],{duration:1000,easing:'cubic-bezier(.23,1,.32,1)'});$('.canvas-wrap')?.animate([{transform:'translateY(0)'},{transform:'translateY(3px)'},{transform:'translateY(0)'}],{duration:180});}else{el.style.opacity=1;setTimeout(()=>el.style.opacity=0,700);}}
 function confetti(){if(!motionAllowed())return;const wrap=document.createElement('div');wrap.className='confetti';wrap.setAttribute('aria-hidden','true');app.append(wrap);for(let i=0;i<42;i++){const p=document.createElement('i');p.style.background=COLORS[i%6];p.style.left=`${Math.random()*100}%`;wrap.append(p);p.animate([{transform:`translateY(-30px) rotate(0deg)`,opacity:1},{transform:`translate(${(Math.random()-.5)*160}px, ${window.innerHeight+50}px) rotate(${Math.random()*720}deg)`,opacity:0}],{duration:1800+Math.random()*1000,delay:Math.random()*350,easing:'cubic-bezier(.2,.5,.5,1)',fill:'forwards'});}setTimeout(()=>wrap.remove(),3200);}
@@ -143,7 +172,7 @@ function animatePour(from,to,color){if(!motionAllowed())return;const a=$(`[data-
 
 function undoSort(){if(!sortState.history.length||sortState.ended)return;sortState.tubes=sortState.history.pop();sortState.moves=Math.max(0,sortState.moves-1);sortState.selected=null;renderTubes();sound('undo');$('#game-message').textContent='One step back. Plenty of room to try again.';}
 function hintSort(){if(sortState.ended)return;const move=findHint(sortState.tubes);if(move){sortState.selected=move[0];renderTubes();sound('hint');$('#game-message').textContent=`Try pouring tube ${move[0]+1} into tube ${move[1]+1}.`;}else{sound('invalid');$('#game-message').textContent='Try undoing a pour to free an empty tube. You can always restart.';}}
-function stopGame(){gameAudio.stop();loadTicket++;engine?.destroy();engine=null;active=null;sortState=null;}
+function stopGame(){clearHint();gameAudio.stop();loadTicket++;engine?.destroy();engine=null;active=null;sortState=null;}
 function pauseGame(instructions=false){if(!active)return;engine?.pause();const id=active;showModal(`<div class="modal-emblem">${icon(instructions?'help':'leaf')}</div><h2 id="dialog-title">${instructions?games[id].name:'Take a little breath.'}</h2>${instructions?steps(id):'<p>Your game is right here when you’re ready.</p>'}<button class="button" id="resume-game">${icon('play')}Keep playing</button>${id!=='sort'?'<button class="button secondary" id="finish-run">Finish this run</button>':''}<button class="text-button" id="pause-instructions">${icon('help')}How to play</button><button class="button ghost" id="leave-game">Back to arcade</button>`,()=>engine?.pause(false));$('#resume-game').insertAdjacentHTML('beforebegin',soundSettingControl('pause-sound-setting'));bindSoundControl('pause-sound-setting');$('#resume-game').onclick=()=>{closeModal();engine?.pause(false);};if($('#finish-run'))$('#finish-run').onclick=()=>{closeModal();engine?.finish();};$('#pause-instructions').onclick=()=>pauseGame(true);$('#leave-game').onclick=()=>openLeave('freeplay');}
 function openLeave(destination){engine?.pause();showModal(`<h2 id="dialog-title">Head back to the arcade?</h2><p>${active&&rankedRun(active)?'This run will end and the play is used. Choose Finish this run in the pause menu to keep your score.':'This run will end. You can start a fresh game whenever you like.'}</p><button class="button" id="confirm-leave">Back to ${destination==='journey'?'my journey':destination.startsWith('help')?'instructions':'arcade'}</button><button class="button secondary" id="cancel-leave">Keep playing</button>`,()=>engine?.pause(false));$('#confirm-leave').onclick=()=>{closeModal();route(destination);};$('#cancel-leave').onclick=()=>{closeModal();engine?.pause(false);};}
 const RETRY_COIN_COST=50,DEMO_TOPUP=100;
@@ -180,7 +209,7 @@ function finishGame(id,result){
  const detailLabel=id==='tower'?'Vials':id==='merge'?'Merges':id==='mahjong'?'Pairs':id==='orbit'?'Hoops':id==='ridge'?'Gates':id==='bond'?'Bonds':'Moves';
  const secondaryLabel=puzzleLevelGame?'Back to levels':'Choose another game';
  if(['blocks','ridge','sequence'].includes(id)){
-  rankedState=null;showReferenceResults({game:id,result,best:data.best[id],level:playedLevel,motion:motionAllowed(),ranked:rankedMode?rankedResults(id,playedLevel):null,onReplay:()=>beginGame(id,won?playedLevel+1:playedLevel),onExit:()=>route('freeplay'),onRanks:()=>{if(window.parent!==window)window.parent.postMessage({type:'ph-game-ranks',game:id},location.origin);else route('freeplay');}});
+  clearHint();rankedState=null;showReferenceResults({game:id,result,best:data.best[id],previousBest,level:playedLevel,motion:motionAllowed(),ranked:rankedMode?rankedResults(id,playedLevel):null,onReplay:()=>beginGame(id,won?playedLevel+1:playedLevel),onExit:()=>route('freeplay'),onRanks:()=>{if(window.parent!==window)window.parent.postMessage({type:'ph-game-ranks',game:id},location.origin);else route('freeplay');}});
   if(won)confetti();return;
  }
  shell(`<section class="result-screen ${won?'victory':'retry'} ${endless?'endless-result':''}"><div class="result-scene"><div class="victory-halo"></div><img src="assets/bottle-mascot.webp" alt="Your cheering bottle mascot"><span class="victory-medal">${icon(won?'trophy':endless?'star':'leaf')}</span><span class="result-star star-one">${icon('spark')}</span><span class="result-star star-two">${icon('spark')}</span></div><h1>${title}</h1><span class="result-status">${status}</span><p>${won?'Lovely work. The next puzzle is ready when you are.':endless?'Every run makes the next one more satisfying. Your best is saved on this device.':'You’re close. Spend coins to give this level another go.'}</p><div class="result-details"><div><strong>${fmt(result.score)}</strong><small>Score</small></div><div class="${newRecord?'record-stat':''}"><strong>${fmt(data.best[id])}</strong><small>${newRecord?'New best':'Personal best'}</small></div><div><strong>${fmt(detailValue)}</strong><small>${detailLabel}</small></div></div>${won&&puzzleLevelGame?`<div class="unlock-note">${icon('check')}Level ${playedLevel+1} unlocked. Keep your momentum.</div>`:''}<div class="result-loot">${icon('coin')} +${fmt(loot.coins+runCoins+dailyBonus)} coins${loot.gems?` ${icon('gem')} +${loot.gems} gem`:''}</div><div class="result-actions"><button class="button" id="result-continue">${icon(won?'arrow':'restart')}${won?'Next level':`Retry · ${RETRY_COIN_COST} coins`}</button><button class="button secondary" id="result-home">${secondaryLabel}</button></div></section>`,'game',id);

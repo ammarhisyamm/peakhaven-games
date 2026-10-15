@@ -62,7 +62,14 @@ export function rankedLine(state,name){
  if(b.rank===1)return `You’re top of this month’s ${name} board!`;
  return `#${b.rank} of ${b.players} on this month’s ${name} board`;
 }
-export function showReferenceResults({game='blocks',result=null,best=0,level=1,onReplay,onExit,onRanks,shopOnly=false,assetBase='assets/',motion=true,ranked=null}){
+// A line for the end of an endless run: a new personal best, or how close it came to one.
+export function closeCall(game,result,previousBest){
+ const s=Math.max(0,Number(result?.score)||0),p=Math.max(0,Number(previousBest)||0);
+ if(game==='sequence'||!s)return '';
+ if(s>p)return p?'New personal best!':'';
+ const gap=p-s;return gap>0&&gap<=Math.max(2,Math.ceil(p*.1))?`So close! Just ${fmt(gap)} off your best.`:'';
+}
+export function showReferenceResults({game='blocks',result=null,best=0,previousBest=0,level=1,onReplay,onExit,onRanks,shopOnly=false,assetBase='assets/',motion=true,ranked=null}){
  document.querySelector('.kg-dialog')?.remove();
  const cfg=GAMES[game]||GAMES.blocks,won=Boolean(result?.won),ctx={won,level,result,best};
  const dialog=document.createElement('dialog');
@@ -75,7 +82,7 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
  dialog.innerHTML=`
 <section class="kg-result" aria-labelledby="kg-result-title">
  <div class="kg-art">${mascot('kg-mascot')}<span class="kg-spark kg-spark-a">${svg('spark')}</span><span class="kg-spark kg-spark-b">${svg('spark')}</span></div>
- <header class="kg-head"><p class="kg-eyebrow">${eyebrow}</p><h1 id="kg-result-title" class="kg-title">${title}</h1><p class="kg-intro">${cfg.intro(ctx)}</p></header>
+ <header class="kg-head"><p class="kg-eyebrow">${eyebrow}</p><h1 id="kg-result-title" class="kg-title">${title}</h1><p class="kg-intro">${closeCall(game,result,previousBest)||cfg.intro(ctx)}</p></header>
  <p class="kg-ranked" role="status" aria-live="polite" hidden><span class="kg-best-badge" hidden>NEW BEST THIS MONTH</span><span class="kg-ranked-text"></span></p>
  <dl class="kg-stats">${cfg.stats(ctx).map(([value,label])=>`<div><dt>${label}</dt><dd>${fmt(value)}</dd></div>`).join('')}</dl>
  <button class="kg-primary" id="kg-replay" type="button">${svg(won?'next':'restart')}<span class="kg-primary-copy"><strong class="kg-primary-label"></strong><small class="kg-primary-note"></small></span></button>
