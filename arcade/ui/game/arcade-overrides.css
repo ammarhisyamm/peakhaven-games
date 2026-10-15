@@ -54,3 +54,10 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .hint-arrow{position:absolute;z-index:19;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;filter:drop-shadow(0 0 7px #8fffff)}
 .hint-arrow line{stroke:#fff;stroke-width:5;stroke-linecap:round}
 .hint-arrow polygon{fill:#fff}
+/* Peak Blocks tray: fixed-size slots, and every piece drawn at the same cell size (sized so a 5-long line fits),
+   so a tall piece no longer makes the tray taller and pushes the board around. */
+.in-game .block-tray{min-height:0}
+.in-game .block-tray .shape-slot{height:96px;min-height:96px;max-height:96px;padding:6px;overflow:hidden}
+.in-game .block-tray .shape-preview{grid-template-columns:repeat(var(--cols),15px);grid-template-rows:repeat(var(--rows),15px);gap:1px}
+.in-game .block-tray .shape-preview i{width:15px;height:15px}
+@media(max-height:700px){.in-game .block-tray .shape-slot{height:84px;min-height:84px;max-height:84px}.in-game .block-tray .shape-preview{grid-template-columns:repeat(var(--cols),13px);grid-template-rows:repeat(var(--rows),13px)}.in-game .block-tray .shape-preview i{width:13px;height:13px}}
