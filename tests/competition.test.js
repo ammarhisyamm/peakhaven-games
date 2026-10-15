@@ -142,7 +142,7 @@ test('A Ridge Run score counts only after the server replays it',async()=>{
   w.advance(run.seconds+2);
   const f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay,claimed:run.score}});
   assert.equal(f.status,200,JSON.stringify(f.body));assert.equal(f.body.score,run.score);assert.equal(f.body.done,true);
-  assert.equal((await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay}})).status,409,'a run can only be submitted once');
+  assert.equal((await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay}})).status,200,'identical retries return the verified result without counting it twice');
   const stored=w.store.runs.get(s.body.runId);assert.equal(stored.status,'closed');assert.equal(stored.flagged,false);
 });
 
@@ -276,4 +276,41 @@ test('A finished run reports its place on this month\'s board, a new best, and p
   assert.equal(f.board.newBest,false,'a lower score is not a new best');assert.equal(f.board.rank,2,'rank uses the best score');assert.ok(f.board.best>f.score);assert.equal(f.plays.ridge,1);
   f=await play(ann,8);
   assert.equal(f.board.rank,1);assert.equal(f.board.newBest,true);assert.equal(f.plays.ridge,0);
+});
+
+
+test('Retrying a cleared Sequence level cannot reject the run or add its score twice',async()=>{
+ const w=world(),token=await w.join('retry@x.com','Retry');
+ const start=(await w.api.start({token,body:{game:'sequence'}})).body;
+ const r=sequenceReplay(start.seed,1);assert.ok(r.won);w.advance(r.seconds+1);
+ const body={runId:start.runId,replay:r.replay,claimed:r.score};
+ const first=await w.api.finish({token,body}),second=await w.api.finish({token,body});
+ assert.equal(first.status,200);assert.equal(second.status,200);assert.equal(second.body.score,r.score);assert.equal(second.body.nextLevel,2);
+ assert.equal(w.store.runs.get(start.runId).segments,1);assert.equal(w.store.runs.get(start.runId).status,'open');
+});
+test('Concurrent identical finish requests count once and both receive verification',async()=>{
+ const w=world(),token=await w.join('double@x.com','Double');
+ const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);
+ const replies=await Promise.all([1,2].map(()=>w.api.finish({token,body:{runId:start.runId,replay:r.replay}})));
+ assert.deepEqual(replies.map(r=>r.status),[200,200]);assert.equal(w.store.runs.get(start.runId).score,r.score);assert.equal(w.store.runs.get(start.runId).segments,1);
+});
+
+test('A lost start response can be retried after the last play without spending another play',async()=>{
+ const w=world(),token=await w.join('start-retry@x.com','Start Retry');
+ for(let i=0;i<2;i++)await w.api.start({token,body:{game:'blocks'}});
+ const requestId='4f372615-a2cd-46e2-93cc-c91e113be4b8',body={game:'blocks',requestId};
+ const [a,b]=await Promise.all([w.api.start({token,body}),w.api.start({token,body})]);
+ assert.equal(a.status,200);assert.equal(b.status,200);assert.equal(a.body.runId,b.body.runId);assert.equal(b.body.plays.blocks,0);assert.equal(w.store.runs.size,3);
+ const r=blocksReplay(a.body.seed);await w.api.finish({token,body:{runId:a.body.runId,replay:r.replay}});
+ assert.equal((await w.api.start({token,body})).status,409,'a completed run cannot be reopened');
+ assert.equal((await w.api.start({token,body:{game:'blocks',requestId:'invalid'}})).status,400);
+});
+
+
+test('Retry comparison tolerates Postgres jsonb object key order',async()=>{
+ const w=world(),token=await w.join('jsonb-retry@x.com','JSON Retry');
+ const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);
+ const body={runId:start.runId,replay:r.replay};assert.equal((await w.api.finish({token,body})).status,200);
+ const stored=w.store.runs.get(start.runId),rep=stored.replays[0];stored.replays=[Object.fromEntries(Object.entries(rep).reverse())];
+ assert.equal((await w.api.finish({token,body})).status,200,'jsonb reorders object keys without changing the replay');assert.equal(stored.segments,1);
 });

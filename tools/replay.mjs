@@ -17,21 +17,29 @@ function stubCanvas(view){
 function collector(){let result=null;return {cb:{hud:noop,message:noop,sound:noop,effect:noop,progress:noop,ready:noop,topTier:noop,place:noop,end(r){result??=r;}},result:()=>result};}
 const MAX_TICKS=120*60*60; // one hour of play
 
+function replayClock(rep,inputs){
+ if(!Number.isSafeInteger(rep.endTick)||rep.endTick<0||rep.endTick>MAX_TICKS)throw new Error('Bad replay duration');
+ if(!Array.isArray(inputs)||!inputs.every(n=>Number.isSafeInteger(n)&&n>=0&&n<=rep.endTick))throw new Error('Bad input clock');
+ for(let i=1;i<inputs.length;i++)if(inputs[i]<inputs[i-1])throw new Error('Inputs out of order');
+}
+
 export async function replayRidge(rep){
   installStubs();
   if(rep?.game!=='ridge'||rep.v!==4||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
+  replayClock(rep,rep.taps);replayClock(rep,rep.resumes??[]);
   const {RidgeEngine}=await import('../dist/tryout-games.js');
   // The course runs in fixed world units, so the screen size doesn't matter here.
   const e=new RidgeEngine(stubCanvas([480,720]),collector().cb,{seed:rep.seed,motion:false});
   const taps=[...rep.taps],resumes=[...(rep.resumes||[])],stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
   for(let i=1;i<taps.length;i++)if(taps[i]<taps[i-1])throw new Error('Taps out of order');
-  while(!e.ended&&e.ticks<stop){
+  while(!e.ended){
     while(resumes.length&&resumes[0]===e.ticks){resumes.shift();e.pause(true);e.pause(false);}
     while(taps.length&&taps[0]===e.ticks){taps.shift();e.action();}
+    if(e.ticks>=stop)break;
     e.step(SIM_STEP);
   }
   e.destroy();
-  return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length};
+  return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length+resumes.length};
 }
 
 export async function replayBond(rep){
@@ -71,14 +79,16 @@ export async function replaySequence(rep){
   if(rep?.game!=='sequence'||rep.v!==1||rep.step!==SIM_STEP)throw new Error('Not a Sequence replay for this build');
   const level=rep.level;if(!Number.isInteger(level)||level<1)throw new Error('Bad Sequence level');
   if(!Array.isArray(rep.moves)||!rep.moves.every(m=>Array.isArray(m)&&m.length===3&&m.every(Number.isInteger)))throw new Error('Bad Sequence move log');
+  replayClock(rep,rep.moves.map(m=>m[0]));
   for(let i=1;i<rep.moves.length;i++)if(rep.moves[i][0]<rep.moves[i-1][0])throw new Error('Moves out of order');
   const {SequenceEngine}=await import('../dist/tryout-games.js');
   // The board is laid out in cells, so the screen size doesn't change the run.
   const out=collector(),e=new SequenceEngine(stubCanvas([480,720]),out.cb,{seed:rep.seed,level,motion:false});
   const moves=rep.moves.map(m=>[...m]);let rejected=0;
   const stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
-  while(!e.ended&&e.ticks<stop){
+  while(!e.ended){
     while(moves.length&&moves[0][0]===e.ticks){const [,from,to]=moves.shift();const before=e.inputs.length;e.choose(from,to);if(e.inputs.length===before)rejected++;}
+    if(e.ticks>=stop)break;
     e.step(SIM_STEP);
   }
   if(!e.ended)e.finish();

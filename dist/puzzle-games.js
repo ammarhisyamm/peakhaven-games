@@ -56,7 +56,7 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
  let drag=null,dragArt=null,suppressClick=false;
  const buzz=ms=>{try{navigator.vibrate?.(ms);}catch{}};
  function boardMetrics(){const a=board.querySelector('[data-cell="0"]').getBoundingClientRect(),b=board.querySelector('[data-cell="1"]').getBoundingClientRect();return {cell:a.width,step:b.left-a.left,left:a.left,top:a.top};}
- function clearDrag(){dragArt?.remove();dragArt=null;tray.querySelector('.lifted')?.classList.remove('lifted');drag=null;board.querySelectorAll('.ghost,.clear-preview').forEach(b=>b.classList.remove('ghost','clear-preview'));}
+ function clearDrag(){const pointer=drag?.pointerId;drag=null;try{if(tray.hasPointerCapture?.(pointer))tray.releasePointerCapture(pointer);}catch{}dragArt?.remove();dragArt=null;tray.querySelector('.lifted')?.classList.remove('lifted');board.querySelectorAll('.ghost,.clear-preview').forEach(b=>b.classList.remove('ghost','clear-preview'));}
  function liftPiece(){const m=boardMetrics(),art=tray.querySelector(`[data-shape="${drag.index}"] .shape-preview`);if(!art)return;
   dragArt=art.cloneNode(true);dragArt.classList.add('block-drag-preview');dragArt.style.setProperty('--cell',`${m.cell}px`);dragArt.style.setProperty('--gap',`${m.step-m.cell}px`);root.append(dragArt);
   tray.querySelector(`[data-shape="${drag.index}"]`)?.classList.add('lifted');buzz(8);}
@@ -67,21 +67,21 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
   drag.r=Math.round((top-m.top)/m.step);drag.c=Math.round((left-m.left)/m.step);
   drag.valid=fits(state.grid,p.shape,drag.r,drag.c);dragArt.classList.toggle('invalid',!drag.valid);
   if(drag.valid)preview(drag.r,drag.c);else board.querySelectorAll('.ghost,.clear-preview').forEach(b=>b.classList.remove('ghost','clear-preview'));}
- const dragDown=e=>{const slot=e.target.closest('[data-shape]');if(locked()||!slot||!state.tray[slot.dataset.shape])return;
-  drag={index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false,lift:e.pointerType==='touch'?LIFT_CELLS:0};tray.setPointerCapture?.(e.pointerId);
+ const dragDown=e=>{const slot=e.target.closest('[data-shape]');if(drag||locked()||e.isPrimary===false||(e.button!==undefined&&e.button!==0)||!slot||!state.tray[slot.dataset.shape])return;
+  drag={pointerId:e.pointerId,index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false,lift:e.pointerType==='touch'?LIFT_CELLS:0};tray.setPointerCapture?.(e.pointerId);
   state.selected=drag.index;bomb=false;hintCells=[];liftPiece();follow(e);cb.sound('select');};
- const dragMove=e=>{if(!drag||locked())return;if(!drag.moving&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>=TAP_SLOP)drag.moving=true;follow(e);};
- const dragUp=e=>{if(!drag)return;follow(e);const last=drag;clearDrag();if(!last.moving){render();return;} // a tap: the click handler selects it
+ const dragMove=e=>{if(!drag||e.pointerId!==drag.pointerId||locked())return;if(!drag.moving&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>=TAP_SLOP)drag.moving=true;follow(e);};
+ const dragUp=e=>{if(!drag||e.pointerId!==drag.pointerId)return;follow(e);const last=drag;clearDrag();if(!last.moving){render();return;} // a tap: the click handler selects it
   suppressClick=true;setTimeout(()=>{suppressClick=false;},0);
   if(locked())return;if(last.valid){buzz(12);place(last.r,last.c);}else{render();cb.sound('invalid');cb.message('That spot is taken. The piece is back in the tray.');}};
- const dragCancel=()=>clearDrag();const dragClick=e=>{if(suppressClick){e.preventDefault();e.stopImmediatePropagation();suppressClick=false;}};
- for(const [name,handler] of [['pointerdown',dragDown],['pointermove',dragMove],['pointerup',dragUp],['pointercancel',dragCancel]])tray.addEventListener(name,handler);tray.addEventListener('click',dragClick,true);
+ const dragCancel=e=>{if(!e||e.type==='blur'||e.pointerId===drag?.pointerId)clearDrag();};const dragClick=e=>{if(suppressClick){e.preventDefault();e.stopImmediatePropagation();suppressClick=false;}};
+ for(const [name,handler] of [['pointerdown',dragDown],['pointermove',dragMove],['pointerup',dragUp],['pointercancel',dragCancel],['lostpointercapture',dragCancel]])tray.addEventListener(name,handler);tray.addEventListener('click',dragClick,true);window.addEventListener('blur',dragCancel);
  buttons.bomb.onclick=()=>{if(locked()||!tools.bomb)return;bomb=!bomb;hintCells=[];hud();cb.sound('tool');cb.message(bomb?'Tap a square to clear its surrounding 3 × 3 area.':'Select a piece to keep playing.');};
  buttons.undo.onclick=()=>{if(locked()||!blocksUndo(g))return;state=g.state;bomb=false;hintCells=[];render();cb.sound('undo');cb.message('Last move restored.');afterAction();};
  buttons.shuffle.onclick=()=>{if(locked()||!blocksShuffle(g))return;state=g.state;bomb=false;hintCells=[];render();cb.sound('tool');cb.message('Three fresh pieces. Find a new fit.');afterAction();};
  buttons.hint.onclick=()=>{if(locked()||!tools.hint)return;const best=blocksHint(g);if(!best){cb.sound('invalid');cb.message('Try Bomb or Shuffle to make space.');return;}state=g.state;bomb=false;hintCells=best.shape.map(([x,y])=>[best.r+y,best.c+x]);render();cb.sound('hint');cb.message(`Place piece ${best.i+1} at row ${best.r+1}, column ${best.c+1}.`);};
  function finish(){if(ended||!alive)return;ended=true;hud();cb.end(blocksResult(g));}
- render();cb.message('Drag a piece onto the board, or tap a piece then its top-left square.');return {pause(value=true){paused=value;clearDrag();hud();},finish,destroy(){alive=false;clearDrag();for(const [name,handler] of [['pointerdown',dragDown],['pointermove',dragMove],['pointerup',dragUp],['pointercancel',dragCancel]])tray.removeEventListener(name,handler);tray.removeEventListener('click',dragClick,true);},action(){}};
+ render();cb.message('Drag a piece onto the board, or tap a piece then its top-left square.');return {pause(value=true){paused=value;clearDrag();hud();},finish,destroy(){alive=false;clearDrag();for(const [name,handler] of [['pointerdown',dragDown],['pointermove',dragMove],['pointerup',dragUp],['pointercancel',dragCancel],['lostpointercapture',dragCancel]])tray.removeEventListener(name,handler);tray.removeEventListener('click',dragClick,true);window.removeEventListener('blur',dragCancel);},action(){}};
 }
 export function startMahjong(root,cb,options={}){
  let tiles=dealTiles(tileLayout(options.level),Math.random,Math.min(9,6+Math.floor((options.level||1)/8))),selected=null,history=[],score=0,pairs=0,chain=0,paused=false,alive=true,ended=false,highlight=[],tools={hint:3,undo:3,shuffle:3};const board=root.querySelector('#mahjong-board'),buttons=controls(root),locked=()=>paused||!alive||ended,rows=tileRows(options.level);board.style.aspectRatio=`6 / ${rows}`;board.style.setProperty('--tile-row',`${100/rows}%`);board.style.setProperty('--tile-height',`${115/rows}%`);board.style.setProperty('--tile-lift',`${7.5/rows}%`);

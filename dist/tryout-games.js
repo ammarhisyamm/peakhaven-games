@@ -81,8 +81,8 @@ class MiniEngine{
  burst(x,y,color='#8fffff',count=24){if(!this.motion)return;this.shockwaves.push({x,y,color,start:this.time});for(let i=0;i<count;i++){const a=i/count*TAU,s=80+Math.random()*90;this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.6+Math.random()*.3,color});}}
  drawEffects(){const c=this.ctx;this.shockwaves=this.shockwaves.filter(p=>this.time-p.start<.55);c.save();for(const p of this.shockwaves){const t=(this.time-p.start)/.55;c.globalAlpha=1-t;c.strokeStyle=p.color;c.lineWidth=3*(1-t);c.beginPath();c.arc(p.x,p.y,10+t*65,0,TAU);c.stroke();}for(const p of this.particles){c.globalAlpha=clamp(p.life/.7,0,1);c.fillStyle=p.color;c.beginPath();c.arc(p.x,p.y,2.5,0,TAU);c.fill();}c.restore();}
  end(result){if(this.ended)return;this.ended=true;this.cb.end(result);}
- pause(value=true){this.paused=value;this.last=0;this.acc=0;}
- destroy(){this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();for(const name of ['pointerdown','pointerup','pointercancel','pointermove']){const handler=this['on'+name];if(handler)this.canvas.removeEventListener(name,handler);}}
+ pause(value=true){this.cancelPointer?.();this.paused=value;this.last=0;this.acc=0;}
+ destroy(){this.cancelPointer?.();if(this.onblur)window.removeEventListener?.('blur',this.onblur);this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();for(const name of ['pointerdown','pointerup','pointercancel','pointermove','lostpointercapture']){const handler=this['on'+name];if(handler)this.canvas.removeEventListener(name,handler);}}
 }
 
 export class OrbitEngine extends MiniEngine{
@@ -278,11 +278,16 @@ export class SequenceEngine extends MiniEngine{
   // Every draw (the opening board, each refill, any reshuffle) comes from the seeded generator, in that order,
   // so the seed plus the logged swaps rebuild the run exactly.
   this.palette=sequencePalette(this.level);this.board=createSequenceBoard(this.level,this.random);this.inputs=[];this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
-  this.onpointerdown=e=>{this.keyboard=false;this.idle=0;this.hintPair=null;this.pointerStart=this.pointer(e);this.pressed=this.pending?null:this.cellAt(...this.pointerStart);canvas.setPointerCapture?.(e.pointerId);};
-  // Swaps fire as soon as the finger has moved a third of a tile, instead of waiting for it to lift.
-  this.onpointermove=e=>{if(!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;
-   const start=this.cellAt(...this.pointerStart);this.pointerStart=null;this.pressed=null;if(start===null)return;const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));
-   if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointerup=e=>{this.pressed=null;if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),[x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];this.pointerStart=null;if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10){this.choose(start);return;}const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointercancel=()=>{this.pointerStart=null;this.pressed=null;};for(const name of ['pointerdown','pointermove','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
+  this.pointerId=null;
+  const owns=e=>this.pointerId!==null&&(e.pointerId===undefined||e.pointerId===this.pointerId);
+  this.cancelPointer=()=>{const id=this.pointerId;this.pointerId=null;this.pointerStart=null;this.pressed=null;try{if(canvas.hasPointerCapture?.(id))canvas.releasePointerCapture(id);}catch{}};
+  this.onpointerdown=e=>{if(this.paused||this.ended||this.pending||this.pointerId!==null||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;this.pointerId=e.pointerId??1;this.keyboard=false;this.idle=0;this.hintPair=null;this.pointerStart=this.pointer(e);this.pressed=this.cellAt(...this.pointerStart);canvas.setPointerCapture?.(e.pointerId);};
+  // The first finger owns the gesture until release, cancellation or loss of capture.
+  const swapFromGesture=(start,dx,dy)=>{const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};
+  this.onpointermove=e=>{if(!owns(e)||!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;const start=this.cellAt(...this.pointerStart);this.pointerStart=null;this.pressed=null;if(start!==null)swapFromGesture(start,dx,dy);};
+  this.onpointerup=e=>{if(!owns(e))return;const origin=this.pointerStart,[x,y]=this.pointer(e);this.cancelPointer();if(!origin)return;const start=this.cellAt(...origin),dx=x-origin[0],dy=y-origin[1];if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10)this.choose(start);else swapFromGesture(start,dx,dy);};
+  this.onpointercancel=(e={})=>{if(owns(e))this.cancelPointer();};this.onlostpointercapture=this.onpointercancel;this.onblur=()=>this.cancelPointer();window.addEventListener?.('blur',this.onblur);
+  for(const name of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
  }
  geometry(){const size=Math.min(this.w-36,this.h-this.top-this.bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:this.top+(this.h-this.top-this.bottom-size)/2,size,cell};}
  cellAt(x,y){const g=this.geometry();if(x<g.x||x>=g.x+g.size||y<g.y||y>=g.y+g.size)return null;return Math.floor((y-g.y)/g.cell)*7+Math.floor((x-g.x)/g.cell);}
