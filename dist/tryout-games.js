@@ -1,4 +1,5 @@
-import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES} from './sequence-rules.js';
+import {SEQUENCE_RULES_VERSION,sequenceLevel,createSequenceProgress,sequenceGoals,sequenceComplete,sequenceBrief,applySequenceWave,progressionExchange,progressionMove,settleProgression,createProgressionBoard} from './sequence-progression.js';
+import {createSequenceBoard,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES} from './sequence-rules.js';
 import {drawSprite,drawBottleObstacle,crystalSprites,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {reachStart,reachThroughGate,REACH} from './ridge-reach.js';
@@ -100,8 +101,8 @@ class MiniEngine{
  burst(x,y,color='#8fffff',count=24){if(!this.motion)return;this.shockwaves.push({x,y,color,start:this.time});for(let i=0;i<count;i++){const a=i/count*TAU,s=80+Math.random()*90;this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.6+Math.random()*.3,color});}}
  drawEffects(){const c=this.ctx;this.shockwaves=this.shockwaves.filter(p=>this.time-p.start<.55);c.save();for(const p of this.shockwaves){const t=(this.time-p.start)/.55;c.globalAlpha=1-t;c.strokeStyle=p.color;c.lineWidth=3*(1-t);c.beginPath();c.arc(p.x,p.y,10+t*65,0,TAU);c.stroke();}for(const p of this.particles){c.globalAlpha=clamp(p.life/.7,0,1);c.fillStyle=p.color;c.beginPath();c.arc(p.x,p.y,2.5,0,TAU);c.fill();}c.restore();}
  end(result){if(this.ended)return;this.ended=true;this.cb.end(result);}
- pause(value=true){this.paused=value;this.last=0;this.acc=0;}
- destroy(){this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();for(const name of ['pointerdown','pointerup','pointercancel','pointermove']){const handler=this['on'+name];if(handler)this.canvas.removeEventListener(name,handler);}}
+ pause(value=true){this.cancelPointer?.();this.paused=value;this.last=0;this.acc=0;}
+ destroy(){this.cancelPointer?.();if(this.onblur)window.removeEventListener?.('blur',this.onblur);this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();for(const name of ['pointerdown','pointerup','pointercancel','pointermove','lostpointercapture']){const handler=this['on'+name];if(handler)this.canvas.removeEventListener(name,handler);}}
 }
 
 export class OrbitEngine extends MiniEngine{
@@ -364,20 +365,28 @@ export class SequenceEngine extends MiniEngine{
   super(canvas,cb,options);
   // Every draw (the opening board, each refill, any reshuffle) comes from the seeded generator, in that order,
   // so the seed plus the logged swaps rebuild the run exactly.
-  this.palette=sequencePalette(this.level);this.board=createSequenceBoard(this.level,this.random);this.inputs=[];this.moves=SEQUENCE_MOVES;this.target=sequenceTarget(this.level);this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
-  this.onpointerdown=e=>{this.keyboard=false;this.idle=0;this.hintPair=null;this.pointerStart=this.pointer(e);this.pressed=this.pending?null:this.cellAt(...this.pointerStart);canvas.setPointerCapture?.(e.pointerId);};
-  // Swaps fire as soon as the finger has moved a third of a tile, instead of waiting for it to lift.
-  this.onpointermove=e=>{if(!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;
-   const start=this.cellAt(...this.pointerStart);this.pointerStart=null;this.pressed=null;if(start===null)return;const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));
-   if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointerup=e=>{this.pressed=null;if(!this.pointerStart)return;const start=this.cellAt(...this.pointerStart),[x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];this.pointerStart=null;if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10){this.choose(start);return;}const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};this.onpointercancel=()=>{this.pointerStart=null;this.pressed=null;};for(const name of ['pointerdown','pointermove','pointerup','pointercancel'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(`Match three or more. Reach ${this.target} points in ${this.moves} moves.`);
+  this.rulesVersion=options?.rulesVersion===1?1:SEQUENCE_RULES_VERSION;this.config=sequenceLevel(this.level);this.progress=createSequenceProgress(this.config);this.palette=sequencePalette(this.level);this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):createProgressionBoard(this.config,this.random,this.progress);this.inputs=[];this.moves=SEQUENCE_MOVES;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  this.pointerId=null;
+  const owns=e=>this.pointerId!==null&&(e.pointerId===undefined||e.pointerId===this.pointerId);
+  this.cancelPointer=()=>{const id=this.pointerId;this.pointerId=null;this.pointerStart=null;this.pressed=null;try{if(canvas.hasPointerCapture?.(id))canvas.releasePointerCapture(id);}catch{}};
+  this.onpointerdown=e=>{if(this.paused||this.ended||this.pending||this.pointerId!==null||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;this.pointerId=e.pointerId??1;this.keyboard=false;this.idle=0;this.hintPair=null;this.pointerStart=this.pointer(e);this.pressed=this.cellAt(...this.pointerStart);canvas.setPointerCapture?.(e.pointerId);};
+  // The first finger owns the gesture until release, cancellation or loss of capture.
+  const swapFromGesture=(start,dx,dy)=>{const horizontal=Math.abs(dx)>Math.abs(dy),to=start+(horizontal?(dx>0?1:-1):(dy>0?7:-7));if(to>=0&&to<49&&(!horizontal||Math.floor(to/7)===Math.floor(start/7)))this.choose(start,to);};
+  this.onpointermove=e=>{if(!owns(e)||!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;const start=this.cellAt(...this.pointerStart);this.pointerStart=null;this.pressed=null;if(start!==null)swapFromGesture(start,dx,dy);};
+  this.onpointerup=e=>{if(!owns(e))return;const origin=this.pointerStart,[x,y]=this.pointer(e);this.cancelPointer();if(!origin)return;const start=this.cellAt(...origin),dx=x-origin[0],dy=y-origin[1];if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10)this.choose(start);else swapFromGesture(start,dx,dy);};
+  this.onpointercancel=(e={})=>{if(owns(e))this.cancelPointer();};this.onlostpointercapture=this.onpointercancel;this.onblur=()=>this.cancelPointer();window.addEventListener?.('blur',this.onblur);
+  for(const name of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(this.rulesVersion===1?`Match three or more. Reach ${this.target} points in ${this.moves} moves.`:sequenceBrief(this.level));this.reportGoals();
  }
- geometry(){const size=Math.min(this.w-36,this.h-this.top-this.bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:this.top+(this.h-this.top-this.bottom-size)/2,size,cell};}
+ geometry(){const inset=this.rulesVersion===2?38/this.scale:0,top=this.top+inset,bottom=this.bottom+(this.rulesVersion===2?36/this.scale:0),size=Math.min(this.w-36,this.h-top-bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:top+(this.h-top-bottom-size)/2,size,cell};}
+ complete(){return this.rulesVersion===1?this.score>=this.target:sequenceComplete(this.score,{...this.config,target:this.target},this.progress);}
+ reportGoals(){this.cb.goals?.({version:this.rulesVersion,level:this.level,target:this.target,goals:this.rulesVersion===1?[]:sequenceGoals(this.config,this.progress)});}
  cellAt(x,y){const g=this.geometry();if(x<g.x||x>=g.x+g.size||y<g.y||y>=g.y+g.size)return null;return Math.floor((y-g.y)/g.cell)*7+Math.floor((x-g.x)/g.cell);}
  choose(index,swapWith=null){
-  if(this.paused||this.ended||this.pending)return;if(swapWith!==null)this.selection=index;
+  if(this.paused||this.ended||this.pending||!Number.isInteger(index)||index<0||index>=49)return;
+  if(this.rulesVersion===2&&(this.progress.locks[index]||(swapWith!==null&&this.progress.locks[swapWith]))){this.selection=null;this.cb.sound('invalid');this.cb.message('Trapped crystal. Match on or beside it to break the trap. No move used.');return;}if(swapWith!==null)this.selection=index;
   if(this.selection===null){this.selection=index;this.cursor=index;this.cb.sound('select');this.cb.message(`Row ${Math.floor(index/7)+1}, column ${index%7+1} selected. Choose a neighbour.`);return;}
   if(this.selection===index&&swapWith===null){this.selection=null;return;}
-  const from=this.selection,to=swapWith??index,next=sequenceExchange(this.board,from,to);
+  const from=this.selection,to=swapWith??index,next=this.rulesVersion===1?sequenceExchange(this.board,from,to):progressionExchange(this.board,from,to,this.progress);
   if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message('Swap neighbours to make a line of three.');return;}
   this.inputs.push([this.ticks,from,to]);
   const matched=sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;if(this.moves===5&&this.score<this.target)this.cb.effect?.('5 MOVES LEFT','sequence');this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=SEQ_SWAP;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
@@ -385,16 +394,16 @@ export class SequenceEngine extends MiniEngine{
  // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
  resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();let sx=0,sy=0;
   for(const i of matches){this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);sx+=i%7;sy+=Math.floor(i/7);}
-  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;
+  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;if(this.rulesVersion===2){this.progress=applySequenceWave(this.config,this.progress,this.board,matches);this.reportGoals();}
   this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
   if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
  // Any swap that makes a line, for the idle hint.
- findMove(){for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
+ findMove(){if(this.rulesVersion===2)return progressionMove(this.board,this.progress);for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
  finishMove(){
   this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.cb.hud(this.score,this.moves,this.target);
-  if(this.score>=this.target||this.moves<=0){this.finish();return;}
-  if(!hasSequenceMove(this.board)){this.board=createSequenceBoard(this.level,this.random);this.cb.message('Fresh crystals. No move used.');}else this.cb.message(`${this.moves} moves left. ${Math.max(0,this.target-this.score)} points to go.`);
+  if(this.complete()||this.moves<=0){this.finish();return;}
+  if(!this.findMove()){this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):createProgressionBoard(this.config,this.random,this.progress,this.board);this.cb.message('Fresh crystals. No move used.');}else{const remaining=this.rulesVersion===1?[]:sequenceGoals(this.config,this.progress).filter(g=>g.left).map(g=>`${g.left} ${g.label.toLowerCase()}`);this.cb.message(`${this.moves} moves left. ${this.score<this.target?`${Math.max(0,this.target-this.score)} points to go.`:'Score goal reached.'}${remaining.length?' Still needed: '+remaining.join(', ')+'.':''}`);}
  }
  tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
   if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
@@ -402,10 +411,11 @@ export class SequenceEngine extends MiniEngine{
   this.tickEffects(dt);if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
   if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=SEQ_SWAP;return;}this.swap=null;this.resolveMatches();return;}
   if(this.phase==='return'){this.board=this.swap.original;this.swap=null;this.phase=null;this.pending=0;this.cb.sound('undo');this.cb.message('Try another pair. No move used.');return;}
+  if(this.phase==='clear'&&this.rulesVersion===2){const gone=this.clearing,cleared=this.board.map((v,i)=>gone.has(i)?-1:v),settled=settleProgression(cleared,this.random,this.palette,this.progress);this.board=settled.board;this.falls=settled.falls;this.clearing=null;this.phase='fall';this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
   if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,this.random,7,this.palette);this.phase='fall';
    // Crystals fall like they have weight: each one accelerates and takes longer the further it drops.
    this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
-  if(this.phase==='fall'){this.falls.clear();if(this.score>=this.target)this.finishMove();else this.resolveMatches();}
+  if(this.phase==='fall'){this.falls.clear();if(this.complete())this.finishMove();else this.resolveMatches();}
  }
  moveSelection(key){this.keyboard=true;let r=Math.floor(this.cursor/7),c=this.cursor%7;if(key==='ArrowUp')r=(r+6)%7;if(key==='ArrowDown')r=(r+1)%7;if(key==='ArrowLeft')c=(c+6)%7;if(key==='ArrowRight')c=(c+1)%7;this.cursor=r*7+c;if(this.selection!==null)this.choose(this.cursor);else this.cb.message(`Row ${r+1}, column ${c+1}. Press Enter to select.`);}
  action(){if(this.paused||this.ended||this.pending)return;this.keyboard=true;this.choose(this.cursor);}
@@ -416,7 +426,7 @@ export class SequenceEngine extends MiniEngine{
    if(this.phase==='fall'){const d=this.falls.get(i)||0;if(d){const k=clamp((this.fallDur-this.pending)/fallTime(d),0,1);y+=d*g.cell*(1-k*k);}}
    let size=g.cell*.86;const held=this.pressed===i||(this.phase==='swap'&&this.swap&&i===this.swap.from);if(held){size*=1.1;c.save();c.shadowColor='#ffe77a';c.shadowBlur=18;c.fillStyle='#ffe77a33';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();c.restore();}
    if(this.clearing?.has(i)){const p=1-clamp(this.pending/SEQ_CLEAR,0,1),s=1-p*p;size*=s;c.globalAlpha=s;}
-   drawSprite(c,crystalSprites[v],x,y,size,size);c.globalAlpha=1;
+   drawSprite(c,crystalSprites[v],x,y,size,size);c.globalAlpha=1;if(this.rulesVersion===2)this.drawObstacle(i,g);
    if(this.selection===i||(this.keyboard&&this.cursor===i)){c.strokeStyle=this.selection===i?'#ffe77a':'#e6ffff';c.lineWidth=3;rounded(c,g.x+col*g.cell+3,g.y+row*g.cell+3,g.cell-6,g.cell-6,9);c.stroke();}
   }
   // Idle hint: after a few seconds without a move, one swap that works pulses gently.
@@ -427,6 +437,15 @@ export class SequenceEngine extends MiniEngine{
   if(this.banner){const t=this.banner.t,a=Math.min(1,t*6,(1.1-t)*3);c.globalAlpha=Math.max(0,a);c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font=`900 ${Math.round(g.cell*.5)}px Inter, sans-serif`;c.fillText(this.banner.text.toUpperCase(),g.x+g.size/2,g.y+g.size/2-(1-Math.min(1,t*5))*12);}
   c.globalAlpha=1;c.shadowBlur=0;c.restore();
  }
- finish(){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:this.score>=this.target,replay:this.replay()});}
- replay(){return {v:1,game:'sequence',seed:this.seed,level:this.level,step:SIM_STEP,moves:this.inputs.map(m=>[...m]),endTick:this.ticks};}
+ drawObstacle(i,g){
+  const c=this.ctx,x=g.x+(i%7)*g.cell+3,y=g.y+Math.floor(i/7)*g.cell+3,w=g.cell-6,ice=this.progress.ice[i],locked=this.progress.locks[i];c.save();
+  if(ice){c.fillStyle=ice===2?'#b4efff66':'#d3faff33';c.strokeStyle='#bff5ff';c.lineWidth=ice===2?2.5:1.5;rounded(c,x,y,w,w,8);c.fill();c.stroke();
+   c.beginPath();c.moveTo(x+w*.16,y+w*.15);c.lineTo(x+w*.46,y+w*.37);c.lineTo(x+w*.34,y+w*.65);c.moveTo(x+w*.46,y+w*.37);c.lineTo(x+w*.8,y+w*.56);c.stroke();
+   c.fillStyle='#052b50';rounded(c,x+w-16,y+2,14,15,4);c.fill();c.fillStyle='#e9ffff';c.font='800 11px Inter, sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(String(ice),x+w-9,y+10);
+  }
+  if(locked){c.strokeStyle='#f8d18b';c.lineWidth=3;rounded(c,x+2,y+2,w-4,w-4,6);c.stroke();for(const off of [.35,.65]){c.beginPath();c.moveTo(x+w*off,y+3);c.lineTo(x+w*off,y+w-3);c.stroke();}c.fillStyle='#082546';rounded(c,x+w*.35,y+w*.36,w*.3,w*.28,3);c.fill();c.stroke();}
+  c.restore();
+ }
+ finish(){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:this.complete(),target:this.target,objectives:this.rulesVersion===1?[]:sequenceGoals(this.config,this.progress),replay:this.replay()});}
+ replay(){return {v:this.rulesVersion,game:'sequence',seed:this.seed,level:this.level,step:SIM_STEP,moves:this.inputs.map(m=>[...m]),endTick:this.ticks};}
 }

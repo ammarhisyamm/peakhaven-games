@@ -9,7 +9,7 @@ const reject=reason=>{throw new RejectedRun(reason);};
 const CLOCK_SLACK_SECONDS=15;
 const MAX_REPLAY_BYTES=400_000;
 
-export async function verifySegment({game,replay,seed,level,elapsedSeconds}){
+export async function verifySegment({game,replay,seed,level,elapsedSeconds,rulesVersion}){
   if(!replay||typeof replay!=='object')reject('Missing replay');
   if(JSON.stringify(replay).length>MAX_REPLAY_BYTES)reject('Replay too large');
   if(replay.game!==game)reject('Replay is for another game');
@@ -19,6 +19,7 @@ export async function verifySegment({game,replay,seed,level,elapsedSeconds}){
     if(game==='ridge')result=await replayRidge(replay);
     else if(game==='sequence'){
       if(replay.level!==level)reject('Replay is for another level');
+      if(rulesVersion!==undefined&&replay.v!==rulesVersion)reject('Replay uses different level rules');
       result=await replaySequence(replay);
     }
     else if(game==='blocks'){
@@ -30,6 +31,7 @@ export async function verifySegment({game,replay,seed,level,elapsedSeconds}){
     if(error instanceof RejectedRun)throw error;
     reject(`Replay failed: ${String(error?.message||error).slice(0,120)}`);
   }
+  if(result.unusedInputs)reject('Replay contains unused or invalid inputs');
   const gameSeconds=(result.ticks||0)*SIM_STEP;
   if(Number.isFinite(elapsedSeconds)&&gameSeconds>elapsedSeconds+CLOCK_SLACK_SECONDS)reject('Run finished faster than real time allows');
   if(!Number.isInteger(result.score)||result.score<0)reject('Replay produced an invalid score');

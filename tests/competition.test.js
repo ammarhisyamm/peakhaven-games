@@ -27,8 +27,8 @@ function blocksReplay(seed,moves=6){
   for(let m=0;m<moves&&!g.ended;m++){const i=g.state.tray.findIndex(p=>p&&placements(g.state.grid,p.shape).length);if(i<0)break;const [r,c]=placements(g.state.grid,g.state.tray[i].shape)[0];blocksPlace(g,i,r,c);}
   const res=blocksResult(g);return {replay:res.replay,score:res.score,seconds:0};
 }
-function sequenceReplay(seed,level){
-  const out=stubCallbacks(),e=new SequenceEngine(stubCanvas(),out.cb,{seed,level,motion:false});
+function sequenceReplay(seed,level,rulesVersion=2){
+  const out=stubCallbacks(),e=new SequenceEngine(stubCanvas(),out.cb,{seed,level,motion:false,rulesVersion});
   driveSequence(e,greedyMove);e.destroy();
   return {replay:out.result.replay,score:out.result.score,won:out.result.won,seconds:e.ticks*SIM_STEP};
 }
@@ -142,7 +142,7 @@ test('A Ridge Run score counts only after the server replays it',async()=>{
   w.advance(run.seconds+2);
   const f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay,claimed:run.score}});
   assert.equal(f.status,200,JSON.stringify(f.body));assert.equal(f.body.score,run.score);assert.equal(f.body.done,true);
-  assert.equal((await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay}})).status,409,'a run can only be submitted once');
+  assert.equal((await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay}})).status,200,'identical retries return the verified result without counting it twice');
   const stored=w.store.runs.get(s.body.runId);assert.equal(stored.status,'closed');assert.equal(stored.flagged,false);
 });
 
@@ -181,7 +181,7 @@ test('Sequence runs go level by level; each cleared level unlocks the next board
   w.advance(l1.seconds+1);
   let f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:l1.replay}});
   assert.equal(f.status,200);assert.equal(f.body.done,false);assert.equal(f.body.nextLevel,2);
-  const day=dayKey(w.now());assert.equal(f.body.nextSeed,seedFor(SECRET,'sequence',day,2));
+  const day=dayKey(w.now());assert.equal(f.body.nextSeed,seedFor(SECRET,'sequence-v2',day,2));
   // Replaying level 1's board as level 2 doesn't work.
   const wrong=sequenceReplay(s.body.seed,2);w.advance(wrong.seconds+1);
   const bad=await w.api.finish({token:t,body:{runId:s.body.runId,replay:wrong.replay}});
@@ -276,4 +276,53 @@ test('A finished run reports its place on this month\'s board, a new best, and p
   assert.equal(f.board.newBest,false,'a lower score is not a new best');assert.equal(f.board.rank,2,'rank uses the best score');assert.ok(f.board.best>f.score);assert.equal(f.plays.ridge,1);
   f=await play(ann,8);
   assert.equal(f.board.rank,1);assert.equal(f.board.newBest,true);assert.equal(f.plays.ridge,0);
+});
+
+
+test('Retrying a cleared Sequence level cannot reject the run or add its score twice',async()=>{
+ const w=world(),token=await w.join('retry@x.com','Retry');
+ const start=(await w.api.start({token,body:{game:'sequence'}})).body;
+ const r=sequenceReplay(start.seed,1);assert.ok(r.won);w.advance(r.seconds+1);
+ const body={runId:start.runId,replay:r.replay,claimed:r.score};
+ const first=await w.api.finish({token,body}),second=await w.api.finish({token,body});
+ assert.equal(first.status,200);assert.equal(second.status,200);assert.equal(second.body.score,r.score);assert.equal(second.body.nextLevel,2);
+ assert.equal(w.store.runs.get(start.runId).segments,1);assert.equal(w.store.runs.get(start.runId).status,'open');
+});
+test('Concurrent identical finish requests count once and both receive verification',async()=>{
+ const w=world(),token=await w.join('double@x.com','Double');
+ const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);
+ const replies=await Promise.all([1,2].map(()=>w.api.finish({token,body:{runId:start.runId,replay:r.replay}})));
+ assert.deepEqual(replies.map(r=>r.status),[200,200]);assert.equal(w.store.runs.get(start.runId).score,r.score);assert.equal(w.store.runs.get(start.runId).segments,1);
+});
+
+test('A lost start response can be retried after the last play without spending another play',async()=>{
+ const w=world(),token=await w.join('start-retry@x.com','Start Retry');
+ for(let i=0;i<2;i++)await w.api.start({token,body:{game:'blocks'}});
+ const requestId='4f372615-a2cd-46e2-93cc-c91e113be4b8',body={game:'blocks',requestId};
+ const [a,b]=await Promise.all([w.api.start({token,body}),w.api.start({token,body})]);
+ assert.equal(a.status,200);assert.equal(b.status,200);assert.equal(a.body.runId,b.body.runId);assert.equal(b.body.plays.blocks,0);assert.equal(w.store.runs.size,3);
+ const r=blocksReplay(a.body.seed);await w.api.finish({token,body:{runId:a.body.runId,replay:r.replay}});
+ assert.equal((await w.api.start({token,body})).status,409,'a completed run cannot be reopened');
+ assert.equal((await w.api.start({token,body:{game:'blocks',requestId:'invalid'}})).status,400);
+});
+
+
+test('Retry comparison tolerates Postgres jsonb object key order',async()=>{
+ const w=world(),token=await w.join('jsonb-retry@x.com','JSON Retry');
+ const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);
+ const body={runId:start.runId,replay:r.replay};assert.equal((await w.api.finish({token,body})).status,200);
+ const stored=w.store.runs.get(start.runId),rep=stored.replays[0];stored.replays=[Object.fromEntries(Object.entries(rep).reverse())];
+ assert.equal((await w.api.finish({token,body})).status,200,'jsonb reorders object keys without changing the replay');assert.equal(stored.segments,1);
+});
+
+
+test('New Sequence competition runs cannot downgrade to v1, while pre-upgrade runs keep their course',async()=>{
+ const w=world(),token=await w.join('sequence-version@x.com','Version Check');
+ const start=await w.api.start({token,body:{game:'sequence'}});assert.equal(start.body.rulesVersion,2);
+ const oldReplay=sequenceReplay(start.body.seed,1,1);w.advance(oldReplay.seconds+1);
+ const downgrade=await w.api.finish({token,body:{runId:start.body.runId,replay:oldReplay.replay}});assert.equal(downgrade.status,422);assert.match(downgrade.body.reason,/different level rules/);
+ const player=await w.auth.userFromToken(token),day=dayKey(w.now()),seed=seedFor(SECRET,'sequence',day,1);
+ const legacy=await w.store.startRun({playerId:player.id,game:'sequence',day,seed,limit:3});
+ const replay=sequenceReplay(seed,1,1);assert.ok(replay.won);w.advance(replay.seconds+1);
+ const finish=await w.api.finish({token,body:{runId:legacy.id,replay:replay.replay}});assert.equal(finish.status,200);assert.equal(finish.body.done,false);assert.equal(finish.body.nextSeed,seedFor(SECRET,'sequence',day,2));
 });

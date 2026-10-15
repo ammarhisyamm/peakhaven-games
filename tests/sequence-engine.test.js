@@ -14,7 +14,7 @@ const {playSequence,greedyMove,randomMove,driveSequence}=await import('../tools/
 const noop=()=>{};
 function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:()=>ctx,set:(t,k,v)=>(t[k]=v,true)});return {getContext:()=>ctx,getBoundingClientRect:()=>({width,height,left:0,top:0}),addEventListener:noop,removeEventListener:noop,setPointerCapture:noop};}
 function callbacks(){const out={result:null,messages:[]};out.cb={hud:noop,sound:noop,effect:noop,ready:noop,message(m){out.messages.push(m);},end(r){out.result??=r;}};return out;}
-const engine=(seed,level=1,out=callbacks())=>new SequenceEngine(canvas(),out.cb,{seed,level,motion:false});
+const engine=(seed,level=1,out=callbacks())=>new SequenceEngine(canvas(),out.cb,{seed,level,rulesVersion:1,motion:false});
 // No legal swap and no line: rows run 0,3,2,1,... shifted by one each row.
 const DEAD=Array.from({length:49},(_,i)=>(Math.floor(i/7)+3*(i%7))%4);
 
@@ -123,4 +123,13 @@ test('Sequence targets keep levels 1-50 as they were, then ease toward a ceiling
   for(let l=51;l<=400;l++){const t=sequenceTarget(l);assert.ok(t>=prev&&t-prev<=150,`level ${l}: ${prev} -> ${t}`);assert.ok(t<=SEQUENCE_TARGET_CAP);assert.equal(t%50,0);prev=t;}
   assert.equal(sequenceTarget(200),SEQUENCE_TARGET_CAP);assert.equal(sequenceTarget(0),sequenceTarget(1));
   assert.equal(SEQUENCE_MOVES,25);
+});
+
+test('Sequence ignores a second pointer and clears held gestures on lost capture and pause',()=>{
+ const e=engine(42),g=e.geometry(),point=i=>({clientX:g.x+(i%7+.5)*g.cell,clientY:g.y+(Math.floor(i/7)+.5)*g.cell,pointerId:1});
+ e.onpointerdown(point(0));const origin=[...e.pointerStart];e.onpointerdown({...point(20),pointerId:2});assert.deepEqual(e.pointerStart,origin);
+ e.onpointermove({...point(1),pointerId:2});assert.equal(e.inputs.length,0);
+ e.onlostpointercapture(point(0));assert.equal(e.pointerStart,null);assert.equal(e.pointerId,null);
+ e.onpointerdown(point(0));e.pause();e.pause(false);e.onpointerup(point(1));assert.equal(e.inputs.length,0);
+ e.onpointerdown(point(0));e.onpointermove(point(1));assert.equal(e.inputs.length,1,'a new gesture works after interruption');e.destroy();
 });

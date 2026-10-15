@@ -24,8 +24,8 @@ const GAMES={
   name:'Sequence',
   eyebrow:({level})=>`Sequence · Level ${level}`,
   title:({won})=>won?'LEVEL CLEARED':'LEVEL NOT CLEARED',
-  intro:({won})=>won?'Lovely work. The next level is ready.':'Try this level again with a fresh board.',
-  stats:({result,level})=>[[result?.score,'Score'],[sequenceTarget(level),'Goal'],[Math.max(0,25-(result?.moves||0)),'Moves']],
+  intro:({won,result})=>won?'Lovely work. The next level is ready.':result?.objectives?.some(g=>g.left)?'Clear every objective before your moves run out.':'Try this level again with a fresh board.',
+  stats:({result,level})=>[[result?.score,'Score'],[result?.target??sequenceTarget(level),'Goal'],[Math.max(0,25-(result?.moves||0)),'Moves']],
   retry:({won,level})=>won?`Play Level ${level+1}`:`Retry Level ${level}`,
   after:({won,level})=>won?`play Level ${level+1}`:`retry Level ${level}`,
  },
@@ -48,6 +48,7 @@ export function keepGoingOffer(free,coins){
 // verified result, the player's place on this month's board and the server's plays left, and never offers coins.
 export function rankedOffer(state){
  if(!state||state.phase==='checking')return {label:'CHECKING SCORE…',note:'Verifying your run',action:null};
+ if(state.phase==='error'&&state.retryable)return {label:'TRY SAVING AGAIN',note:'Your score is kept on this device until you retry',action:'retry'};
  if(state.phase==='next')return {label:'NEXT LEVEL',note:`Level ${state.level} · run total ${fmt(state.score)}`,action:'next'};
  const plays=Math.max(0,Number(state.plays)||0);
  if(plays>0)return {label:'PLAY AGAIN',note:`${plural(plays,'free play','free plays')} left today`,action:'again'};
@@ -85,6 +86,7 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  <header class="kg-head"><p class="kg-eyebrow">${eyebrow}</p><h1 id="kg-result-title" class="kg-title">${title}</h1><p class="kg-intro">${closeCall(game,result,previousBest)||cfg.intro(ctx)}</p></header>
  <p class="kg-ranked" role="status" aria-live="polite" hidden><span class="kg-best-badge" hidden>NEW BEST THIS MONTH</span><span class="kg-ranked-text"></span></p>
  <dl class="kg-stats">${cfg.stats(ctx).map(([value,label])=>`<div><dt>${label}</dt><dd>${fmt(value)}</dd></div>`).join('')}</dl>
+ ${game==='sequence'&&result?.objectives?.length?`<p class="kg-objectives">${result.objectives.map(g=>`${g.label}: ${fmt(g.done)}/${fmt(g.total)}`).join(' · ')}</p>`:''}
  <button class="kg-primary" id="kg-replay" type="button">${svg(won?'next':'restart')}<span class="kg-primary-copy"><strong class="kg-primary-label"></strong><small class="kg-primary-note"></small></span></button>
  <div class="kg-actions"><button class="kg-secondary" id="kg-ranks" type="button">${svg('ranks')}<span>View ${cfg.name} ranks</span></button><button class="kg-secondary" id="kg-exit" type="button">${svg('back')}<span>Back to arcade</span></button></div>
  <div class="kg-wallet" hidden>${coinArt(0)}<p><strong class="kg-wallet-count">0</strong> shared coins<small>1 coin = 1 play</small></p><button class="kg-link" id="kg-get-coins" type="button">Get more ${svg('arrow')}</button></div>
@@ -134,7 +136,7 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  const exit=()=>{close();onExit?.();};
  const replay=()=>{
   if(busy)return;
-  if(ranked){const action=rankedOffer(rankedState).action;if(!action)return;busy=true;close();if(action==='next')ranked.nextLevel();else if(action==='again')ranked.playAgain();else onExit?.();return;}
+  if(ranked){const action=rankedOffer(rankedState).action;if(!action)return;if(action==='retry'){ranked.retry();return;}busy=true;close();if(action==='next')ranked.nextLevel();else if(action==='again')ranked.playAgain();else onExit?.();return;}
   if(!availablePlays(game)){setMode('shop');return;}
   const use=consumePlay(game);
   if(!use.ok){setMode('shop');feedback(use.reason==='storage'?'Your browser could not save play credits. Please allow site storage and try again.':'No plays left. Choose a blue coin pack.');return;}

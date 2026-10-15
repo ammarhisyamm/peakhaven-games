@@ -24,7 +24,7 @@ export function createSupabaseBackend(env=supabaseEnv()){
     async updatePlayer(id,patch){return must(await admin.from('players').update(patch).eq('id',id).select('id,name,bottle').single());},
     async playersByIds(ids){if(!ids.length)return [];return must(await admin.from('players').select('id,name,bottle').in('id',ids));},
     async countRuns(playerId,day){const out={};for(const r of must(await admin.from('runs').select('game').eq('player_id',playerId).eq('day',day)))out[r.game]=(out[r.game]||0)+1;return out;},
-    async startRun({playerId,game,day,seed,limit}){const rows=must(await admin.rpc('start_run',{p_player:playerId,p_game:game,p_day:day,p_seed:seed,p_limit:limit}));return run(rows?.[0])??null;},
+    async startRun({playerId,game,day,seed,limit,requestId=null}){const rows=must(await admin.rpc('start_run',{p_player:playerId,p_game:game,p_day:day,p_seed:seed,p_limit:limit,...(requestId?{p_request:requestId}:{})}));return run(rows?.[0])??null;},
     async getRun(id){if(!/^[0-9a-f-]{36}$/i.test(id))return null;return run(must(await admin.from('runs').select(RUN_FIELDS).eq('id',id).maybeSingle()));},
     // Compare-and-set on `segments` and `status`, so the same submission can't be counted twice.
     async updateRunIf(id,segments,patch){const rows=must(await admin.from('runs').update(patch).eq('id',id).eq('segments',segments).eq('status','open').select('id'));return rows.length?rows[0]:null;},

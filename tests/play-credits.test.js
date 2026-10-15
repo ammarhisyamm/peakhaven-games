@@ -37,3 +37,10 @@ test('non-finite persisted counts cannot create an unlimited wallet',()=>{
  const s=storage();s.setItem(PLAY_CREDIT_KEY,JSON.stringify({date:'2026-10-14',used:{blocks:'Infinity'},coins:'Infinity'}));
  assert.equal(playWallet(s,date).coins,0);assert.equal(freePlaysLeft('blocks',s,date),3);
 });
+
+test('A browser that denies access to localStorage reports a recoverable storage error',()=>{
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,get(){throw Error('denied');}});
+ try{assert.equal(playWallet().coins,0);assert.equal(consumePlay('blocks').reason,'storage');assert.equal(simulateCoinPurchase(5).reason,'storage');}
+ finally{if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else delete globalThis.localStorage;}
+});

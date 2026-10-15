@@ -14,12 +14,13 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     async updatePlayer(id,patch){Object.assign(players.get(id),patch);return copy(players.get(id));},
     async playersByIds(ids){return ids.map(id=>players.get(id)).filter(Boolean).map(copy);},
     async countRuns(playerId,day){const out={};for(const r of runs.values())if(r.player_id===playerId&&r.day===day)out[r.game]=(out[r.game]||0)+1;return out;},
-    async startRun({playerId,game,day,seed,limit}){
+    async startRun({playerId,game,day,seed,limit,requestId=null}){
+      if(requestId){const existing=[...runs.values()].find(r=>r.player_id===playerId&&r.request_id===requestId);if(existing)return copy(existing);}
       const used=[...runs.values()].filter(r=>r.player_id===playerId&&r.game===game&&r.day===day).length;
       if(used>=limit)return null;
       const t=now().toISOString();
       for(const r of runs.values())if(r.player_id===playerId&&r.game===game&&r.status==='open'){r.status='closed';r.finished_at=t;}
-      const run={id:randomUUID(),player_id:playerId,game,day,seed,level:1,segments:0,score:0,status:'open',flagged:false,replays:[],started_at:t,updated_at:t,finished_at:null,reject_reason:null};
+      const run={request_id:requestId,id:randomUUID(),player_id:playerId,game,day,seed,level:1,segments:0,score:0,status:'open',flagged:false,replays:[],started_at:t,updated_at:t,finished_at:null,reject_reason:null};
       runs.set(run.id,run);return copy(run);
     },
     async getRun(id){return copy(runs.get(id))??null;},

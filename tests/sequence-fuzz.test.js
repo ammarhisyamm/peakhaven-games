@@ -19,7 +19,7 @@ const SEEDS=200,MAX_BUSY=120*30; // no single move may keep the board busy for 3
 function fuzz(seed,bot){
   const level=1+(seed*13+(bot==='random'?7:0))%60,palette=sequencePalette(level),target=sequenceTarget(level),rand=createRandom(seed^0x5eed);
   let result=null,ends=0;const cb={hud:noop,message:noop,sound:noop,effect:noop,ready:noop,end(r){ends++;result??=r;}};
-  const e=new SequenceEngine(canvas(),cb,{seed,level,motion:bot==='random'});
+  const e=new SequenceEngine(canvas(),cb,{seed,level,rulesVersion:1,motion:bot==='random'});
   const pick=bot==='greedy'?greedyMove:b=>randomMove(b,rand);
   const where=()=>`${bot} seed ${seed} level ${level} tick ${e.ticks}`;
   let lastScore=0,lastMoves=SEQUENCE_MOVES,busy=0;
