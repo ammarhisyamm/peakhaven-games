@@ -17,11 +17,11 @@ async function body(req){let raw='';for await(const chunk of req)raw+=chunk;try{
 const send=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 
 createServer(async(req,res)=>{
-  const url=new URL(req.url,`http://${req.headers.host}`);
+  let url;try{url=new URL(req.url,`http://${req.headers.host}`);}catch{res.writeHead(400);res.end('Bad request');return;}
   if(url.pathname.startsWith('/api/')){
     const name=url.pathname.slice(5),token=String(req.headers.authorization||'').replace(/^Bearer /,'')||null;
     if(name==='config')return send(res,200,{accounts:true,dev:true});
-    const data=req.method==='POST'?await body(req):{};
+    let data;try{data=req.method==='POST'?await body(req):{};}catch{res.destroy();return;}
     if(name==='dev-login'){const t=auth.tokenFor(String(data.email||'').trim().toLowerCase());return t?send(res,200,{devToken:t}):send(res,404,{error:'No account uses that email yet. Join with your invite code.'});}
     if(!['join','me','profile','start','finish','leaderboard'].includes(name))return send(res,404,{error:'Not found'});
     try{
@@ -39,7 +39,7 @@ createServer(async(req,res)=>{
     path=normalize(path).replace(/^(\.\.[/\\])+/,'');
     const file=join(root,path);
     if(!(await stat(file)).isFile())throw 0;
-    res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(await readFile(file));
+    const data=await readFile(file);res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(data);
   }catch(error){
     const malformed=error instanceof URIError;
     res.writeHead(malformed?400:404);res.end(malformed?'Bad request':'Not found');
