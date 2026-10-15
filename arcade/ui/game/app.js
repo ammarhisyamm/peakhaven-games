@@ -49,11 +49,23 @@ function haptic(type,force=false){const pattern=active==='ridge'&&type==='perfec
   if(!hapticSwitch){const label=document.createElement('label');label.setAttribute('aria-hidden','true');label.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden';label.innerHTML='<input type="checkbox" switch tabindex="-1">';document.body.append(label);hapticSwitch=label;}
   hapticSwitch.click();}catch{/* Haptics are optional. */}}
 
-// First-play hints: in a player's first two games of Peak Blocks, Sequence and Ridge Run, a touch marker shows the
-// opening gesture (drag a piece, swap two crystals, tap to fly). It goes on the first touch and never affects play.
+// First-play hints: until a player has touched their way through two of them per game, a marker shows the opening
+// gesture (drag a piece, swap two crystals, tap to fly). It waits for that first touch and never affects play.
 const HINT_GAMES={blocks:'Drag a piece onto the board',sequence:'Swipe a crystal to swap it',ridge:'Tap anywhere to fly'},HINT_RUNS=2;
 let hintCleanup=null;
 function clearHint(){hintCleanup?.();hintCleanup=null;}
+// A static arrow from where the gesture starts to where it ends, used when motion is reduced and the marker cannot travel.
+function hintArrow(from,to){
+ const dx=to[0]-from[0],dy=to[1]-from[1],len=Math.hypot(dx,dy);if(len<28)return null;
+ const ang=Math.atan2(dy,dx),gap=Math.min(38,len*.3),head=Math.min(19,len*.28),half=Math.max(6,head*.55);
+ const sx=from[0]+Math.cos(ang)*gap,sy=from[1]+Math.sin(ang)*gap,tx=to[0]-Math.cos(ang)*4,ty=to[1]-Math.sin(ang)*4;
+ const bx=tx-Math.cos(ang)*head,by=ty-Math.sin(ang)*head,px=-Math.sin(ang)*half,py=Math.cos(ang)*half;
+ const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),line=document.createElementNS(ns,'line'),tip=document.createElementNS(ns,'polygon');
+ svg.setAttribute('class','hint-arrow');svg.setAttribute('aria-hidden','true');
+ line.setAttribute('x1',sx);line.setAttribute('y1',sy);line.setAttribute('x2',bx);line.setAttribute('y2',by);
+ tip.setAttribute('points',`${tx},${ty} ${bx+px},${by+py} ${bx-px},${by-py}`);
+ svg.append(line,tip);return svg;
+}
 function showFirstPlayHint(id){
  clearHint();if(!HINT_GAMES[id]||!engine)return;
  data.hintRuns=data.hintRuns&&typeof data.hintRuns==='object'?data.hintRuns:{};if((data.hintRuns[id]||0)>=HINT_RUNS)return;
@@ -62,16 +74,20 @@ function showFirstPlayHint(id){
  if(id==='blocks'){const slot=world.querySelector('[data-shape]:not([disabled])'),board=$('#block-board');if(!slot||!board)return;const a=slot.getBoundingClientRect(),b=board.getBoundingClientRect();from=pt(a.left+a.width/2,a.top+a.height/2);to=pt(b.left+b.width/2,b.top+b.height/2);}
  else if(id==='sequence'){const pair=engine.findMove?.(),canvas=$('#game-canvas');if(!pair||!canvas||!engine.geometry)return;const g=engine.geometry(),r=canvas.getBoundingClientRect(),k=engine.scale,cell=i=>pt(r.left+(g.x+(i%7+.5)*g.cell)*k,r.top+(g.y+(Math.floor(i/7)+.5)*g.cell)*k);from=cell(pair[0]);to=cell(pair[1]);}
  else{const canvas=$('#game-canvas');if(!canvas)return;const r=canvas.getBoundingClientRect();from=pt(r.left+r.width*.5,r.top+r.height*.6);}
- data.hintRuns[id]=(data.hintRuns[id]||0)+1;save();
- const dot=document.createElement('div'),caption=document.createElement('div');
- dot.className='hint-touch';dot.setAttribute('aria-hidden','true');dot.style.left=`${from[0]}px`;dot.style.top=`${from[1]}px`;
+ const dot=document.createElement('div'),caption=document.createElement('div'),moving=motionAllowed();
+ dot.className=moving?'hint-touch':'hint-touch hint-static';dot.setAttribute('aria-hidden','true');dot.style.left=`${from[0]}px`;dot.style.top=`${from[1]}px`;
  caption.className='hint-caption';caption.textContent=HINT_GAMES[id];caption.style.top=`${Math.max(84,from[1]-(id==='blocks'?92:70))}px`;
  world.append(dot,caption);
  const dx=to?to[0]-from[0]:0,dy=to?to[1]-from[1]:0,base='translate(-50%,-50%)';
- const anim=!motionAllowed()?null:to?dot.animate([{transform:`${base} scale(.8)`,opacity:0},{transform:`${base} scale(1)`,opacity:1,offset:.15},{transform:`${base} translate(${dx}px,${dy}px)`,opacity:1,offset:.7},{transform:`${base} translate(${dx}px,${dy}px)`,opacity:0}],{duration:1800,iterations:Infinity,easing:'ease-in-out'})
+ // Reduced motion: nothing travels, so a static arrow carries the direction and the marker fades in and out instead.
+ const arrow=!moving&&to?hintArrow(from,to):null;if(arrow)world.append(arrow);
+ const anim=!moving?dot.animate([{opacity:1},{opacity:.45,offset:.5},{opacity:1}],{duration:1700,iterations:Infinity,easing:'ease-in-out'})
+  :to?dot.animate([{transform:`${base} scale(.8)`,opacity:0},{transform:`${base} scale(1)`,opacity:1,offset:.15},{transform:`${base} translate(${dx}px,${dy}px)`,opacity:1,offset:.7},{transform:`${base} translate(${dx}px,${dy}px)`,opacity:0}],{duration:1800,iterations:Infinity,easing:'ease-in-out'})
   :dot.animate([{transform:`${base} scale(1)`},{transform:`${base} scale(.75)`,offset:.25},{transform:`${base} scale(1)`}],{duration:900,iterations:Infinity});
- let timer=0;const done=()=>{anim?.cancel();dot.remove();caption.remove();world.removeEventListener('pointerdown',done,true);clearTimeout(timer);if(hintCleanup===done)hintCleanup=null;};
- timer=setTimeout(done,15000);world.addEventListener('pointerdown',done,true);hintCleanup=done;
+ // A hint only counts once the player has actually touched the game while it was showing; it waits as long as that takes.
+ const done=counted=>{if(counted){data.hintRuns[id]=(data.hintRuns[id]||0)+1;save();}anim?.cancel();dot.remove();caption.remove();arrow?.remove();world.removeEventListener('pointerdown',touched,true);if(hintCleanup===cleanup)hintCleanup=null;};
+ const touched=()=>done(true),cleanup=()=>done(false);
+ world.addEventListener('pointerdown',touched,true);hintCleanup=cleanup;
 }
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3500);}
 function earn(id){if(data.badges.includes(id))return false;data.badges.push(id);return true;}

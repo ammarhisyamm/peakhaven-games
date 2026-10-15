@@ -47,3 +47,8 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 /* First-play hints: a glowing touch marker showing the opening gesture, with a short caption */
 .hint-touch{position:absolute;z-index:20;width:54px;height:54px;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);border:3px solid #fff;background:radial-gradient(circle,#ffffffee 0 26%,#8fffff66 27% 60%,transparent 61%);box-shadow:0 0 18px #8fffff,0 0 4px #003c9b}
 .hint-caption{position:absolute;z-index:20;left:50%;transform:translateX(-50%);pointer-events:none;white-space:nowrap;padding:7px 14px;border-radius:999px;background:#041a3ee6;border:1px solid #8cecff88;color:#fff;font:700 14px/1.3 Inter,sans-serif;box-shadow:0 4px 14px #00265666}
+/* Reduced motion: a bigger, brighter marker and a static arrow, since nothing is allowed to travel */
+.hint-touch.hint-static{width:74px;height:74px;border-width:4px;background:radial-gradient(circle,#fff 0 30%,#b4fdffcc 31% 64%,transparent 65%);box-shadow:0 0 30px #8fffff,0 0 10px #fff,0 0 3px #003c9b}
+.hint-arrow{position:absolute;z-index:19;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;filter:drop-shadow(0 0 7px #8fffff)}
+.hint-arrow line{stroke:#fff;stroke-width:5;stroke-linecap:round}
+.hint-arrow polygon{fill:#fff}
