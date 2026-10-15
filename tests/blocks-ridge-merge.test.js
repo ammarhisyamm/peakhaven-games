@@ -8,7 +8,7 @@ globalThis.requestAnimationFrame=()=>{rafCalls++;return 1;};
 globalThis.cancelAnimationFrame=()=>{};
 globalThis.Image=class{complete=false;naturalWidth=0;};
 const {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,replayBlocks,anyFit}=await import('../dist/blocks-core.js');
-const {SHAPES,makeTray,emptyGrid}=await import('../dist/puzzle-rules.js');
+const {SHAPES,PIECES,makeTray,emptyGrid,placements}=await import('../dist/puzzle-rules.js');
 const {RidgeEngine}=await import('../dist/tryout-games.js');
 const {MergeEngine,MERGE_SPAWN_TIERS}=await import('../dist/engines.js');
 const {SIM_STEP,createRandom}=await import('../dist/rng.js');
@@ -19,7 +19,7 @@ function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?
 function callbacks(onEnd){const out={result:null};out.cb={hud:noop,message:noop,sound:noop,effect:noop,progress:noop,ready:noop,topTier:noop,place:noop,end(r){out.result??=r;onEnd?.(r);}};return out;}
 
 // ---------- Peak Blocks ----------
-const I4=SHAPES[8];
+const I4=PIECES.find(p=>p.name==='line4'&&p.shape.every(([,y])=>y===0)).shape;
 function checker(){return Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>(r+c)%2?1:0));}
 
 test('Blocks ends when the last Bomb leaves no piece that fits, instead of freezing',()=>{
@@ -54,10 +54,17 @@ test('A tampered Blocks log is rejected',()=>{
   const g=createBlocks(5);blocksPlace(g,0,0,0);const rep=blocksResult(g).replay;
   assert.throws(()=>replayBlocks({...rep,log:[...rep.log,['p',0,0,0]]}),/Illegal step/);
 });
-test('Late Blocks trays draw evenly instead of piling onto the 2×3 block',()=>{
-  const rand=createRandom(9),counts=new Map();
-  for(let i=0;i<3000;i++)for(const p of makeTray(emptyGrid(),rand,60))counts.set(SHAPES.indexOf(p.shape),(counts.get(SHAPES.indexOf(p.shape))||0)+1);
-  for(const [index,n] of counts){assert.ok(index>=5,'smallest shapes retire late');assert.ok(n/9000>.15&&n/9000<.25,`shape ${index} share ${n/9000}`);}
+test('Blocks trays deal Block Blast style pieces in proportion to their weights, with no difficulty ramp',()=>{
+  const rand=createRandom(9),counts=new Map(),deals=30000;
+  for(let i=0;i<deals/3;i++)for(const p of makeTray(emptyGrid(),rand))counts.set(p.shape,(counts.get(p.shape)||0)+1);
+  const total=PIECES.reduce((s,p)=>s+p.weight,0);
+  for(const p of PIECES){const share=(counts.get(p.shape)||0)/deals,want=p.weight/total;assert.ok(Math.abs(share-want)<want*.25+.004,`${p.name} share ${share.toFixed(4)} vs ${want.toFixed(4)}`);}
+  for(const p of PIECES)assert.ok(p.color>=1,'every piece has a colour');
+});
+test('A Blocks tray is never dead on arrival when something can fit',()=>{
+  const rand=createRandom(4);
+  for(let i=0;i<2000;i++){const g=emptyGrid().map(row=>row.map(()=>rand()<.72?1:0));const tray=makeTray(g,rand);
+    const anything=PIECES.some(p=>placements(g,p.shape).length);if(anything)assert.ok(tray.some(p=>placements(g,p.shape).length));}
 });
 
 // ---------- Ridge Run ----------
@@ -401,4 +408,24 @@ test('Peptide orbs appear from gate 3, sit between gates, and pay 2 points when 
   for(const o of e.orbs){assert.ok(o.y>=RIDGE.EDGE&&o.y<=RIDGE.GROUND-RIDGE.EDGE);assert.ok(!e.gates.some(g=>o.x>g.x-RIDGE.ORB_R&&o.x<g.x+RIDGE.PW+RIDGE.ORB_R),'never inside a gate');}
   const f=new RidgeEngine(canvas(),callbacks().cb,{seed:6,motion:false});for(const g of f.gates)g.x=1e6;f.nextX=1e7;f.orbs=[{x:f.px+4,y:f.py,taken:false}];f.action();f.step(SIM_STEP);
   assert.equal(f.orbsTaken,1);assert.equal(f.score,2);assert.equal(f.gatesPassed,0,'orbs are not gates');e.destroy();f.destroy();
+});
+
+test('Blocks scores like Block Blast: 1 per block placed, 10 per cleared block with line and combo multipliers',async()=>{
+  const {BLOCK_SCORE,clearPoints}=await import('../dist/blocks-core.js');
+  assert.equal(clearPoints(8,1,1),80);assert.equal(clearPoints(16,2,1),480);assert.equal(clearPoints(24,3,1),1440);assert.equal(clearPoints(32,4,1),3200);
+  assert.equal(clearPoints(8,1,3),160,'a third clear in a streak doubles the points');
+  // Fill row 0 except one cell, then drop a dot there: one line, combo 1.
+  const line=PIECES.find(p=>p.name==='dot').shape;
+  const g=createBlocks(3);g.state.grid=emptyGrid();for(let c=0;c<7;c++)g.state.grid[0][c]=1;g.state.grid[5][5]=1;
+  g.state.tray=[{shape:line,color:3},{shape:line,color:3},{shape:line,color:3}];
+  let out=blocksPlace(g,0,0,7);assert.equal(out.lines,1);assert.equal(out.combo,1);assert.equal(out.points,1+80);
+  // Two placements without a clear keep the streak; a clear on the next one makes it combo 2.
+  out=blocksPlace(g,1,7,0);assert.equal(out.combo,1);out=blocksPlace(g,2,7,1);assert.equal(out.combo,1);
+  for(let c=0;c<7;c++)g.state.grid[3][c]=1;g.state.tray=[{shape:line,color:3},{shape:line,color:3},{shape:line,color:3}];
+  out=blocksPlace(g,0,3,7);assert.equal(out.combo,2);assert.equal(out.points,1+clearPoints(8,1,2));
+  // Three placements without a clear end it.
+  blocksPlace(g,1,6,6);blocksPlace(g,2,6,7);g.state.tray=[{shape:line,color:3},null,null];out=blocksPlace(g,0,6,5);assert.equal(out.combo,0);assert.equal(g.state.chain,0);
+  // Emptying the board adds the perfect clear bonus.
+  const h=createBlocks(4);h.state.grid=emptyGrid();for(let c=0;c<7;c++)h.state.grid[2][c]=1;h.state.tray=[{shape:line,color:3},null,null];
+  out=blocksPlace(h,0,2,7);assert.equal(out.perfect,true);assert.equal(out.points,1+80+BLOCK_SCORE.perfect);
 });

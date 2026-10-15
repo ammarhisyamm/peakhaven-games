@@ -1,11 +1,40 @@
 // Pure rules shared by pointer, touch and keyboard play.
-export const SHAPES=[[[0,0]],[[0,0],[1,0]],[[0,0],[1,0],[2,0]],[[0,0],[0,1],[0,2]],[[0,0],[1,0],[0,1],[1,1]],[[0,0],[1,0],[2,0],[1,1]],[[0,0],[0,1],[1,1]],[[0,0],[1,0],[1,1]],[[0,0],[1,0],[2,0],[3,0]],[[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]]];
+// Peak Blocks pieces, modelled on Block Blast: no rotation, so every orientation is its own piece, and each family
+// has its own colour. Weights set how often a piece is dealt (bigger awkward pieces a little rarer).
+const cells=rows=>rows.flatMap((row,y)=>[...row].flatMap((ch,x)=>ch==='#'?[[x,y]]:[]));
+const family=(name,color,weight,...shapes)=>shapes.map(rows=>({name,color,weight,shape:cells(rows)}));
+export const PIECES=[
+  ...family('dot',3,2,['#']),
+  ...family('line2',1,3,['##'],['#','#']),
+  ...family('line3',1,3,['###'],['#','#','#']),
+  ...family('line4',1,2.5,['####'],['#','#','#','#']),
+  ...family('line5',1,1.8,['#####'],['#','#','#','#','#']),
+  ...family('square2',3,4,['##','##']),
+  ...family('square3',3,1.6,['###','###','###']),
+  ...family('rect',8,2,['###','###'],['##','##','##']),
+  ...family('corner3',2,1.8,['##','#.'],['##','.#'],['#.','##'],['.#','##']),
+  ...family('l4',9,1.1,['#.','#.','##'],['.#','.#','##'],['##','#.','#.'],['##','.#','.#'],['###','#..'],['###','..#'],['#..','###'],['..#','###']),
+  ...family('corner5',7,1,['###','#..','#..'],['###','..#','..#'],['#..','#..','###'],['..#','..#','###']),
+  ...family('t',8,1.3,['###','.#.'],['.#.','###'],['#.','##','#.'],['.#','##','.#']),
+  ...family('sz',7,1.1,['##.','.##'],['.##','##.'],['#.','##','.#'],['.#','##','#.']),
+];
+// Kept for older callers: the bare shapes, with the 1-cell and 2-cell pieces first.
+export const SHAPES=PIECES.map(p=>p.shape);
 export const emptyGrid=()=>Array.from({length:8},()=>Array(8).fill(0));
 export function fits(grid,shape,row,col){return shape.every(([x,y])=>row+y>=0&&col+x>=0&&row+y<8&&col+x<8&&!grid[row+y][col+x]);}
 export function placements(grid,shape){const list=[];for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(fits(grid,shape,r,c))list.push([r,c]);return list;}
 export function placeBlock(grid,shape,row,col,color=1){if(!fits(grid,shape,row,col))return null;const next=grid.map(r=>[...r]);for(const [x,y]of shape)next[row+y][col+x]=color;const rows=[],cols=[];for(let i=0;i<8;i++){if(next[i].every(Boolean))rows.push(i);if(next.every(r=>r[i]))cols.push(i);}const cleared=[];for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(rows.includes(r)||cols.includes(c)){cleared.push([r,c]);next[r][c]=0;}return {grid:next,lines:rows.length+cols.length,cleared};}
-// Later trays drop the smallest shapes but draw evenly from the rest. Clamping a shifted index piled 60% of late pieces onto the 2×3 block.
-export function makeTray(grid,rng=Math.random,level=1){const shift=Math.min(5,Math.floor(level/4)),tray=Array.from({length:3},()=>({shape:SHAPES[shift+Math.floor(rng()*(SHAPES.length-shift))],color:1+Math.floor(rng()*3)}));if(!tray.some(p=>placements(grid,p.shape).length))tray[0]={shape:SHAPES[0],color:1};return tray;}
+// Three pieces, weighted at random like Block Blast's deal (no difficulty ramp, no rotation). A tray is never dead
+// on arrival: if none of the three fits, the first is swapped for a piece that does. `level` is accepted and ignored.
+export function makeTray(grid,rng=Math.random,level=1){
+  const pick=list=>{const total=list.reduce((sum,p)=>sum+p.weight,0);let x=rng()*total;for(const p of list){x-=p.weight;if(x<0)return p;}return list.at(-1);};
+  const fitsNow=p=>placements(grid,p.shape).length>0,full=grid.flat().filter(Boolean).length/64;
+  // On a crowded board (over 45% full) a piece that can't go anywhere gets one redraw, the gentle help players feel
+  // in Block Blast when the board gets tight.
+  const tray=[pick(PIECES),pick(PIECES),pick(PIECES)].map(p=>full>.45&&!fitsNow(p)?pick(PIECES):p);
+  if(!tray.some(fitsNow)){const fitting=PIECES.filter(fitsNow);if(fitting.length)tray[0]=pick(fitting);}
+  return tray.map(p=>({shape:p.shape,color:p.color}));
+}
 export function bombGrid(grid,row,col){return grid.map((line,r)=>line.map((v,c)=>Math.abs(r-row)<=1&&Math.abs(c-col)<=1?0:v));}
 export function tileRows(level=1){return 5+Math.floor(Math.max(0,level-20)/5);}
 export function tileLayout(level=1){const tiles=[];for(let y=0;y<4;y++)for(let x=0;x<6;x++)tiles.push({id:tiles.length,x,y,z:0});for(let y=1;y<3;y++)for(let x=1;x<5;x++)tiles.push({id:tiles.length,x:x+.15,y:y-.15,z:1});for(let x=2;x<4;x++)tiles.push({id:tiles.length,x:x+.3,y:1.35,z:2});if(level>=4)for(let x=0;x<6;x++)tiles.push({id:tiles.length,x,y:4,z:0});if(level>=8){for(let x=1;x<5;x++)for(let y=0;y<2;y++)tiles.push({id:tiles.length,x:x+.15,y:2.85+y*.25,z:1});for(let x=2;x<4;x++)tiles.push({id:tiles.length,x:x+.3,y:2.35,z:2});}if(level>=15)for(let x=2;x<4;x++)tiles.push({id:tiles.length,x:x+.45,y:1.65,z:3});const extraRows=tileRows(level)-5;for(let row=0;row<extraRows;row++)for(let x=0;x<6;x++)tiles.push({id:tiles.length,x,y:5+row,z:0});return tiles;}

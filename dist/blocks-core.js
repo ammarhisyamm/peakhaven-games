@@ -4,13 +4,18 @@ import {emptyGrid,fits,placements,placeBlock,makeTray,bombGrid} from './puzzle-r
 import {nextRandom} from './rng.js';
 
 export const BLOCK_TOOLS=Object.freeze({bomb:3,undo:3,shuffle:3,hint:3});
-const trayLevel=moves=>1+Math.floor(moves/12);
+// Scoring modelled on Block Blast. Placing a piece scores 1 per block. A clear scores 10 per cleared block, times a
+// bonus for several lines at once (x3 for 2 lines, x6 for 3, x10 for 4, more beyond), times the combo: each clear in a
+// streak adds 50%. The streak survives up to two placements without a clear; the third ends it. Emptying the board
+// adds 300 on top.
+export const BLOCK_SCORE=Object.freeze({cell:1,clearCell:10,lineMult:[0,1,3,6,10,15,20],comboStep:.5,comboGrace:3,perfect:300});
+export function clearPoints(cells,lines,combo){const m=BLOCK_SCORE.lineMult[Math.min(lines,BLOCK_SCORE.lineMult.length-1)];return Math.round(cells*BLOCK_SCORE.clearCell*m*(1+BLOCK_SCORE.comboStep*Math.max(0,combo-1)));}
 const clone=value=>structuredClone(value);
 
 export function createBlocks(seed){
-  const state={grid:emptyGrid(),tray:null,selected:0,score:0,lines:0,chain:0,moves:0,rng:seed>>>0};
+  const state={grid:emptyGrid(),tray:null,selected:0,score:0,lines:0,chain:0,sinceClear:0,bestChain:0,moves:0,rng:seed>>>0};
   // The generator state lives inside `state`, so Undo also rewinds it and replaying a move deals the same tray.
-  state.tray=makeTray(state.grid,()=>nextRandom(state),1);
+  state.tray=makeTray(state.grid,()=>nextRandom(state));
   return {seed:seed>>>0,state,history:[],tools:{...BLOCK_TOOLS},ended:false,log:[]};
 }
 export const anyFit=g=>g.state.tray.some(p=>p&&placements(g.state.grid,p.shape).length>0);
@@ -26,10 +31,16 @@ export function blocksPlace(g,index,r,c){
   const out=placeBlock(s.grid,p.shape,r,c,p.color);
   if(!out)return null;
   remember(g);
-  s.grid=out.grid;s.moves++;s.chain=out.lines?s.chain+1:0;s.lines+=out.lines;
-  s.score+=p.shape.length*10+out.lines*100*Math.max(1,s.chain);
+  s.grid=out.grid;s.moves++;s.lines+=out.lines;
+  // `chain` is the combo count shown in the HUD; `sinceClear` counts placements since the last clear.
+  let bonus=0;out.perfect=false;
+  if(out.lines){s.chain=s.chain>0&&(s.sinceClear??0)<BLOCK_SCORE.comboGrace?s.chain+1:1;s.sinceClear=0;s.bestChain=Math.max(s.bestChain||0,s.chain);
+    bonus=clearPoints(out.cleared.length,out.lines,s.chain);if(s.grid.every(row=>row.every(v=>!v))){out.perfect=true;bonus+=BLOCK_SCORE.perfect;}}
+  else{s.sinceClear=(s.sinceClear??0)+1;if(s.sinceClear>=BLOCK_SCORE.comboGrace)s.chain=0;}
+  out.points=p.shape.length*BLOCK_SCORE.cell+bonus;out.clearPoints=bonus;out.combo=s.chain;
+  s.score+=out.points;
   s.tray[index]=null;
-  if(s.tray.every(x=>!x))s.tray=makeTray(s.grid,()=>nextRandom(s),trayLevel(s.moves));
+  if(s.tray.every(x=>!x))s.tray=makeTray(s.grid,()=>nextRandom(s));
   s.selected=s.tray.findIndex(Boolean);
   g.log.push(['p',index,r,c]);
   checkEnd(g);
@@ -51,7 +62,7 @@ export function blocksUndo(g){
 export function blocksShuffle(g){
   if(g.ended||!g.tools.shuffle)return false;
   remember(g);const s=g.state;
-  s.tray=makeTray(s.grid,()=>nextRandom(s),trayLevel(s.moves));s.selected=0;g.tools.shuffle--;
+  s.tray=makeTray(s.grid,()=>nextRandom(s));s.selected=0;g.tools.shuffle--;
   g.log.push(['s']);checkEnd(g);return true;
 }
 export function blocksHint(g){
@@ -61,7 +72,7 @@ export function blocksHint(g){
   if(!best)return null;
   g.tools.hint--;s.selected=best.i;g.log.push(['h']);return best;
 }
-export function blocksResult(g){const s=g.state;return {score:s.score,lines:s.lines,moves:s.moves,won:false,replay:{v:1,game:'blocks',seed:g.seed,log:g.log.map(x=>[...x])}};}
+export function blocksResult(g){const s=g.state;return {score:s.score,lines:s.lines,moves:s.moves,bestCombo:s.bestChain||0,won:false,replay:{v:1,game:'blocks',seed:g.seed,log:g.log.map(x=>[...x])}};}
 
 // Server side: rebuild a run from its seed and log. Any illegal step means the log was tampered with.
 export function replayBlocks(replay){
