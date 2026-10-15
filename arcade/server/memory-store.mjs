@@ -25,7 +25,7 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     async getRun(id){return copy(runs.get(id))??null;},
     async updateRunIf(id,segments,patch){const r=runs.get(id);if(!r||r.segments!==segments||r.status!=='open')return null;Object.assign(r,patch);return copy(r);},
     async finishedScores(playerId){return [...runs.values()].filter(r=>r.player_id===playerId&&r.status==='closed').map(r=>r.score);},
-    async scoredRuns(from,to){return [...runs.values()].filter(r=>r.status!=='rejected'&&r.score>0&&r.day>=from&&r.day<=to).map(({player_id,game,score,day,updated_at})=>({player_id,game,score,day,updated_at}));},
+    async scoredRuns(from,to){return [...runs.values()].filter(r=>r.status!=='rejected'&&r.score>0&&r.day>=from&&r.day<=to).map(({id,player_id,game,score,day,updated_at})=>({id,player_id,game,score,day,updated_at}));},
   };
 }
 

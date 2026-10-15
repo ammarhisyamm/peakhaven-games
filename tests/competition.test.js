@@ -264,3 +264,16 @@ test('A top-three monthly finish is found for Golden Peak',()=>{
   assert.deepEqual(podiumMonths(runs,'d'),['2026-09']);
   assert.deepEqual(podiumMonths(runs,'e'),[]);
 });
+
+test('A finished run reports its place on this month\'s board, a new best, and plays left',async()=>{
+  const w=world(),ann=await w.join('a@x.com','Ann'),ben=await w.join('b@x.com','Ben');
+  const play=async(token,gates)=>{const s=await w.api.start({token,body:{game:'ridge'}});const r=ridgeReplay(s.body.seed,gates);w.advance(r.seconds+2);return (await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay}})).body;};
+  let f=await play(ben,6);
+  assert.equal(f.board.rank,1);assert.equal(f.board.players,1);assert.equal(f.board.newBest,true);assert.equal(f.board.previousBest,0);assert.equal(f.plays.ridge,2);
+  f=await play(ann,3);
+  assert.equal(f.board.rank,2);assert.equal(f.board.players,2);assert.equal(f.board.newBest,true);
+  f=await play(ann,2);
+  assert.equal(f.board.newBest,false,'a lower score is not a new best');assert.equal(f.board.rank,2,'rank uses the best score');assert.ok(f.board.best>f.score);assert.equal(f.plays.ridge,1);
+  f=await play(ann,8);
+  assert.equal(f.board.rank,1);assert.equal(f.board.newBest,true);assert.equal(f.plays.ridge,0);
+});

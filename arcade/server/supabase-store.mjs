@@ -38,7 +38,7 @@ export function createSupabaseBackend(env=supabaseEnv()){
     async scoredRuns(from,to){
       const out=[];
       for(let page=0;;page++){
-        const rows=must(await admin.from('runs').select('player_id,game,score,day,updated_at').neq('status','rejected').gt('score',0).gte('day',from).lte('day',to).order('id').range(page*1000,page*1000+999));
+        const rows=must(await admin.from('runs').select('id,player_id,game,score,day,updated_at').neq('status','rejected').gt('score',0).gte('day',from).lte('day',to).order('id').range(page*1000,page*1000+999));
         out.push(...rows);if(rows.length<1000)return out;
       }
     },
