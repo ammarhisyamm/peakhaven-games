@@ -30,8 +30,11 @@ createServer(async(req,res)=>{
       return send(res,out.status,out.body);
     }catch(error){console.error(error);return send(res,500,{error:String(error.message)});}
   }
-  let path=normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/,'');
+  // index.html is appended while the path still has its URL slashes: on Windows normalize() rewrites a trailing
+  // slash to a backslash, so the directory check has to happen before it, not after.
+  let path=decodeURIComponent(url.pathname);
   if(path.endsWith('/'))path+='index.html';
+  path=normalize(path).replace(/^(\.\.[/\\])+/,'');
   const file=join(root,path);
   try{if(!(await stat(file)).isFile())throw 0;res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(await readFile(file));}
   catch{res.writeHead(404);res.end('Not found');}
