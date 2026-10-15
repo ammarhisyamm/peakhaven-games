@@ -28,6 +28,13 @@ export function createSupabaseBackend(env=supabaseEnv()){
     async getRun(id){if(!/^[0-9a-f-]{36}$/i.test(id))return null;return run(must(await admin.from('runs').select(RUN_FIELDS).eq('id',id).maybeSingle()));},
     // Compare-and-set on `segments` and `status`, so the same submission can't be counted twice.
     async updateRunIf(id,segments,patch){const rows=must(await admin.from('runs').update(patch).eq('id',id).eq('segments',segments).eq('status','open').select('id'));return rows.length?rows[0]:null;},
+    async finishedScores(playerId){
+      const out=[];
+      for(let page=0;;page++){
+        const rows=must(await admin.from('runs').select('score').eq('player_id',playerId).eq('status','closed').order('id').range(page*1000,page*1000+999));
+        out.push(...rows.map(r=>Number(r.score)||0));if(rows.length<1000)return out;
+      }
+    },
     async scoredRuns(from,to){
       const out=[];
       for(let page=0;;page++){

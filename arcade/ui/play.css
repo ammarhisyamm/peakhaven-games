@@ -106,3 +106,52 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
  .leaderboard-shortcut .ranks-preview{grid-column:3;grid-row:2}
  .customise-link{padding-inline:10px;gap:5px}
 }
+/* Feedback round: hero sub line, gameplay art badge, taglines, per-game leaderboards, bottle unlocks. */
+.hero-copy .hero-note{max-width:34em;font-size:clamp(12px,1.25vw,17px);font-weight:500;letter-spacing:-.01em;color:#2d4a5e;margin-top:6px}
+.daily-game-image{position:relative}
+.daily-game-image .daily-game-badge{position:absolute;right:6px;bottom:6px;width:clamp(20px,4.5vw,44px);height:auto;aspect-ratio:1;object-fit:contain;padding:3px;border-radius:50%;background:#ffffffd9;box-shadow:0 2px 8px #00213a33}
+.daily-game-copy>p strong{display:block;color:#0d2233;font-weight:700}
+.daily-game-copy>p span{display:block;font-size:.84em;margin-top:2px}
+.shortcut-filters{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.leaderboard-shortcut .shortcut-filters{grid-column:2;grid-row:2;justify-self:start}
+.board-games,.board-period{min-width:0;height:clamp(34px,6vw,44px)}
+.board-games button,.board-period button{font-size:clamp(11px,1.7vw,14px);padding:4px 12px;min-height:0}
+.board-games button[aria-selected=true],.board-period button[aria-selected=true]{background:linear-gradient(#087fc1,#004375);color:#fff}
+.play-leaderboard-preview table{width:100%}
+.leaderboard-shortcut .play-leaderboard-preview{grid-row:3}
+.board-caption{font-size:clamp(10px,1.5vw,12px);font-weight:650;color:#3f5a6d;letter-spacing:.02em;padding:8px 10px 0}
+.ranks-filters{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:0 auto 12px}
+.ranks-filters .tabs button{font-size:14px;min-height:32px}
+.rule-link{font:inherit;color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.rule-link:hover{color:#005a9a}
+.steps-note{font-size:14px;color:#2d4a5e;font-weight:600;margin:10px 0 2px}
+.game-modal-tagline{font-weight:650;color:#0d2233}
+.modal-plays{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;border-radius:999px;background:#e5f6fd;color:#005a9a;font-size:13px;font-weight:650}
+.modal-plays svg{width:18px;height:18px}
+.game-controls-note strong+p{margin-top:2px}
+.game-controls-note p+strong{display:block;margin-top:10px}
+.modal-footnote{font-size:12px;color:#526775;margin-top:10px}
+.collection-grid .collection-card{height:auto;min-height:106px}
+.collection-art{position:relative;min-width:0}
+.collection-card.locked .collection-art img{filter:grayscale(1);opacity:.55}
+.collection-card.locked .lock-button{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;box-shadow:0 2px 8px #00213a2e}
+.collection-card .tier{display:block;font-size:11px;font-weight:650;color:#4a6a80;margin:-6px 0 6px;letter-spacing:.02em}
+.unlock-progress{margin-bottom:7px}
+.unlock-bar{display:block;height:6px;border-radius:999px;background:#dbe9f1;overflow:hidden}
+.unlock-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#00cfea,#007cff)}
+.unlock-progress small{display:block;font-size:11px;color:#3f5a6d;margin-top:3px;font-variant-numeric:tabular-nums}
+.modal-image.locked-bottle{filter:grayscale(1);opacity:.6}
+#modal .unlock-progress{margin:12px 0 4px}
+@media(max-width:800px){
+ .hero-copy .hero-note{display:none}
+ .leaderboard-shortcut .shortcut-icon{grid-row:1}
+ .leaderboard-shortcut .shortcut-filters{grid-column:1/-1;grid-row:2}
+ .leaderboard-shortcut .ranks-preview{grid-column:3;grid-row:1}
+ .board-games{flex:1 1 100%}
+ .board-games button{flex:1;padding-inline:4px}
+}
+@media(max-width:700px){
+ .collection-card .tier{font-size:9px;margin:-5px 0 4px}
+ .unlock-progress small{font-size:9px}
+ .collection-grid .collection-card{min-height:93px}
+}

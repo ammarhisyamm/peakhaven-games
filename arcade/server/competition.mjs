@@ -38,22 +38,32 @@ export const cleanCode=value=>String(value??'').trim().toUpperCase().replace(/[^
 
 export function pointsForRank(rank){return COMPETITION.points[rank-1]??COMPETITION.minPoints;}
 
-// One month's table. `runs` are scored runs ({player_id, game, score, updated_at}). Each player's best score per game
-// is ranked (equal scores share a rank, the earlier one listed first) and earns rank points; the three games add up.
+// Each player's best score in one game, ranked. `runs` are scored runs ({player_id, game, score, updated_at}).
+function gameTable(runs,game){
+  const best=new Map();
+  for(const r of runs){
+    if(r.game!==game||!(r.score>0))continue;
+    const prev=best.get(r.player_id),at=Date.parse(r.updated_at)||0;
+    if(!prev||r.score>prev.score||(r.score===prev.score&&at<prev.at))best.set(r.player_id,{score:r.score,at});
+  }
+  const sorted=[...best].sort((a,b)=>b[1].score-a[1].score||a[1].at-b[1].at);
+  const table=new Map();let rank=0,last=null;
+  sorted.forEach(([player,b],i)=>{if(b.score!==last){rank=i+1;last=b.score;}table.set(player,{best:b.score,rank,points:pointsForRank(rank),at:b.at});});
+  return table;
+}
+
+// One game's board for a month or a year: each player's best score in that game, highest first. Equal scores
+// share a rank, and the earlier one is listed first.
+export function gameStandings(runs,game){
+  return [...gameTable(runs,game)].sort((a,b)=>a[1].rank-b[1].rank||a[1].at-b[1].at)
+    .map(([player_id,e])=>({player_id,points:e.best,best:e.best,rank:e.rank}));
+}
+
+// One month's overall table, which decides the prizes. Each player's best score per game is ranked (equal scores
+// share a rank, the earlier one listed first) and earns rank points; the three games add up.
 export function monthlyStandings(runs){
   const perGame={};
-  for(const game of COMPETITION.games){
-    const best=new Map();
-    for(const r of runs){
-      if(r.game!==game||!(r.score>0))continue;
-      const prev=best.get(r.player_id),at=Date.parse(r.updated_at)||0;
-      if(!prev||r.score>prev.score||(r.score===prev.score&&at<prev.at))best.set(r.player_id,{score:r.score,at});
-    }
-    const sorted=[...best].sort((a,b)=>b[1].score-a[1].score||a[1].at-b[1].at);
-    const table=new Map();let rank=0,last=null;
-    sorted.forEach(([player,b],i)=>{if(b.score!==last){rank=i+1;last=b.score;}table.set(player,{best:b.score,rank,points:pointsForRank(rank),at:b.at});});
-    perGame[game]=table;
-  }
+  for(const game of COMPETITION.games)perGame[game]=gameTable(runs,game);
   const players=new Set(COMPETITION.games.flatMap(g=>[...perGame[g].keys()]));
   const rows=[...players].map(player=>{
     const games={};let points=0,rankSum=0,reachedAt=0;
@@ -80,4 +90,11 @@ export function yearlyStandings(runs){
 function rank(rows){
   rows.sort((a,b)=>b.points-a.points||a.rankSum-b.rankSum||a.reachedAt-b.reachedAt||String(a.player_id).localeCompare(String(b.player_id)));
   return rows.map((r,i)=>{const {rankSum,reachedAt,...rest}=r;return {...rest,rank:i+1};});
+}
+
+// Months (YYYY-MM) in which the player finished in the overall top three. `runs` should cover finished months only.
+export function podiumMonths(runs,playerId){
+  const byMonth=new Map();
+  for(const r of runs){const m=String(r.day).slice(0,7);if(!byMonth.has(m))byMonth.set(m,[]);byMonth.get(m).push(r);}
+  return [...byMonth].filter(([,monthRuns])=>monthlyStandings(monthRuns).some(r=>r.player_id===playerId&&r.rank<=3)).map(([m])=>m).sort();
 }

@@ -69,12 +69,12 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
  <p class="kg-run-note">${eyebrow} · ${title.toLowerCase()} · ${fmt(result?.score)} pts</p>
  <p class="kg-out-note">Your free plays are used up for today.</p>
  <p class="kg-balance">${coinArt(0)}<span>Shared coins</span><strong class="kg-wallet-count">0</strong></p>
- <fieldset class="kg-packs"><legend class="kg-sr-only">Choose a blue coin pack</legend>${COIN_PACKS.map((pack,index)=>`<label class="kg-pack${pack.popular?' is-popular':''}"><input type="radio" name="kg-pack" value="${pack.coins}"${pack.popular?' checked':''}><span class="kg-pack-body"><span class="kg-pack-badge">${pack.popular?'MOST POPULAR':''}</span><span class="kg-pack-count">${pack.coins}</span><span class="kg-pack-unit">${pack.coins===1?'PLAY COIN':'PLAY COINS'}</span>${coinArt(index,'kg-pack-coin')}<span class="kg-pack-price">${pack.price}</span><small class="kg-pack-proto">Prototype</small></span></label>`).join('')}</fieldset>
+ <fieldset class="kg-packs"><legend class="kg-sr-only">Choose a blue coin pack</legend>${COIN_PACKS.map((pack,index)=>`<label class="kg-pack${pack.popular?' is-popular':''}"><input type="radio" name="kg-pack" value="${pack.coins}"${pack.popular?' checked':''}><span class="kg-pack-body"><span class="kg-pack-badge">${pack.popular?'MOST POPULAR':''}</span><span class="kg-pack-count">${pack.coins}</span><span class="kg-pack-unit">${pack.coins===1?'PLAY COIN':'PLAY COINS'}</span>${coinArt(index,'kg-pack-coin')}<span class="kg-pack-price">${pack.price}</span></span></label>`).join('')}</fieldset>
  <p class="kg-rule">Coins work across all three games.</p>
  <button class="kg-buy" id="kg-buy" type="button">${shopOnly?'GET BLUE COINS':'BUY &amp; PLAY AGAIN'}</button>
  <p class="kg-buy-note">Purchase confirmed first. Then ${cfg.after(ctx)}.</p>
  <button class="kg-ghost" id="kg-shop-exit" type="button">Back to arcade</button>
- <p class="kg-proto-note">Prototype purchase · no payment is taken.</p>
+ <p class="kg-proto-note">No payment is taken.</p>
  <p class="kg-feedback" role="status" aria-live="polite"></p>
 </section>`;
  document.body.append(dialog);
@@ -117,7 +117,7 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
   const purchase=simulateCoinPurchase(coins);
   if(!purchase.ok){feedback('Your browser could not save the coins. No payment was taken. Please allow site storage and try again.');return;}
   refresh();
-  if(shopOnly){feedback(`${coins} prototype blue coins added. No payment was taken.`);return;}
+  if(shopOnly){feedback(`${coins} blue coins added. No payment was taken.`);return;}
   replay();
  };
  if(shopOnly)dialog.classList.add('kg-shop-only');

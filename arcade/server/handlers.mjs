@@ -1,10 +1,11 @@
 // The competition API, written against two small interfaces so it can be tested without a network:
 //   auth:  userFromToken(token), createUser(email), sendLink(email, redirectTo)
 //   store: see supabase-store.mjs (memory-store.mjs in the tests implements the same calls)
-import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,monthlyStandings,yearlyStandings} from './competition.mjs';
+import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,monthlyStandings,yearlyStandings,gameStandings,podiumMonths} from './competition.mjs';
+import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
 
-export const BOTTLES=['ph-original','sky-molecule','deep-hex','ice-flow','golden-peak','violet-bloom'];
+export const BOTTLES=BOTTLE_SKINS.map(b=>b.id);
 const ok=body=>({status:200,body});
 const fail=(status,error,extra={})=>({status,body:{error,...extra}});
 
@@ -19,6 +20,15 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
   async function playsLeft(playerId,day){
     const used=await store.countRuns(playerId,day);
     return Object.fromEntries(COMPETITION.games.map(g=>[g,Math.max(0,COMPETITION.triesPerDay-(used[g]||0))]));
+  }
+
+  // Lifetime points (from every finished game) and whether the player has finished a past month in the top three.
+  // Together they decide which bottles are unlocked.
+  async function progress(playerId){
+    const at=now(),monthStart=`${monthKey(at)}-01`;
+    const points=(await store.finishedScores(playerId)).reduce((sum,score)=>sum+pointsForGame(score),0);
+    const past=(await store.scoredRuns('2000-01-01',dayKey(at))).filter(r=>r.day<monthStart);
+    return {points,podium:podiumMonths(past,playerId).length>0};
   }
 
   return {
@@ -41,14 +51,19 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
     async me({token}){
       const s=await signedIn(token);if(s.error)return s.error;
       const day=dayKey(now());
-      return ok({player:{name:s.player.name,bottle:s.player.bottle},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day)});
+      const p=await progress(s.player.id);
+      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day)});
     },
 
     async profile({token,body}){
       const s=await signedIn(token);if(s.error)return s.error;
       const patch={};
       if(body?.name!==undefined){const name=cleanName(body.name);if(!name)return fail(400,'Choose a player name of at least 2 characters.');patch.name=name;}
-      if(body?.bottle!==undefined){if(!BOTTLES.includes(body.bottle))return fail(400,'Unknown bottle.');patch.bottle=body.bottle;}
+      if(body?.bottle!==undefined&&body.bottle!==s.player.bottle){
+        if(!BOTTLES.includes(body.bottle))return fail(400,'Unknown bottle.');
+        if(!bottleUnlocked(body.bottle,await progress(s.player.id)))return fail(403,'Earn more points to unlock this bottle.');
+        patch.bottle=body.bottle;
+      }
       const player=await store.updatePlayer(s.player.id,patch);
       return ok({player:{name:player.name,bottle:player.bottle}});
     },
@@ -89,17 +104,19 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
       return ok({score,levelScore:result.score,done,nextLevel:done?null:level+1,nextSeed:done?null:seedFor(secret,run.game,run.day,level+1)});
     },
 
+    // With a game, that game's board: best scores this month or year. Without one, the overall rank-points table.
     async leaderboard({token,query}){
       const s=await signedIn(token);if(s.error)return s.error;
       const period=query?.period==='yearly'?'yearly':'monthly',at=now();
+      const game=COMPETITION.games.includes(query?.game)?query.game:null;
       const key=period==='yearly'?yearKey(at):monthKey(at),range=period==='yearly'?yearRange(key):monthRange(key);
       const runs=await store.scoredRuns(range.from,range.to);
-      const table=period==='yearly'?yearlyStandings(runs):monthlyStandings(runs);
+      const table=game?gameStandings(runs,game):period==='yearly'?yearlyStandings(runs):monthlyStandings(runs);
       const shown=table.slice(0,20),mine=table.find(r=>r.player_id===s.player.id)??null;
       const ids=[...new Set([...shown.map(r=>r.player_id),...(mine?[mine.player_id]:[])])];
       const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
       const view=r=>({rank:r.rank,name:people.get(r.player_id)?.name??'Player',bottle:people.get(r.player_id)?.bottle??BOTTLES[0],points:r.points,games:r.games,you:r.player_id===s.player.id});
-      return ok({period,key,players:table.length,top:shown.map(view),me:mine?view(mine):null});
+      return ok({period,key,game,players:table.length,top:shown.map(view),me:mine?view(mine):null});
     },
   };
 }

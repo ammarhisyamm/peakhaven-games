@@ -54,9 +54,9 @@ performs automatic builds and assigns the production domain after success.
 Play follows the supplied October 13 layout: campaign hero, monthly/yearly
 prizes, Peak Blocks / Sequence / Ridge Run rows, leaderboard preview, bottle
 customisation shortcut and extra-plays concept. `ui/play.css` scopes the layout
-to Play, preserving the other pages. Game illustrations use landscape frames
-(1672:941) with `cover` fitting; original supplied images are preserved in
-`source-assets/`. Proportional result mascots and game wordmarks use `contain`.
+to Play, preserving the other pages. Game cards show real gameplay frames
+(1672:941, captured from each game) with the player's bottle as a small corner
+badge; original supplied images are preserved in `source-assets/`. Proportional result mascots and game wordmarks use `contain`.
 
 The prototype tracks three free game launches per game per local calendar day
 on this device. A launch is counted when the instruction dialog's start button
@@ -67,8 +67,8 @@ three games. Blue play credits are separate from the gameplay engine's cosmetic
 and reward coins and persist locally when the daily free allowance resets.
 
 The coin shop offers 1 / 5 / 10 / 25 blue coins with illustrative A$2.99 /
-A$9.99 / A$17.99 / A$29.99 prices. Purchases are explicitly prototype
-simulations: coins are saved on this device and no payment is taken. The result
+A$9.99 / A$17.99 / A$29.99 prices. Purchases are simulated: coins
+are saved on this device and the shop states that no payment is taken. The result
 shop confirms that save before starting a fresh run; the Play-page shop adds
 coins without starting a game. Storage failure reports feedback and blocks the
 affected launch or simulated purchase.
@@ -89,6 +89,13 @@ it counts, so a changed client can't post a fake score.
 - `supabase/schema.sql`: tables, Row Level Security and the two database functions. Run it once in the SQL editor.
 - `ui/account.js`: sign-in by emailed link and calls to `/api`. Without `/api/config` (plain static preview)
   the arcade falls back to the on-device demo.
+- Leaderboards are per game: `GET /api/leaderboard?period=monthly|yearly&game=blocks|sequence|ridge` ranks
+  each player's best score in that game. Without `game` it returns the overall rank-points table that decides
+  prizes (each game's monthly board earns 100, 90, 80… points; the three games add up).
+- Bottle skins unlock with lifetime points (`ui/bottle-unlocks.js`, shared by the page and the API): every
+  finished game earns a tenth of its score, at least 10 and at most 250. Sky Molecule 500, Ice Flow 2,500,
+  Deep Hex 7,500, Violet Bloom 15,000, Golden Peak 30,000 or a top-three monthly finish. `/api/profile`
+  refuses to equip a locked bottle.
 - Tests: `npm test` in the repo root (`tests/competition.test.js`).
 
 Environment variables (Vercel, Production and Preview): `SUPABASE_URL`, `SUPABASE_ANON_KEY`,

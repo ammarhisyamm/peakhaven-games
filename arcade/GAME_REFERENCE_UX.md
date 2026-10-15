@@ -33,9 +33,9 @@ Desktop white shops pair run statistics with selectable packs. Blocks uses four 
 
 `dist/play-credits.js` owns `ph-arcade-play-credits-v1`: three free launches per game per local calendar day, plus one shared blue-coin balance across all three games. Both initial launch and result replay consume a play. Remaining free launches are used first, then one blue coin. Day rollover restores free launches and retains shared coins. Existing V2 daily usage migrates without returning already spent plays.
 
-Blue play credits are separate from cosmetic/reward coins under `ph-arcade-v1`. The reference packs are 1/A$2.99, 5/A$9.99, 10/A$17.99 and 25/A$29.99, with 10 initially selected. Every price carries an adjacent Prototype label. Selection and confirmation simulate adding coins locally; no checkout, payment request or charge occurs. A purchase is saved before replay, then the new run consumes a play normally. Storage failure gives feedback and prevents an unsaved launch/purchase from appearing successful.
+Blue play credits are separate from cosmetic/reward coins under `ph-arcade-v1`. The reference packs are 1/A$2.99, 5/A$9.99, 10/A$17.99 and 25/A$29.99, with 10 initially selected. The shop states that no payment is taken; per the October 15 implementation brief, packs no longer carry a Prototype label. Selection and confirmation simulate adding coins locally; no checkout, payment request or charge occurs. A purchase is saved before replay, then the new run consumes a play normally. Storage failure gives feedback and prevents an unsaved launch/purchase from appearing successful.
 
-Sequence retries a failed level with a fresh board and advances after an actual win. Existing target rules, seeded engine logic, finite tools, sound, personal bests, Ridge course and pause/resume behavior remain authoritative. Ranks buttons open the existing Arcade Ranks page; they do not introduce a separate per-game backend leaderboard.
+Sequence retries a failed level with a fresh board and advances after an actual win. Existing target rules, seeded engine logic, finite tools, sound, personal bests, Ridge course and pause/resume behavior remain authoritative. Ranks buttons open the Arcade Ranks page on that game's own leaderboard.
 
 ## Validation and scope
 
