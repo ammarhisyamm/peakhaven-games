@@ -1,3 +1,4 @@
+import {isDeepStrictEqual} from 'node:util';
 // The competition API, written against two small interfaces so it can be tested without a network:
 //   auth:  userFromToken(token), createUser(email), sendLink(email, redirectTo)
 //   store: see supabase-store.mjs (memory-store.mjs in the tests implements the same calls)
@@ -29,6 +30,23 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
     const points=(await store.finishedScores(playerId)).reduce((sum,score)=>sum+pointsForGame(score),0);
     const past=(await store.scoredRuns('2000-01-01',dayKey(at))).filter(r=>r.day<monthStart);
     return {points,podium:podiumMonths(past,playerId).length>0};
+  }
+
+  async function finishView(run,playerId){
+    const done=run.status!=='open',level=run.segments;
+    const lastScore=run.replays?.length>1?null:run.score;
+    const out={score:run.score,done,nextLevel:done?null:level+1,nextSeed:done?null:seedFor(secret,run.game,run.day,level+1)};
+    if(lastScore!==null)out.levelScore=lastScore;
+    if(done){
+      const month=String(run.day).slice(0,7),range=monthRange(month);
+      const before=(await store.scoredRuns(range.from,range.to)).filter(r=>r.id!==run.id);
+      const previousBest=before.filter(r=>r.player_id===playerId&&r.game===run.game).reduce((m,r)=>Math.max(m,r.score),0);
+      const rows=run.score>0?[...before,{id:run.id,player_id:playerId,game:run.game,score:run.score,day:run.day,updated_at:run.updated_at}]:before;
+      const table=gameStandings(rows,run.game),mine=table.find(r=>r.player_id===playerId);
+      out.board={month,rank:mine?.rank??null,players:table.length,best:mine?.best??0,previousBest,newBest:run.score>0&&run.score>previousBest};
+      out.plays=await playsLeft(playerId,dayKey(now()));
+    }
+    return out;
   }
 
   return {
@@ -73,10 +91,13 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
     async start({token,body}){
       const s=await signedIn(token);if(s.error)return s.error;
       const game=body?.game;if(!COMPETITION.games.includes(game))return fail(400,'That game is not in the competition.');
+      const requestId=body?.requestId??null;
+      if(requestId!==null&&(typeof requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)))return fail(400,'Invalid start request. Please reopen the game.');
       const day=dayKey(now()),seed=seedFor(secret,game,day,1);
-      const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay});
+      const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId});
       if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day)});
-      return ok({runId:run.id,game,seed,level:1,plays:await playsLeft(s.player.id,day)});
+      if(run.game!==game||run.status!=='open'||run.segments>0)return fail(409,'This run has already been played. Please start a new one.');
+      return ok({runId:run.id,game,seed:run.seed,level:1,plays:await playsLeft(s.player.id,day)});
     },
 
     // Receives one finished game (or, in Sequence, one finished level), replays it, and adds the verified score.
@@ -85,6 +106,9 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
       const s=await signedIn(token);if(s.error)return s.error;
       const run=await store.getRun(String(body?.runId??''));
       if(!run||run.player_id!==s.player.id)return fail(404,'Run not found.');
+      // A lost HTTP response is safe to retry. Only an identical replay already verified for this player qualifies.
+      const duplicate=run.status!=='rejected'&&(run.replays||[]).some(rep=>isDeepStrictEqual(rep,body?.replay));
+      if(duplicate)return ok(await finishView(run,s.player.id));
       if(run.status!=='open')return fail(409,'This run is already finished.');
       const level=run.segments+1;
       if(run.game!=='sequence'&&run.segments>0)return fail(409,'This run is already finished.');
@@ -99,21 +123,13 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
       const done=run.game!=='sequence'||!result.won,score=run.score+result.score;
       const claimed=Number(body?.claimed);
       const flagged=run.flagged||(Number.isFinite(claimed)&&claimed!==result.score);
-      // For the end-of-run screen: where this run puts the player on this month's board for the game, and whether
-      // it beats their earlier best this month. Read before the update so this run's own earlier levels are excluded.
-      const month=String(run.day).slice(0,7),range=monthRange(month);
-      const before=done?(await store.scoredRuns(range.from,range.to)).filter(r=>r.id!==run.id):null;
       const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
-      if(!updated)return fail(409,'This run was already updated.');
-      const out={score,levelScore:result.score,done,nextLevel:done?null:level+1,nextSeed:done?null:seedFor(secret,run.game,run.day,level+1)};
-      if(done){
-        const previousBest=before.filter(r=>r.player_id===s.player.id&&r.game===run.game).reduce((m,r)=>Math.max(m,r.score),0);
-        const rows=score>0?[...before,{id:run.id,player_id:s.player.id,game:run.game,score,day:run.day,updated_at:at.toISOString()}]:before;
-        const table=gameStandings(rows,run.game),mine=table.find(r=>r.player_id===s.player.id);
-        out.board={month,rank:mine?.rank??null,players:table.length,best:mine?.best??0,previousBest,newBest:score>0&&score>previousBest};
-        out.plays=await playsLeft(s.player.id,dayKey(at));
+      if(!updated){
+        const latest=await store.getRun(run.id);
+        if(latest?.status!=='rejected'&&(latest?.replays||[]).some(rep=>isDeepStrictEqual(rep,body.replay)))return ok(await finishView(latest,s.player.id));
+        return fail(409,'This run was already updated.');
       }
-      return ok(out);
+      return ok({...await finishView({...run,score,segments:level,level,status:done?'closed':'open',updated_at:at.toISOString()},s.player.id),levelScore:result.score});
     },
 
     // With a game, that game's board: best scores this month or year. Without one, the overall rank-points table.

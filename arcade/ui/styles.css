@@ -70,3 +70,11 @@ tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.fo
 .guest-continue{width:100%;min-height:48px;gap:10px}
 .guest-continue svg{width:20px;height:20px;flex:none}
 #guest-sign-in{min-height:44px;padding:8px 12px}
+/* Recovery controls preserve the current play when the network or iframe load fails. */
+.pending-result{padding:16px;margin-block:12px;border:1px solid var(--line);border-radius:12px;background:#effbfe}
+.pending-result>div{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+.pending-result button{min-height:44px}
+.game-load-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;background:#0a203b;color:#fff;text-align:center}
+.game-load-state p{max-width:38ch;color:#fff;font-size:16px;margin:0}
+.game-load-state button{min-height:44px;padding:10px 20px}
+.game-load-state .text-link{color:#80e9ff}

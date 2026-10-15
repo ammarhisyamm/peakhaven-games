@@ -48,6 +48,7 @@ export function keepGoingOffer(free,coins){
 // verified result, the player's place on this month's board and the server's plays left, and never offers coins.
 export function rankedOffer(state){
  if(!state||state.phase==='checking')return {label:'CHECKING SCORE…',note:'Verifying your run',action:null};
+ if(state.phase==='error'&&state.retryable)return {label:'TRY SAVING AGAIN',note:'Your score is kept on this device until you retry',action:'retry'};
  if(state.phase==='next')return {label:'NEXT LEVEL',note:`Level ${state.level} · run total ${fmt(state.score)}`,action:'next'};
  const plays=Math.max(0,Number(state.plays)||0);
  if(plays>0)return {label:'PLAY AGAIN',note:`${plural(plays,'free play','free plays')} left today`,action:'again'};
@@ -134,7 +135,7 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  const exit=()=>{close();onExit?.();};
  const replay=()=>{
   if(busy)return;
-  if(ranked){const action=rankedOffer(rankedState).action;if(!action)return;busy=true;close();if(action==='next')ranked.nextLevel();else if(action==='again')ranked.playAgain();else onExit?.();return;}
+  if(ranked){const action=rankedOffer(rankedState).action;if(!action)return;if(action==='retry'){ranked.retry();return;}busy=true;close();if(action==='next')ranked.nextLevel();else if(action==='again')ranked.playAgain();else onExit?.();return;}
   if(!availablePlays(game)){setMode('shop');return;}
   const use=consumePlay(game);
   if(!use.ok){setMode('shop');feedback(use.reason==='storage'?'Your browser could not save play credits. Please allow site storage and try again.':'No plays left. Choose a blue coin pack.');return;}

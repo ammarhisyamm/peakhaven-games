@@ -124,3 +124,12 @@ test('Sequence targets keep levels 1-50 as they were, then ease toward a ceiling
   assert.equal(sequenceTarget(200),SEQUENCE_TARGET_CAP);assert.equal(sequenceTarget(0),sequenceTarget(1));
   assert.equal(SEQUENCE_MOVES,25);
 });
+
+test('Sequence ignores a second pointer and clears held gestures on lost capture and pause',()=>{
+ const e=engine(42),g=e.geometry(),point=i=>({clientX:g.x+(i%7+.5)*g.cell,clientY:g.y+(Math.floor(i/7)+.5)*g.cell,pointerId:1});
+ e.onpointerdown(point(0));const origin=[...e.pointerStart];e.onpointerdown({...point(20),pointerId:2});assert.deepEqual(e.pointerStart,origin);
+ e.onpointermove({...point(1),pointerId:2});assert.equal(e.inputs.length,0);
+ e.onlostpointercapture(point(0));assert.equal(e.pointerStart,null);assert.equal(e.pointerId,null);
+ e.onpointerdown(point(0));e.pause();e.pause(false);e.onpointerup(point(1));assert.equal(e.inputs.length,0);
+ e.onpointerdown(point(0));e.onpointermove(point(1));assert.equal(e.inputs.length,1,'a new gesture works after interruption');e.destroy();
+});

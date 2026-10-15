@@ -30,6 +30,7 @@ export async function verifySegment({game,replay,seed,level,elapsedSeconds}){
     if(error instanceof RejectedRun)throw error;
     reject(`Replay failed: ${String(error?.message||error).slice(0,120)}`);
   }
+  if(result.unusedInputs)reject('Replay contains unused or invalid inputs');
   const gameSeconds=(result.ticks||0)*SIM_STEP;
   if(Number.isFinite(elapsedSeconds)&&gameSeconds>elapsedSeconds+CLOCK_SLACK_SECONDS)reject('Run finished faster than real time allows');
   if(!Number.isInteger(result.score)||result.score<0)reject('Replay produced an invalid score');
