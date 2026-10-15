@@ -8,7 +8,7 @@ globalThis.requestAnimationFrame=()=>{rafCalls++;return 1;};
 globalThis.cancelAnimationFrame=()=>{};
 globalThis.Image=class{complete=false;naturalWidth=0;};
 const {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,replayBlocks,anyFit}=await import('../dist/blocks-core.js');
-const {SHAPES,PIECES,makeTray,emptyGrid,placements}=await import('../dist/puzzle-rules.js');
+const {SHAPES,PIECES,makeTray,emptyGrid,placements,placeBlock,RAMP_MOVES}=await import('../dist/puzzle-rules.js');
 const {RidgeEngine}=await import('../dist/tryout-games.js');
 const {MergeEngine,MERGE_SPAWN_TIERS}=await import('../dist/engines.js');
 const {SIM_STEP,createRandom}=await import('../dist/rng.js');
@@ -428,4 +428,63 @@ test('Blocks scores like Block Blast: 1 per block placed, 10 per cleared block w
   // Emptying the board adds the perfect clear bonus.
   const h=createBlocks(4);h.state.grid=emptyGrid();for(let c=0;c<7;c++)h.state.grid[2][c]=1;h.state.tray=[{shape:line,color:3},null,null];
   out=blocksPlace(h,0,2,7);assert.equal(out.perfect,true);assert.equal(out.points,1+80+BLOCK_SCORE.perfect);
+});
+
+// --- difficulty curve -------------------------------------------------------------------------------------
+// Plays whatever fits first, so a run can be driven without caring how well it is played.
+function firstLegal(g){for(let i=0;i<g.state.tray.length;i++){const p=g.state.tray[i];if(!p)continue;const spot=placements(g.state.grid,p.shape)[0];if(spot)return [i,spot[0],spot[1]];}return null;}
+const trayRun=seed=>{const g=createBlocks(seed);const seen=[];for(let i=0;i<24;i++){seen.push(g.state.tray.map(p=>p&&p.shape.length).join(''));const move=firstLegal(g);if(!move)break;blocksPlace(g,...move);}return seen;};
+
+test('Blocks tray generation is deterministic from the seed and the game state',()=>{
+  assert.deepEqual(trayRun(90210),trayRun(90210),'the same seed must deal the same run twice');
+  assert.notDeepEqual(trayRun(90210),trayRun(90211),'different seeds should not deal the same run');
+});
+
+test('Early Blocks trays are smaller on average than late trays',()=>{
+  // An empty board has no line to complete, so this measures the ramp on its own, with no assist in the way.
+  const average=moves=>{let cells=0,pieces=0;for(let seed=0;seed<160;seed++){const rand=createRandom((seed*2654435761)>>>0);for(const p of makeTray(emptyGrid(),rand,{version:2,moves})){cells+=p.shape.length;pieces++;}}return cells/pieces;};
+  const early=average(0),late=average(RAMP_MOVES*2);
+  assert.ok(early<late-.8,`early trays ${early.toFixed(2)} cells should sit well under late ${late.toFixed(2)}`);
+  assert.ok(early<3,`early trays should be gentle, got ${early.toFixed(2)} cells a piece`);
+});
+
+test('The near-clear assist fires more often early than late',()=>{
+  // Row 0 is filled to column 3, so the only piece that completes a line is the flat 4-line across columns 4-7.
+  // That piece is rare in an early deal, which makes a high early hit rate the assist's doing rather than the ramp's.
+  const nearly=()=>{const g=emptyGrid();for(let c=0;c<4;c++)g[0][c]=1;return g;};
+  const clears=(grid,p)=>placements(grid,p.shape).some(([r,c])=>placeBlock(grid,p.shape,r,c,1).lines>0);
+  const rate=moves=>{const runs=400;let hits=0;for(let seed=0;seed<runs;seed++){const grid=nearly(),rand=createRandom((seed*40503+moves*7919)>>>0);
+    if(makeTray(grid,rand,{version:2,moves}).some(p=>clears(grid,p)))hits++;}return hits/runs;};
+  const early=rate(0),late=rate(RAMP_MOVES*2);
+  assert.ok(early>late+.15,`the assist should fade over a run: early ${early.toFixed(2)} vs late ${late.toFixed(2)}`);
+  assert.ok(early>.5,`the assist should be common early, got ${early.toFixed(2)}`);
+});
+
+test('A v2 tray is still never dead on arrival',()=>{
+  for(const moves of [0,10,RAMP_MOVES,RAMP_MOVES*2]){
+    for(let seed=0;seed<250;seed++){
+      const rand=createRandom((seed*2246822519+moves)>>>0);
+      const grid=emptyGrid().map(row=>row.map(()=>rand()<.72?1:0));
+      if(!grid.flat().includes(0))continue;
+      const tray=makeTray(grid,rand,{version:2,moves});
+      assert.ok(tray.some(p=>placements(grid,p.shape).length>0),`dead tray at moves ${moves}, seed ${seed}`);
+    }
+  }
+});
+
+test('Both v1 and v2 Blocks replays verify, each with the generator it was played on',()=>{
+  for(const version of [1,2]){
+    const g=createBlocks(31337,version);
+    for(let i=0;i<40;i++){const move=firstLegal(g);if(!move)break;blocksPlace(g,...move);}
+    const result=blocksResult(g);
+    assert.equal(result.replay.v,version,'a replay carries the version it was played under');
+    assert.equal(replayBlocks(result.replay).score,result.score,`a v${version} replay should reproduce its score`);
+    assert.ok(result.moves>5,`the v${version} run should get going, got ${result.moves} moves`);
+  }
+  // The two generators really do deal differently, which is why the version has to travel with the replay.
+  assert.notEqual(
+    createBlocks(31337,1).state.tray.map(p=>p.shape.length).join(','),
+    createBlocks(31337,2).state.tray.map(p=>p.shape.length).join(','));
+  const rep=blocksResult(createBlocks(5,2)).replay;
+  assert.throws(()=>replayBlocks({...rep,v:3}),/Unknown Peak Blocks replay version/);
 });
