@@ -158,7 +158,7 @@ function mountGame(id,level=null){
  $('#game-back').onclick=()=>pauseGame();
  if(id==='sort'){setupSort(runningLevel);return;}
  const cb={aligned:value=>{if($('#alignment-cue'))$('#alignment-cue').textContent=value?'Tap now!':'';},hud:(score,detail,combo)=>{hudValue('#hud-score',fmt(score));hudValue('#hud-detail',fmt(detail));hudValue('#hud-combo',id==='ridge'?fmt(Math.max(data.best.ridge||0,score)):id==='blocks'?String(parseInt(combo,10)||0):combo);},message:m=>{if($('#game-message'))$('#game-message').textContent=m;},sound,ready:()=>{},end:result=>finishGame(id,result),effect:(label,kind,meta)=>impact(label,kind,meta),place:height=>{if(height>=10){earn('tower10');if(!data.daily.includes(localDay())){data.daily.push(localDay());earn('daily');}save();}},topTier:()=>{earn('merge5');save();}};
- const options={motion:motionAllowed(),level:runningLevel,skin:SKINS.findIndex(s=>s.id===data.skin),...(ranked?{seed:ranked.seed}:{})};
+ const options={motion:motionAllowed(),level:runningLevel,best:data.best[id]||0,skin:SKINS.findIndex(s=>s.id===data.skin),...(ranked?{seed:ranked.seed}:{})};
  engine=id==='blocks'?startBlocks($('.game-world'),cb,options):id==='mahjong'?startMahjong($('.game-world'),cb,options):id==='tower'?new TowerEngine($('#game-canvas'),cb,options):id==='merge'?new MergeEngine($('#game-canvas'),cb,options):id==='orbit'?new OrbitEngine($('#game-canvas'),cb,options):id==='ridge'?new RidgeEngine($('#game-canvas'),cb,options):id==='bond'?new BondEngine($('#game-canvas'),cb,options):new SequenceEngine($('#game-canvas'),cb,options);
  $('#game-canvas')?.focus({preventScroll:true});
  setTimeout(()=>{if(active===id)showFirstPlayHint(id);},700);
@@ -167,7 +167,7 @@ function mountGame(id,level=null){
 // board flashes and how strong the haptic is. The callout text itself comes from the game.
 function blockImpactFeedback(label,meta){
  if(!meta)return label;
- const board=$('#block-board'),big=meta.perfect||meta.combo>=3||meta.lines>=3;
+ const board=$('#block-board'),big=meta.perfect||meta.newBest||meta.combo>=3||meta.lines>=3;
  if(board&&motionAllowed()){
   board.classList.remove('block-clearing','block-combo-2','block-combo-3');void board.offsetWidth;board.classList.add('block-clearing');
   if(meta.combo>1||meta.lines>1||meta.perfect)board.classList.add(big?'block-combo-3':'block-combo-2');
