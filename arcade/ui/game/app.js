@@ -43,7 +43,8 @@ function rankedResults(id,level){return {subscribe(fn){rankedListeners.add(fn);f
 // a light system tap (iOS 18 and later), which is used for the same moments. Off with the Vibration setting.
 const HAPTICS={drop:[8],crystal:[12],bond:[12],perfect:[20],merge:[28],invalid:[10,40,10],miss:[35,45,35],win:[18,60,30]};
 let hapticAt=0,hapticSwitch=null;
-function haptic(type){const pattern=active==='ridge'&&type==='perfect'?[8]:HAPTICS[type];// every Ridge gate is a lighter tickif(!pattern||data.haptics===false)return;const now=performance.now();if(now-hapticAt<45)return;hapticAt=now;
+function haptic(type){const pattern=active==='ridge'&&type==='perfect'?[8]:HAPTICS[type];// every Ridge gate is a lighter tick
+ if(!pattern||data.haptics===false)return;const now=performance.now();if(now-hapticAt<45)return;hapticAt=now;
  try{if(navigator.vibrate){navigator.vibrate(pattern);return;}
   if(!hapticSwitch){const label=document.createElement('label');label.setAttribute('aria-hidden','true');label.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden';label.innerHTML='<input type="checkbox" switch tabindex="-1">';document.body.append(label);hapticSwitch=label;}
   hapticSwitch.click();}catch{/* Haptics are optional. */}}
