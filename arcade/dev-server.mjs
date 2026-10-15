@@ -30,12 +30,18 @@ createServer(async(req,res)=>{
       return send(res,out.status,out.body);
     }catch(error){console.error(error);return send(res,500,{error:String(error.message)});}
   }
-  // index.html is appended while the path still has its URL slashes: on Windows normalize() rewrites a trailing
-  // slash to a backslash, so the directory check has to happen before it, not after.
-  let path=decodeURIComponent(url.pathname);
-  if(path.endsWith('/'))path+='index.html';
-  path=normalize(path).replace(/^(\.\.[/\\])+/,'');
-  const file=join(root,path);
-  try{if(!(await stat(file)).isFile())throw 0;res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(await readFile(file));}
-  catch{res.writeHead(404);res.end('Not found');}
+  // The path build sits inside the try: a malformed percent-escape makes decodeURIComponent throw, which reached
+  // the server as an unhandled rejection and stopped it. index.html is appended while the path still has its URL
+  // slashes, because on Windows normalize() rewrites a trailing slash to a backslash before endsWith('/') sees it.
+  try{
+    let path=decodeURIComponent(url.pathname);
+    if(path.endsWith('/'))path+='index.html';
+    path=normalize(path).replace(/^(\.\.[/\\])+/,'');
+    const file=join(root,path);
+    if(!(await stat(file)).isFile())throw 0;
+    res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(await readFile(file));
+  }catch(error){
+    const malformed=error instanceof URIError;
+    res.writeHead(malformed?400:404);res.end(malformed?'Bad request':'Not found');
+  }
 }).listen(port,()=>console.log(`PH Arcade dev server with accounts: http://localhost:${port}/#play (invite code DEV)`));
