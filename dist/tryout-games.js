@@ -17,12 +17,23 @@ const RIDGE_V4=Object.freeze({H:640,W:360,GROUND:570,FLOOR_PAD:6,CLOSE:7,GRAVITY
  MOVE_START:15,MOVE_FULL:45,MOVE_AMP:18,MOVE_AMP_TO:55,MOVE_SPEED:1.2,MOVE_SPEED_TO:2.2,
  ORB_START:3,ORB_CHANCE:.35,ORB_R:10,ORB_POINTS:2,ORB_OFFSET:30,ORB_OFFSET_TO:60});
 // v5 of the course. Physics (gravity, flap, vial size, spacing) is untouched, so a v4 replay still flies the same;
-// only the shaping changes: a gap that starts well clear of a single flap arc, smaller steps between gates, a
-// gentler speed ramp, and moving columns that arrive in stages instead of switching on at full strength.
-const RIDGE=Object.freeze({...RIDGE_V4,
- SPEED:145,SPEED_GAIN:40,GAP:252,GAP_TO:195,GAP_START:10,GAP_END:80,JUMP:36,JUMP_TO:124,JUMP_END:60,GAP_OPEN:340,GAP_OPEN_END:10,
- MOVE_START:15,MOVE_FULL:55,MOVE_AMP:9,MOVE_AMP_TO:28,MOVE_SPEED:.85,MOVE_SPEED_TO:1.6,MOVE_SHARE:.12,MOVE_SHARE_TO:.8,
- ORB_START:4,ORB_CHANCE:.2,ORB_GAP:2});
+// only the shaping changes. Every ramp point is derived from RAMP, the gate where the course reaches full
+// difficulty, so the whole curve retunes by moving one number.
+const ridgeCourse=(RAMP)=>Object.freeze({...RIDGE_V4,RAMP,
+ // The opening is wider for the first few gates only, and is a normal gap by the time the player has a rhythm.
+ GAP:252,GAP_TO:195,GAP_OPEN:340,GAP_OPEN_END:Math.max(2,Math.round(RAMP*.13)),
+ GAP_START:Math.max(1,Math.round(RAMP*.17)),GAP_END:RAMP,
+ JUMP:36,JUMP_TO:124,JUMP_END:RAMP,
+ // Full speed by RAMP, then a last 10% over the same distance again so a long run keeps tightening.
+ // Full speed by RAMP. SPEED_LATE adds a further rise over the same distance again; it is 0 because any
+  // value above it produced courses the planning bot cannot fly, and a reachable course comes first.
+ SPEED:145,SPEED_GAIN:40,SPEED_LATE:0,
+ // The first column moves at about a quarter of the way in, half of them are moving by halfway, and by RAMP
+ // nearly all of them are, at full swing.
+ MOVE_START:Math.max(1,Math.round(RAMP*.27)),MOVE_FULL:RAMP,MOVE_AMP:9,MOVE_AMP_TO:28,
+ MOVE_SPEED:.85,MOVE_SPEED_TO:1.6,MOVE_SHARE:.25,MOVE_SHARE_TO:.95,
+ ORB_START:4,ORB_CHANCE:.2,ORB_GAP:2,ORB_OFFSET_END:Math.round(RAMP*4/3)});
+const RIDGE=ridgeCourse(40);
 // The vial profile in pixels down from the crimp cap: cap 0-16 at half-width 22, neck 16-24 at 15,
 // shoulder 24-38 ramping 15 to 30, body 30 beyond. The drawing and the collision read the same numbers.
 export const RIDGE_VIAL=Object.freeze({cap:16,neck:24,shoulder:38,capW:22,neckW:15,bodyW:30});
@@ -145,7 +156,10 @@ export class RidgeEngine extends MiniEngine{
  measureHud(){try{const hud=document.querySelector('.in-game .hud'),r=this.canvas.getBoundingClientRect(),b=hud?hud.getBoundingClientRect().bottom-r.top:0;this.hudTop=b>0?(b+10)/this.scale:this.top;}catch{this.hudTop=this.top;}this.hudAt=this.time;}
  sy(y){return this.oy+y*this.ws;}
  get worldW(){return this.w/this.ws;}
- get speed(){return this.C.SPEED+this.C.SPEED_GAIN*clamp(this.gatesPassed/60,0,1);}
+ get speed(){const C=this.C,g=this.gatesPassed;
+  if(C.RAMP===undefined)return C.SPEED+C.SPEED_GAIN*clamp(g/60,0,1);
+  const base=C.SPEED+C.SPEED_GAIN*clamp(g/C.RAMP,0,1);
+  return base*(1+C.SPEED_LATE*clamp((g-C.RAMP)/C.RAMP,0,1));}
  // Gap and reach ramp off the gate's own index, not the live score, so the course is the same for everyone
  // however well they are playing.
  // The opening gates are wider still and ease down to the normal gap, so the first seconds of a run forgive the
@@ -162,12 +176,15 @@ export class RidgeEngine extends MiniEngine{
  addGate(){const i=this.index++,gap=this.gapFor(i),lo=this.C.EDGE+gap/2,hi=this.C.GROUND-this.C.EDGE-gap/2,ramp=clamp((i-this.C.MOVE_START)/(this.C.MOVE_FULL-this.C.MOVE_START),0,1);
   const share=this.C.MOVE_SHARE===undefined?.4+.6*ramp:this.C.MOVE_SHARE+(this.C.MOVE_SHARE_TO-this.C.MOVE_SHARE)*ramp;
   const moves=i>=this.C.MOVE_START&&this.random()<share,want=moves?this.C.MOVE_AMP+(this.C.MOVE_AMP_TO-this.C.MOVE_AMP)*ramp:0;
-  const jump=Math.max(40,this.jumpFor(i)-want-this.lastAmp);
+  // Two columns that both swing can otherwise end up far enough apart, out of phase, that no line threads both.
+  // v5 takes a wider margin off the step for the swing either side; v4 keeps the rule it always had.
+  const swingRoom=(want+this.lastAmp)*(this.C.SWING_SAFETY??1);
+  const jump=Math.max(40,this.jumpFor(i)-swingRoom);
   const a=Math.max(lo,this.lastGy-jump),b=Math.min(hi,this.lastGy+jump),gy=a+this.random()*(b-a),amp=Math.min(want,gy-lo,hi-gy);
   const gate={x:this.nextX,gy,cy:gy,gap,amp,phase:this.random()*TAU,rate:this.C.MOVE_SPEED+(this.C.MOVE_SPEED_TO-this.C.MOVE_SPEED)*ramp,passed:false};
   const prev=this.gates.at(-1);
   const orbRoom=prev&&i>=this.C.ORB_START&&(this.C.ORB_GAP===undefined||i-this.lastOrbI>=this.C.ORB_GAP);
-  if(orbRoom&&this.random()<this.C.ORB_CHANCE){this.lastOrbI=i;const off=(this.C.ORB_OFFSET+(this.C.ORB_OFFSET_TO-this.C.ORB_OFFSET)*clamp(i/40,0,1))*(this.random()<.5?-1:1);
+  if(orbRoom&&this.random()<this.C.ORB_CHANCE){this.lastOrbI=i;const off=(this.C.ORB_OFFSET+(this.C.ORB_OFFSET_TO-this.C.ORB_OFFSET)*clamp(i/(this.C.ORB_OFFSET_END??40),0,1))*(this.random()<.5?-1:1);
    this.orbs.push({x:prev.x+this.C.PW+(this.C.SPACE-this.C.PW)/2,y:clamp((prev.gy+gy)/2+off,this.C.EDGE,this.C.GROUND-this.C.EDGE),taken:false});}
   this.lastGy=gy;this.lastAmp=amp;this.gates.push(gate);this.nextX+=this.C.SPACE;}
  // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.

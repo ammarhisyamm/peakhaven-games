@@ -519,25 +519,26 @@ test('Ridge pickups start at gate 4, never fill two gaps running, and land near 
   assert.ok(rate>.12&&rate<.22,`pickup rate ${(rate*100).toFixed(1)}% should sit near one gap in five`);
 });
 
-test('Ridge moving columns start around gate 15 and build from there',()=>{
-  const band={};let firstMove=[];
+test('Ridge moving columns arrive in stages off the RAMP knob, and every column stays reachable',()=>{
+  // The gate numbers come from RIDGE.RAMP rather than being written down, so retuning the knob retunes the test.
+  const start=RIDGE.MOVE_START,full=RIDGE.MOVE_FULL,half=Math.round((start+full)/2);
+  const share={},swing={};let firstMover=Infinity;
   for(let seed=0;seed<60;seed++){
     const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false,version:5});
-    while(e.index<70)e.addGate();
-    let first=null;
-    e.gates.forEach((g,i)=>{const b=Math.floor(i/10)*10;band[b]??={moving:0,n:0,amp:0};band[b].n++;
-      if(g.amp>0){band[b].moving++;band[b].amp+=g.amp;if(first===null)first=i;}
-      // Reachability: a column must stay inside the playfield across its whole swing.
+    while(e.index<full+15)e.addGate();
+    e.gates.forEach((g,i)=>{share[i]??={m:0,n:0};swing[i]??=[];share[i].n++;
+      if(g.amp>0){share[i].m++;swing[i].push(g.amp);if(i<firstMover)firstMover=i;}
       const lo=RIDGE.EDGE+g.gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-g.gap/2;
       assert.ok(g.gy-g.amp>=lo-1e-6&&g.gy+g.amp<=hi+1e-6,`gate ${i} swings out of the playfield`);});
-    if(first!==null)firstMove.push(first);
     e.destroy();
   }
-  assert.equal(band[0].moving,0,'the opening gates hold still');
-  assert.ok(Math.min(...firstMove)>=15,'nothing moves before gate 15');
-  assert.ok(band[20].moving/band[20].n>.1,'a few columns move by the twenties');
-  assert.ok(band[50].moving/band[50].n>.6,'most columns move by the fifties');
-  assert.ok(band[50].amp/band[50].moving>band[20].amp/band[20].moving,'and they swing further than they did');
+  const shareAt=i=>share[i].m/share[i].n;
+  const meanSwing=i=>{const all=[];for(let j=Math.max(0,i-2);j<=i+2;j++)all.push(...(swing[j]??[]));return all.length?all.reduce((a,b)=>a+b,0)/all.length:0;};
+  assert.ok(firstMover>=start,`nothing may move before gate ${start}, saw one at ${firstMover}`);
+  assert.equal(shareAt(Math.max(0,start-2)),0,'the gates before the first mover hold still');
+  assert.ok(shareAt(half)>.25,`about a third should move by the midpoint, got ${(shareAt(half)*100).toFixed(0)}%`);
+  assert.ok(shareAt(full+8)>.8,`nearly all should move past RAMP, got ${(shareAt(full+8)*100).toFixed(0)}%`);
+  assert.ok(meanSwing(full+8)>meanSwing(half),'and they should swing further than they did at the midpoint');
 });
 
 test('Both v4 and v5 Ridge replays verify, each on the course it was flown',async()=>{
