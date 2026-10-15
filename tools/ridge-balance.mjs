@@ -22,10 +22,12 @@ function stubCanvas(view) {
 const quietCb = {hud: noop, message: noop, sound: noop, effect: noop, progress: noop, ready: noop, topTier: noop, place: noop, haptic: noop, end: noop};
 
 // Reaction lag in ticks, and how shaky the aim is in world units.
+// How late the hand is, how much that lateness wobbles, and how precisely the eye picks the line. The spec for
+// these bots is a reaction time with timing noise, so the wobble lives in the delay, not in the aim.
 const PROFILES = {
-  weak: {lagMs: 180, noise: 26, lookAhead: false},
-  average: {lagMs: 120, noise: 14, lookAhead: false},
-  strong: {lagMs: 60, noise: 5, lookAhead: true},
+  weak: {lagMs: 180, jitterMs: 60, aim: 12, lookAhead: false},
+  average: {lagMs: 120, jitterMs: 40, aim: 7, lookAhead: false},
+  strong: {lagMs: 60, jitterMs: 20, aim: 3, lookAhead: true},
 };
 
 // Box-Muller, so the timing noise is normal rather than a flat band.
@@ -46,30 +48,32 @@ function aimFor(e, RIDGE, profile, rand) {
     const closeness = Math.max(0, Math.min(1, (RIDGE.SPACE - (next.x - e.px)) / RIDGE.SPACE));
     target = next.cy * (1 - closeness * .35) + ahead[1].cy * (closeness * .35);
   }
-  return target + gaussian(rand) * profile.noise;
+  return target + gaussian(rand) * profile.aim;
 }
 
 async function playRun(RidgeEngine, RIDGE, seed, profileName, version) {
   const profile = PROFILES[profileName];
   const rand = createRandom((seed ^ 0x5bf03635) >>> 0);
   const e = new RidgeEngine(stubCanvas([480, 720]), quietCb, {seed, motion: false, version});
-  const lagTicks = Math.max(1, Math.round((profile.lagMs / 1000) / SIM_STEP));
-  const decisions = [];           // what the bot decided `lagTicks` ago
-  // A hand can only tap so fast. Without this the bot taps every tick the vial is low and rockets into the ceiling,
-  // which is not how anyone plays and makes every bot look equally hopeless.
+  const baseLag = Math.max(1, (profile.lagMs / 1000) / SIM_STEP);
+  const jitter = (profile.jitterMs / 1000) / SIM_STEP;
+  // A hand can only tap so fast; without this the bot taps every tick the vial is low and rockets into the ceiling.
   const TAP_GAP = 9, RISING = .35;
-  let lastTap = -99;
-  let guard = 0;
+  let pendingAt = -1, lastTap = -99, guard = 0;
   // The first tap starts the run; after that the bot flies.
   e.action();
   while (!e.ended && guard++ < 120 * 60 * 10) {
-    // Decide from the world as it is now, act on the decision made a reaction time ago.
     const target = aimFor(e, RIDGE, profile, rand);
-    // Flap when the vial is under the line and is not already climbing hard. Reacting to height alone means
-    // tapping all the way up and clipping the gate above; reacting to a long prediction parks it near the ceiling.
-    decisions.push(e.py > target && e.vy > -RIDGE.FLAP * RISING);
-    const due = decisions.length > lagTicks ? decisions.shift() : false;
-    if (due && !e.dead && e.ticks - lastTap >= TAP_GAP) { e.action(); lastTap = e.ticks; }
+    const want = e.py > target && e.vy > -RIDGE.FLAP * RISING;
+    // A player notices once and then taps a beat late, and how late varies. Re-rolling the delay every tick is
+    // not timing noise, it is a randomised hand, and it makes every bot look equally hopeless.
+    if (want && pendingAt < 0 && e.ticks - lastTap >= TAP_GAP) {
+      pendingAt = e.ticks + Math.max(1, Math.round(baseLag + gaussian(rand) * jitter));
+    }
+    if (pendingAt >= 0 && e.ticks >= pendingAt) {
+      if (!e.dead) { e.action(); lastTap = e.ticks; }
+      pendingAt = -1;
+    }
     e.step(SIM_STEP);
   }
   const gates = e.gatesPassed;

@@ -11,11 +11,18 @@ const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d
 // radius 13 at x 100, and gates whose openings are the box-era 150..118 less VIAL_SLACK, the room the
 // vial-shaped collision below hands back. Shrinking the gap by exactly that keeps the vial a reskin
 // rather than an easier game.
-const RIDGE=Object.freeze({H:640,W:360,GROUND:570,FLOOR_PAD:6,CLOSE:7,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,
+const RIDGE_V4=Object.freeze({H:640,W:360,GROUND:570,FLOOR_PAD:6,CLOSE:7,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,
  SLACK:2.6,GAP:150,GAP_TO:118,GAP_START:10,GAP_END:50,JUMP:120,JUMP_TO:220,JUMP_END:40,EDGE:60,R:13,FIRST_X:450,
  // Moving vials and peptide orbs (additions on top of the Tryout Arcade course).
  MOVE_START:15,MOVE_FULL:45,MOVE_AMP:18,MOVE_AMP_TO:55,MOVE_SPEED:1.2,MOVE_SPEED_TO:2.2,
  ORB_START:3,ORB_CHANCE:.35,ORB_R:10,ORB_POINTS:2,ORB_OFFSET:30,ORB_OFFSET_TO:60});
+// v5 of the course. Physics (gravity, flap, vial size, spacing) is untouched, so a v4 replay still flies the same;
+// only the shaping changes: a gap that starts well clear of a single flap arc, smaller steps between gates, a
+// gentler speed ramp, and moving columns that arrive in stages instead of switching on at full strength.
+const RIDGE=Object.freeze({...RIDGE_V4,
+ SPEED:145,SPEED_GAIN:40,GAP:252,GAP_TO:195,GAP_START:10,GAP_END:80,JUMP:36,JUMP_TO:124,JUMP_END:60,GAP_OPEN:340,GAP_OPEN_END:10,
+ MOVE_START:15,MOVE_FULL:55,MOVE_AMP:9,MOVE_AMP_TO:28,MOVE_SPEED:.85,MOVE_SPEED_TO:1.6,MOVE_SHARE:.12,MOVE_SHARE_TO:.8,
+ ORB_START:4,ORB_CHANCE:.2,ORB_GAP:2});
 // The vial profile in pixels down from the crimp cap: cap 0-16 at half-width 22, neck 16-24 at 15,
 // shoulder 24-38 ramping 15 to 30, body 30 beyond. The drawing and the collision read the same numbers.
 export const RIDGE_VIAL=Object.freeze({cap:16,neck:24,shoulder:38,capW:22,neckW:15,bodyW:30});
@@ -30,7 +37,7 @@ export function hitsVial(bx,by,r,cx,capY,dir){
  for(let i=0;i<RIDGE_SAMPLES;i++){const a=i*TAU/RIDGE_SAMPLES,px=bx+Math.cos(a)*r*RIDGE_INSET,py=by+Math.sin(a)*r*RIDGE_INSET;
   const hw=vialHalfWidth((py-capY)*dir);if(hw>0&&Math.abs(px-cx)<hw)return true;}
  return false;}
-export {RIDGE};
+export {RIDGE,RIDGE_V4};
 // Gate counts that get a big on-screen callout in Ridge Run.
 const RIDGE_MILESTONES=[10,25,50,75,100,150,200];
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
@@ -126,83 +133,116 @@ export class RidgeEngine extends MiniEngine{
  // Gravity 1450, a tap sets climb speed to 430, gates 62 wide every 210 units, speed 165 rising to 230 by
  // gate 60, openings 150 shrinking to 118 between gates 10 and 50, and each opening a random step of up to
  // 120 (rising to 220 by gate 40) from the last. The ceiling stops you instead of ending the run.
- constructor(canvas,cb,options){super(canvas,cb,options);this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.lastAmp=0;this.trail=[];this.tilt=0;this.gatesPassed=0;this.orbs=[];this.orbsTaken=0;this.runTime=0;this.popups=[];
-  this.inputs=[];this.resumes=[];this.nextX=RIDGE.FIRST_X;for(let i=0;i<4;i++)this.addGate();this.fillGates();
+ constructor(canvas,cb,options){super(canvas,cb,options);this.courseV=options?.version===4?4:5;this.C=this.courseV===4?RIDGE_V4:RIDGE;this.lastOrbI=-99;this.flapAt=-9;this.bursts=[];this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.lastAmp=0;this.trail=[];this.tilt=0;this.gatesPassed=0;this.orbs=[];this.orbsTaken=0;this.runTime=0;this.popups=[];
+  this.inputs=[];this.resumes=[];this.nextX=this.C.FIRST_X;for(let i=0;i<4;i++)this.addGate();this.fillGates();
   this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
  // The course (sky to ground, 0 to GROUND in world units) fills the space between the bottom of the HUD and the
  // bottom of the screen, so no vial hides under the score boxes and the ground sits on the screen's bottom edge.
  // Only drawing changes with the screen; the course and physics stay in world units.
  get oy(){return this.hudTop??this.top;}
- get ws(){return Math.max(.1,(this.h-this.oy-RIDGE.FLOOR_PAD)/RIDGE.GROUND);}
+ get ws(){return Math.max(.1,(this.h-this.oy-this.C.FLOOR_PAD)/this.C.GROUND);}
  // Measures where the HUD ends on screen (it moves with the notch / safe area); falls back to the shared top margin.
  measureHud(){try{const hud=document.querySelector('.in-game .hud'),r=this.canvas.getBoundingClientRect(),b=hud?hud.getBoundingClientRect().bottom-r.top:0;this.hudTop=b>0?(b+10)/this.scale:this.top;}catch{this.hudTop=this.top;}this.hudAt=this.time;}
  sy(y){return this.oy+y*this.ws;}
  get worldW(){return this.w/this.ws;}
- get speed(){return RIDGE.SPEED+RIDGE.SPEED_GAIN*clamp(this.gatesPassed/60,0,1);}
+ get speed(){return this.C.SPEED+this.C.SPEED_GAIN*clamp(this.gatesPassed/60,0,1);}
  // Gap and reach ramp off the gate's own index, not the live score, so the course is the same for everyone
  // however well they are playing.
- gapFor(i){return(RIDGE.GAP-RIDGE.SLACK)-(RIDGE.GAP-RIDGE.GAP_TO)*clamp((i-RIDGE.GAP_START)/(RIDGE.GAP_END-RIDGE.GAP_START),0,1);}
- jumpFor(i){return RIDGE.JUMP+(RIDGE.JUMP_TO-RIDGE.JUMP)*clamp(i/RIDGE.JUMP_END,0,1);}
+ // The opening gates are wider still and ease down to the normal gap, so the first seconds of a run forgive the
+ // flailing everyone does before they find the rhythm. v4 has no GAP_OPEN, so its opening is unchanged.
+ gapFor(i){const C=this.C,base=(C.GAP-C.SLACK)-(C.GAP-C.GAP_TO)*clamp((i-C.GAP_START)/(C.GAP_END-C.GAP_START),0,1);
+  return C.GAP_OPEN===undefined?base:base+(C.GAP_OPEN-C.GAP)*(1-clamp(i/C.GAP_OPEN_END,0,1));}
+ jumpFor(i){return this.C.JUMP+(this.C.JUMP_TO-this.C.JUMP)*clamp(i/this.C.JUMP_END,0,1);}
  // The reachable band is clamped to the playfield first and the centre drawn inside it, so a gate near an
  // edge still uses its whole remaining range instead of piling up on the margin.
  // Moving vials: from gate 15 some gates bob up and down, more of them and further and faster as you go
  // (from 18 to 55 units, by gate 45). The step between gates shrinks by both swings so every gate stays
  // reachable, and a gate never bobs past the playfield edges.
  // Peptide orbs: from gate 3, about a third of the gaps hold an orb worth 2 points, set off the safe line.
- addGate(){const i=this.index++,gap=this.gapFor(i),lo=RIDGE.EDGE+gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-gap/2,ramp=clamp((i-RIDGE.MOVE_START)/(RIDGE.MOVE_FULL-RIDGE.MOVE_START),0,1);
-  const moves=i>=RIDGE.MOVE_START&&this.random()<.4+.6*ramp,want=moves?RIDGE.MOVE_AMP+(RIDGE.MOVE_AMP_TO-RIDGE.MOVE_AMP)*ramp:0;
+ addGate(){const i=this.index++,gap=this.gapFor(i),lo=this.C.EDGE+gap/2,hi=this.C.GROUND-this.C.EDGE-gap/2,ramp=clamp((i-this.C.MOVE_START)/(this.C.MOVE_FULL-this.C.MOVE_START),0,1);
+  const share=this.C.MOVE_SHARE===undefined?.4+.6*ramp:this.C.MOVE_SHARE+(this.C.MOVE_SHARE_TO-this.C.MOVE_SHARE)*ramp;
+  const moves=i>=this.C.MOVE_START&&this.random()<share,want=moves?this.C.MOVE_AMP+(this.C.MOVE_AMP_TO-this.C.MOVE_AMP)*ramp:0;
   const jump=Math.max(40,this.jumpFor(i)-want-this.lastAmp);
   const a=Math.max(lo,this.lastGy-jump),b=Math.min(hi,this.lastGy+jump),gy=a+this.random()*(b-a),amp=Math.min(want,gy-lo,hi-gy);
-  const gate={x:this.nextX,gy,cy:gy,gap,amp,phase:this.random()*TAU,rate:RIDGE.MOVE_SPEED+(RIDGE.MOVE_SPEED_TO-RIDGE.MOVE_SPEED)*ramp,passed:false};
+  const gate={x:this.nextX,gy,cy:gy,gap,amp,phase:this.random()*TAU,rate:this.C.MOVE_SPEED+(this.C.MOVE_SPEED_TO-this.C.MOVE_SPEED)*ramp,passed:false};
   const prev=this.gates.at(-1);
-  if(prev&&i>=RIDGE.ORB_START&&this.random()<RIDGE.ORB_CHANCE){const off=(RIDGE.ORB_OFFSET+(RIDGE.ORB_OFFSET_TO-RIDGE.ORB_OFFSET)*clamp(i/40,0,1))*(this.random()<.5?-1:1);
-   this.orbs.push({x:prev.x+RIDGE.PW+(RIDGE.SPACE-RIDGE.PW)/2,y:clamp((prev.gy+gy)/2+off,RIDGE.EDGE,RIDGE.GROUND-RIDGE.EDGE),taken:false});}
-  this.lastGy=gy;this.lastAmp=amp;this.gates.push(gate);this.nextX+=RIDGE.SPACE;}
+  const orbRoom=prev&&i>=this.C.ORB_START&&(this.C.ORB_GAP===undefined||i-this.lastOrbI>=this.C.ORB_GAP);
+  if(orbRoom&&this.random()<this.C.ORB_CHANCE){this.lastOrbI=i;const off=(this.C.ORB_OFFSET+(this.C.ORB_OFFSET_TO-this.C.ORB_OFFSET)*clamp(i/40,0,1))*(this.random()<.5?-1:1);
+   this.orbs.push({x:prev.x+this.C.PW+(this.C.SPACE-this.C.PW)/2,y:clamp((prev.gy+gy)/2+off,this.C.EDGE,this.C.GROUND-this.C.EDGE),taken:false});}
+  this.lastGy=gy;this.lastAmp=amp;this.gates.push(gate);this.nextX+=this.C.SPACE;}
  // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.
- fillGates(){while(this.nextX<this.worldW+RIDGE.PW*2)this.addGate();}
+ fillGates(){while(this.nextX<this.worldW+this.C.PW*2)this.addGate();}
  // The tap that ends a post-pause wait only picks the flight back up, at the speed it had when it paused; it does
  // not flap. A forced flap there could throw the vial into glass it was threading when the tab went hidden.
  action(){if(this.paused||this.ended||this.dead)return;this.inputs.push(this.ticks);
   if(this.waiting){this.waiting=false;this.cb.message('');return;}
-  this.started=true;this.vy=-RIDGE.FLAP;this.cb.sound('flap');this.cb.message('');}
+  this.started=true;this.vy=-this.C.FLAP;this.flapAt=this.time;this.cb.sound('flap');this.cb.message('');}
  // Broad phase on the gate's column, then the two vial outlines themselves.
- hits(g){const R=RIDGE.R;if(!(this.px+R>g.x&&this.px-R<g.x+RIDGE.PW))return false;const cx=g.x+RIDGE.PW/2;
+ hits(g){const R=this.C.R;if(!(this.px+R>g.x&&this.px-R<g.x+this.C.PW))return false;const cx=g.x+this.C.PW/2;
   return hitsVial(this.px,this.py,R,cx,g.cy+g.gap/2,1)||hitsVial(this.px,this.py,R,cx,g.cy-g.gap/2,-1);}
  update(dt){
   if(this.waiting)return; // holds still where it was paused until the next tap
   if(!this.started){this.py=300+Math.sin(this.time*3)*8;return;}
-  this.vy+=RIDGE.GRAVITY*dt;this.py+=this.vy*dt;this.tilt=clamp(this.vy*.0011,-.35,.7);
-  if(this.dead){this.deadT+=dt;if(this.py>RIDGE.GROUND-RIDGE.R)this.py=RIDGE.GROUND-RIDGE.R;if(this.deadT>.8)this.end(this.result());return;}
+  this.vy+=this.C.GRAVITY*dt;this.py+=this.vy*dt;this.tilt=clamp(this.vy*.0011,-.35,.7);
+  if(this.dead){this.deadT+=dt;if(this.py>this.C.GROUND-this.C.R)this.py=this.C.GROUND-this.C.R;if(this.deadT>.8)this.end(this.result());return;}
   const sp=this.speed;this.runTime+=dt;for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.8);
   for(const g of this.gates)g.cy=g.gy+g.amp*Math.sin(g.phase+g.rate*this.runTime);
-  for(const o of this.orbs){o.x-=sp*dt;if(!o.taken&&Math.hypot(o.x-this.px,o.y-this.py)<RIDGE.R+RIDGE.ORB_R){o.taken=true;this.orbsTaken++;this.score+=RIDGE.ORB_POINTS;this.popups.push({x:o.x,y:o.y,t:0});this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('bond');this.burst(o.x*this.ws,this.sy(o.y),'#ffd24d',14);}}
-  this.orbs=this.orbs.filter(o=>o.x>-RIDGE.ORB_R*2);
-  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px-RIDGE.R){g.passed=true;this.gatesPassed++;this.score++;if(g.minClear<RIDGE.CLOSE)this.popups.push({x:this.px+18,y:this.py-22,t:0,text:'CLOSE!'});if(RIDGE_MILESTONES.includes(this.gatesPassed))this.cb.effect?.(`${this.gatesPassed} GATES!`,'ridge');this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.sy(this.py),'#8fffff',12);}}
-  this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-RIDGE.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
-  if(this.py<RIDGE.R){this.py=RIDGE.R;this.vy=0;}
-  if(this.py+RIDGE.R>RIDGE.GROUND){this.py=RIDGE.GROUND-RIDGE.R;this.crash();}else if(this.gates.some(g=>this.hits(g)))this.crash();
+  for(const o of this.orbs){o.x-=sp*dt;if(!o.taken&&Math.hypot(o.x-this.px,o.y-this.py)<this.C.R+this.C.ORB_R){o.taken=true;this.orbsTaken++;this.score+=this.C.ORB_POINTS;this.popups.push({x:o.x,y:o.y,t:0});this.bursts.push({x:o.x,y:o.y,t:0});this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('bond');this.burst(o.x*this.ws,this.sy(o.y),'#ffd24d',14);}}
+  this.orbs=this.orbs.filter(o=>o.x>-this.C.ORB_R*2);
+  for(const b of this.bursts){b.x-=sp*dt;b.t+=dt;}this.bursts=this.bursts.filter(b=>b.t<.7);
+  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+this.C.PW<this.px-this.C.R){g.passed=true;this.gatesPassed++;this.score++;g.flashAt=this.time;if(g.minClear<this.C.CLOSE){this.popups.push({x:this.px+18,y:this.py-22,t:0,text:'CLOSE!'});this.cb.haptic?.('close');}if(RIDGE_MILESTONES.includes(this.gatesPassed))this.cb.effect?.(`${this.gatesPassed} GATES!`,'ridge');this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.sy(this.py),'#8fffff',12);}}
+  this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-this.C.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
+  if(this.py<this.C.R){this.py=this.C.R;this.vy=0;}
+  if(this.py+this.C.R>this.C.GROUND){this.py=this.C.GROUND-this.C.R;this.crash();}else if(this.gates.some(g=>this.hits(g)))this.crash();
   // Near misses, for the "CLOSE!" popup only: the tightest gap to the glass while inside each gate's column.
-  if(!this.dead)for(const g of this.gates)if(!g.passed&&this.px+RIDGE.R>g.x&&this.px-RIDGE.R<g.x+RIDGE.PW)g.minClear=Math.min(g.minClear??Infinity,this.py-RIDGE.R-(g.cy-g.gap/2),g.cy+g.gap/2-(this.py+RIDGE.R));
+  if(!this.dead)for(const g of this.gates)if(!g.passed&&this.px+this.C.R>g.x&&this.px-this.C.R<g.x+this.C.PW)g.minClear=Math.min(g.minClear??Infinity,this.py-this.C.R-(g.cy-g.gap/2),g.cy+g.gap/2-(this.py+this.C.R));
   if(this.motion){this.trail.push({x:this.px,y:this.py});for(const p of this.trail)p.x-=sp*dt;if(this.trail.length>14)this.trail.shift();}
  }
  crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.sy(this.py),'#ffd383');this.cb.sound('miss');}
  result(){return {score:this.score,gates:this.gatesPassed,orbs:this.orbsTaken,replay:this.replay()};}
- replay(){return {v:4,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
+ replay(){return {v:this.courseV,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],endTick:this.ticks};}
  // After a pause the vial (and the course) hold still until a tap, so the run never resumes before the player is
  // ready. Its velocity is kept: the tap continues the same flight, as if the pause never happened.
  pause(value=true){super.pause(value);if(!value&&this.started&&!this.dead&&!this.ended){this.resumes.push(this.ticks);this.waiting=true;this.cb.message('Tap to keep flying.');}}
- draw(){if(this.hudAt===undefined||this.time-this.hudAt>1||this.time<this.hudAt)this.measureHud();const c=this.ctx,k=this.ws;c.save();c.translate(0,this.oy);c.scale(k,k);
+ draw(){if(this.hudAt===undefined||this.time-this.hudAt>1||this.time<this.hudAt)this.measureHud();const c=this.ctx,k=this.ws;c.save();
+  // Crash shake: about 6px for a quarter second, and only when motion is allowed.
+  const shake=this.dead&&this.motion?Math.max(0,1-this.deadT/.25):0;
+  if(shake)c.translate(Math.sin(this.deadT*64)*6*shake,Math.cos(this.deadT*51)*6*shake);
+  c.translate(0,this.oy);c.scale(k,k);
   if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.3;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.25,0,TAU);c.fill();}
   c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;
-  // Peptide orbs: a glowing core with three bonded atoms circling it.
-  for(const o of this.orbs){if(o.taken)continue;const pulse=1+.12*Math.sin(this.time*6+o.x*.05);c.save();c.shadowColor='#ffd24d';c.shadowBlur=16;
-   c.strokeStyle='#ffe9a3';c.lineWidth=1.5;for(let k=0;k<3;k++){const a=this.time*2.4+k*TAU/3,ax=o.x+Math.cos(a)*RIDGE.ORB_R*1.5,ay=o.y+Math.sin(a)*RIDGE.ORB_R*1.5;c.beginPath();c.moveTo(o.x,o.y);c.lineTo(ax,ay);c.stroke();c.fillStyle='#fff6d6';c.beginPath();c.arc(ax,ay,2.6,0,TAU);c.fill();}
-   const gr=c.createRadialGradient(o.x,o.y,1,o.x,o.y,RIDGE.ORB_R*pulse);gr.addColorStop(0,'#fffbe8');gr.addColorStop(.5,'#ffd24d');gr.addColorStop(1,'#ff9d2e');c.fillStyle=gr;c.beginPath();c.arc(o.x,o.y,RIDGE.ORB_R*pulse*.8,0,TAU);c.fill();c.restore();}
-  for(const p of this.popups){c.save();c.globalAlpha=1-p.t/.8;c.fillStyle='#ffe9a3';c.shadowColor='#ff9d2e';c.shadowBlur=10;c.font='900 18px Inter, sans-serif';c.textAlign='center';c.fillText(p.text??`+${RIDGE.ORB_POINTS}`,p.x,p.y-14-p.t*30);c.restore();}
-  for(const g of this.gates){const top=g.cy-g.gap/2,bottom=g.cy+g.gap/2,cx=g.x+RIDGE.PW/2;drawBottleObstacle(c,cx,top,top+this.oy/k,RIDGE.PW,true);drawBottleObstacle(c,cx,bottom,RIDGE.GROUND-bottom,RIDGE.PW,false);}
-  c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,RIDGE.GROUND);c.lineTo(this.worldW,RIDGE.GROUND);c.stroke();
-  c.shadowColor='#8fffff';c.shadowBlur=16;drawSprite(c,'vial-cyan',this.px,this.py,RIDGE.R*2,RIDGE.R*2.6,this.tilt);
-  c.restore();}
+  // Pickups: a mini gold vial bobbing in the gap, with a soft glow behind it and a glint every couple of seconds.
+  for(const o of this.orbs){if(o.taken)continue;
+   const ph=o.x*.03,bob=Math.sin(this.time*3+ph)*2.5,oy=o.y+bob,tilt=Math.sin(this.time*1.6+ph)*.16;
+   c.save();
+   const gr=c.createRadialGradient(o.x,oy,1,o.x,oy,this.C.ORB_R*2.4);gr.addColorStop(0,"#ffe9a3aa");gr.addColorStop(1,"#ffd24d00");
+   c.fillStyle=gr;c.beginPath();c.arc(o.x,oy,this.C.ORB_R*2.4,0,TAU);c.fill();
+   c.shadowColor="#ffd24d";c.shadowBlur=14;drawSprite(c,"vial-gold",o.x,oy,19,36,tilt);
+   // Glint: a short white flick across the glass, roughly every two seconds.
+   const gl=(this.time*.5+ph)%1;if(gl<.12){c.globalAlpha=Math.sin(gl/.12*Math.PI)*.9;c.strokeStyle="#ffffff";c.lineWidth=2;
+    c.beginPath();c.moveTo(o.x-5,oy-9+gl*40);c.lineTo(o.x+5,oy-13+gl*40);c.stroke();c.globalAlpha=1;}
+   c.restore();}
+  // Collecting one: a gold ring opening out with eight sparks, over about 0.7s.
+  for(const b of this.bursts){const p=b.t/.7,ease=1-(1-p)*(1-p);c.save();c.globalAlpha=1-p;
+   c.strokeStyle="#ffe9a3";c.lineWidth=2.5;c.beginPath();c.arc(b.x,b.y,6+ease*26,0,TAU);c.stroke();
+   c.fillStyle="#fff6d6";for(let i=0;i<8;i++){const a=i*TAU/8,d=8+ease*30;c.beginPath();c.arc(b.x+Math.cos(a)*d,b.y+Math.sin(a)*d,2.2*(1-p),0,TAU);c.fill();}
+   c.globalAlpha=1;c.restore();}
+  for(const p of this.popups){const close=p.text==='CLOSE!',pop=close?1+.5*Math.max(0,1-p.t/.16)-.5*0:1;
+   c.save();c.globalAlpha=close?Math.max(0,1-p.t/.55):1-p.t/.8;if(close){c.translate(p.x,p.y-14);c.scale(pop,pop);c.translate(-p.x,-(p.y-14));}c.fillStyle='#ffe9a3';c.shadowColor='#ff9d2e';c.shadowBlur=10;c.font='900 18px Inter, sans-serif';c.textAlign='center';c.fillText(p.text??`+${this.C.ORB_POINTS}`,p.x,p.y-14-p.t*30);c.restore();}
+  for(const g of this.gates){const top=g.cy-g.gap/2,bottom=g.cy+g.gap/2,cx=g.x+this.C.PW/2;drawBottleObstacle(c,cx,top,top+this.oy/k,this.C.PW,true);drawBottleObstacle(c,cx,bottom,this.C.GROUND-bottom,this.C.PW,false);
+   // A tick of light on the glass of a gate just cleared.
+   const fl=g.flashAt===undefined?9:this.time-g.flashAt;if(fl<.28){c.save();c.globalAlpha=(1-fl/.28)*.85;c.strokeStyle='#eaffff';c.lineWidth=3;c.shadowColor='#8fffff';c.shadowBlur=12;
+    c.beginPath();c.moveTo(cx-this.C.PW/2,top);c.lineTo(cx+this.C.PW/2,top);c.moveTo(cx-this.C.PW/2,bottom);c.lineTo(cx+this.C.PW/2,bottom);c.stroke();c.restore();}}
+  c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,this.C.GROUND);c.lineTo(this.worldW,this.C.GROUND);c.stroke();
+  c.shadowColor='#8fffff';c.shadowBlur=16;
+  // A flap squashes the vial for about 120ms and kicks its nose up; a dead vial tumbles as it falls.
+  const fl=this.motion?clamp(1-(this.time-this.flapAt)/.12,0,1):0;
+  const tilt=this.dead?this.tilt+this.deadT*7:this.tilt-.5*fl;
+  drawSprite(c,'vial-cyan',this.px,this.py,this.C.R*2*(1-.2*fl),this.C.R*2.6*(1+.26*fl),tilt);
+  c.restore();
+  // Crash flash: about 80ms of white over the whole screen, motion permitting.
+  if(this.dead&&this.motion&&this.deadT<.08){c.save();c.globalAlpha=(1-this.deadT/.08)*.7;c.fillStyle='#ffffff';c.fillRect(0,0,this.w,this.h);c.restore();}
+ }
  finish(){if(!this.ended)this.end(this.result());}
 }
 
