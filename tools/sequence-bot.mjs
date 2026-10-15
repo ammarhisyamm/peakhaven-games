@@ -1,3 +1,4 @@
+import {progressionExchange,applySequenceWave} from '../dist/sequence-progression.js';
 // Sequence bots and a headless, pure-rules playthrough that draws from the generator in exactly the
 // engine's order (opening board, each refill, each reshuffle). Used by the tests and by the balance script.
 import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,sequenceCascade,sequencePalette,sequenceTarget,SEQUENCE_MOVES,SEQUENCE_SIZE} from '../dist/sequence-rules.js';
@@ -34,7 +35,8 @@ export function plainMove(board){
 
 // Greedy: the swap with the most guaranteed points; ties go to the swap lower on the board, which shakes up
 // more crystals and so tends to set off more chains.
-export function greedyMove(board){
+export function greedyMove(board,engine){
+  if(engine?.rulesVersion===2)return objectiveMove(board,engine);
   let best=null,bestValue=-1;
   for(const [a,b] of SEQUENCE_PAIRS){const next=sequenceExchange(board,a,b);if(!sequenceMatches(next).size)continue;
     const value=knownCascade(next).gained+Math.max(Math.floor(a/N),Math.floor(b/N));
@@ -79,8 +81,23 @@ export function playSequence({level=1,seed=1,pick=greedyMove,target=sequenceTarg
 export function driveSequence(e,pick,{think=()=>0,onStep,maxTicks=120*60*30,step=SIM_STEP}={}){
   let wait=null;
   while(!e.ended&&e.ticks<maxTicks){
-    if(!e.pending&&!e.paused){wait??=think(e);if(wait<=0){wait=null;const [a,b]=pick(e.board);e.choose(a,b);}else wait--;}
+    if(!e.pending&&!e.paused){wait??=think(e);if(wait<=0){wait=null;const pair=pick(e.board,e);if(!pair)throw new Error("Sequence bot found no legal move");const [a,b]=pair;e.choose(a,b);}else wait--;}
     e.step(step);onStep?.(e);
   }
   return e.ticks;
+}
+
+// Prioritise visible objectives; the bot cannot inspect the refill RNG.
+export function objectiveMove(board,engine){
+ let best=null,bestValue=-Infinity;
+ for(const [a,b] of SEQUENCE_PAIRS){
+  const next=progressionExchange(board,a,b,engine.progress);if(!next)continue;
+  const matches=sequenceMatches(next);if(!matches.size)continue;
+  const after=applySequenceWave(engine.config,engine.progress,next,matches);
+  const ice=engine.progress.ice.reduce((n,v,i)=>n+v-after.ice[i],0),traps=engine.progress.locks.filter(Boolean).length-after.locks.filter(Boolean).length;
+  const collected=Math.min(engine.config.collect?.count||0,after.collected)-Math.min(engine.config.collect?.count||0,engine.progress.collected);
+  const points=knownCascade(next).gained*(engine.score<engine.target?1:.12),value=points+ice*220+traps*300+collected*190+Math.floor(a/7);
+  if(value>bestValue){bestValue=value;best=[a,b];}
+ }
+ return best;
 }
