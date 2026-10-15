@@ -34,8 +34,10 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .in-game .block-cell.ghost{background-color:#40ecff59}
 .in-game .block-cell.clear-preview:not(.filled){background-color:#40ecff40}
 .in-game .block-tray{background:#073774a6;border:1px solid #90eaff;border-radius:16px;padding:8px;min-height:80px}
-.in-game .block-tray .shape-slot{border-radius:11px;background:transparent;border:1px solid #6acaff44;min-height:62px;flex:1}
-.in-game .block-tray .shape-slot[aria-pressed=true]{border:2px solid #ffde68;background:#147fd72e;box-shadow:none}
+/* Peak Blocks tray: dark frosted glass cards; the selected piece's card turns bright cyan frost (no yellow outline) */
+.in-game .block-tray .shape-slot{border-radius:11px;min-height:62px;flex:1;background:linear-gradient(180deg,#123f8c99,#061f52b3);border:1px solid #5fb8ff44;box-shadow:inset 0 1px 0 #9fe6ff44,0 4px 12px #00163f77;-webkit-backdrop-filter:blur(10px) saturate(1.25);backdrop-filter:blur(10px) saturate(1.25)}
+.in-game .block-tray .shape-slot[aria-pressed=true]{background:linear-gradient(180deg,#5fe8ff66,#0aa6e84d);border:1px solid #c8faffee;box-shadow:inset 0 1px 0 #e6fdffcc,inset 0 0 20px #7ff6ff66,0 0 18px #39d0ff88;outline:none}
+.shape-slot .shape-preview{transition:transform .15s ease-out}.shape-slot[aria-pressed=true] .shape-preview{transform:scale(1.08)}
 .in-game .game-tools{max-width:100%;gap:12px;padding:0;overflow:visible}
 .in-game .tool-button{min-height:48px;padding:8px 12px;flex:0 0 auto;width:max-content;gap:7px;border:1.5px solid #6be8ff;border-radius:14px;background:linear-gradient(#0b447abf,#082657ed)}
 .in-game .tool-button>span{font-size:12px;font-weight:750;white-space:nowrap}
@@ -52,3 +54,10 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .hint-arrow{position:absolute;z-index:19;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;filter:drop-shadow(0 0 7px #8fffff)}
 .hint-arrow line{stroke:#fff;stroke-width:5;stroke-linecap:round}
 .hint-arrow polygon{fill:#fff}
+/* Peak Blocks tray: fixed-size slots, and every piece drawn at the same cell size (sized so a 5-long line fits),
+   so a tall piece no longer makes the tray taller and pushes the board around. */
+.in-game .block-tray{min-height:0}
+.in-game .block-tray .shape-slot{height:96px;min-height:96px;max-height:96px;padding:6px;overflow:hidden}
+.in-game .block-tray .shape-preview{grid-template-columns:repeat(var(--cols),15px);grid-template-rows:repeat(var(--rows),15px);gap:1px}
+.in-game .block-tray .shape-preview i{width:15px;height:15px}
+@media(max-height:700px){.in-game .block-tray .shape-slot{height:84px;min-height:84px;max-height:84px}.in-game .block-tray .shape-preview{grid-template-columns:repeat(var(--cols),13px);grid-template-rows:repeat(var(--rows),13px)}.in-game .block-tray .shape-preview i{width:13px;height:13px}}

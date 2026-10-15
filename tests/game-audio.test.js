@@ -39,3 +39,17 @@ test('a failed download falls back to the synth and is retried next time',async(
  const before=starts.length;assert.equal(audio.play('ridge','flap'),true);await flush();assert.equal(starts.length,before+1);
  globalThis.fetch=realFetch;
 });
+test('Peak Blocks uses its own sound set, unshifted, and the files exist',()=>{
+ const want={select:'blk-pick',drop:'blk-place',perfect:'blk-clear',big:'blk-big',sparkle:'blk-pick',invalid:'blk-invalid',miss:'blk-over'};
+ for(const [event,file] of Object.entries(want)){const cue=cueFor('blocks',event);assert.equal(cue.file,file,event);assert.equal(cue.rate,1,event);
+  assert.ok(existsSync(new URL(`../dist/assets/audio/${file}.wav`,import.meta.url)),file);}
+ assert.equal(cueFor('blocks','tool').rate,.95,'shared cues keep the Blocks pitch');
+});
+test('a cue can be pitched up and delayed for combos',async()=>{
+ const realFetch=globalThis.fetch;globalThis.fetch=async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(4)});
+ const started=[];const source=()=>({playbackRate:{value:1},connect(){},start(at){started.push({at,rate:this.playbackRate.value});},stop(){}});
+ globalThis.window={AudioContext:class{constructor(){this.state='running';this.currentTime=10;this.destination={};}resume(){return Promise.resolve();}decodeAudioData(){return Promise.resolve({});}createBufferSource(){return source();}createGain(){return {gain:{value:1},connect(){}};}}};
+ try{const audio=new GameAudio(()=>true);audio.play('blocks','sparkle',{rate:1.5,delay:.1});await new Promise(r=>setTimeout(r,10));
+  assert.equal(started.length,1);assert.equal(started[0].rate,1.5);assert.ok(Math.abs(started[0].at-10.1)<1e-9);}
+ finally{globalThis.fetch=realFetch;delete globalThis.window;}
+});
