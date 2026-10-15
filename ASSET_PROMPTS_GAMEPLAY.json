@@ -37,5 +37,5 @@
     ]
   },
   "derivation": "Transparent atlas sprites cropped per 4\u00d73 cell using alpha > 10 bounding boxes; WebP quality 93\u201394. Backgrounds resized within 1080\u00d71920 and saved as WebP quality 87. Vial labels edited against supplied peak-haven-mark.png. No generative pixels added during cropping or encoding.",
-  "audio": "Nine original synthesized WAV effects shared with the Tryout Arcade, in dist/assets/audio, reproducible with tools/make-sfx.py."
+  "audio": "Nine original synthesized WAV effects shared with the Tryout Arcade, in dist/assets/audio, reproducible with tools/make-sfx.py. Peak Blocks has its own set (blk-*.wav): original sounds from tools/make-blocks-sfx.py, plus blk-place.wav, which is drop_002 from Kenney Interface Sounds (CC0, kenney.nl)."
 }
