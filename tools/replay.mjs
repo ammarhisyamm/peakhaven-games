@@ -25,11 +25,11 @@ function replayClock(rep,inputs){
 
 export async function replayRidge(rep){
   installStubs();
-  if(rep?.game!=='ridge'||rep.v!==4||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
+  if(rep?.game!=='ridge'||(rep.v!==4&&rep.v!==5)||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
   replayClock(rep,rep.taps);replayClock(rep,rep.resumes??[]);
   const {RidgeEngine}=await import('../dist/tryout-games.js');
   // The course runs in fixed world units, so the screen size doesn't matter here.
-  const e=new RidgeEngine(stubCanvas([480,720]),collector().cb,{seed:rep.seed,motion:false});
+  const e=new RidgeEngine(stubCanvas([480,720]),collector().cb,{seed:rep.seed,motion:false,version:rep.v});
   const taps=[...rep.taps],resumes=[...(rep.resumes||[])],stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
   for(let i=1;i<taps.length;i++)if(taps[i]<taps[i-1])throw new Error('Taps out of order');
   while(!e.ended){

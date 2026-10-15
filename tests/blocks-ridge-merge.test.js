@@ -9,7 +9,7 @@ globalThis.cancelAnimationFrame=()=>{};
 globalThis.Image=class{complete=false;naturalWidth=0;};
 const {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,replayBlocks,anyFit}=await import('../dist/blocks-core.js');
 const {SHAPES,PIECES,makeTray,emptyGrid,placements,placeBlock,RAMP_MOVES}=await import('../dist/puzzle-rules.js');
-const {RidgeEngine}=await import('../dist/tryout-games.js');
+const {RidgeEngine,RIDGE_V4}=await import('../dist/tryout-games.js');
 const {MergeEngine,MERGE_SPAWN_TIERS}=await import('../dist/engines.js');
 const {SIM_STEP,createRandom}=await import('../dist/rng.js');
 const {replayRidge,replayMerge}=await import('../tools/replay.mjs');
@@ -71,7 +71,7 @@ test('A Blocks tray is never dead on arrival when something can fit',()=>{
 const {RIDGE,RIDGE_VIAL,vialHalfWidth,hitsVial}=await import('../dist/tryout-games.js');
 // A simple bot that keeps the vial a little below the next gate's centre.
 function ridgeBot(e){const next=e.gates.find(g=>g.x+RIDGE.PW>e.px-RIDGE.R);const target=next?next.gy+12:300;return e.py>target&&e.vy>-60;}
-function playRidge({seed,hz,view=[480,720],maxSeconds=90}){
+function playRidge({seed,hz,view=[480,720],maxSeconds=900}){
   const c=canvas(...view),out=callbacks(),e=new RidgeEngine(c,out.cb,{seed,motion:false});
   let now=1000;e.frame(now);e.action();
   for(let f=0;f<maxSeconds*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&!e.dead&&ridgeBot(e))e.action();}
@@ -82,7 +82,7 @@ function playRidge({seed,hz,view=[480,720],maxSeconds=90}){
 const refGap=i=>(150-RIDGE.SLACK)-((150-RIDGE.SLACK)-(118-RIDGE.SLACK))*Math.min(1,Math.max(0,(i-10)/40));
 const refJump=i=>120+100*Math.min(1,Math.max(0,i/40));
 test('Ridge Run builds the Tryout Arcade course: 210 apart, openings 147.4 to 115.4, steps up to 120 rising to 220',()=>{
-  for(let seed=1;seed<=50;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false});
+  for(let seed=1;seed<=50;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false,version:4});
     while(e.index<90)e.addGate();
     for(let i=0;i<e.gates.length;i++){const g=e.gates[i],gap=refGap(i);
       assert.ok(Math.abs(g.gap-gap)<1e-9,`gap at ${i}`);assert.ok(g.gy>=RIDGE.EDGE+gap/2-1e-9&&g.gy<=RIDGE.GROUND-RIDGE.EDGE-gap/2+1e-9);
@@ -91,7 +91,7 @@ test('Ridge Run builds the Tryout Arcade course: 210 apart, openings 147.4 to 11
 });
 test('Ridge openings give back exactly the room the vial outline takes, and the first gate waits at 450',()=>{
   assert.equal(RIDGE.SLACK,2.6);assert.equal(RIDGE.GROUND,570);assert.equal(RIDGE.R,13);assert.equal(RIDGE.FIRST_X,450);
-  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false});
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:3,motion:false,version:4});
   assert.ok(Math.abs(e.gapFor(0)-147.4)<1e-9);assert.ok(Math.abs(e.gapFor(50)-115.4)<1e-9);assert.ok(Math.abs(e.gapFor(90)-115.4)<1e-9);
   assert.equal(e.gates[0].x,450);assert.ok(Math.abs(e.gates[1].x-660)<1e-9);e.destroy();
 });
@@ -118,7 +118,7 @@ test('A Ridge gate is only scored once the whole gate is behind the vial',()=>{
   g.x=e.px-RIDGE.PW-RIDGE.R-1;e.step(SIM_STEP);assert.equal(e.score,1);e.destroy();
 });
 test('Ridge Run speed rises from 165 to 230 by gate 60, with Tryout Arcade gravity and flap',()=>{
-  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false});assert.equal(e.speed,165);e.gatesPassed=30;assert.equal(e.speed,197.5);e.gatesPassed=90;assert.equal(e.speed,230);e.gatesPassed=0;
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:1,motion:false,version:4});assert.equal(e.speed,165);e.gatesPassed=30;assert.equal(e.speed,197.5);e.gatesPassed=90;assert.equal(e.speed,230);e.gatesPassed=0;
   e.action();assert.equal(e.vy,-430);e.step(SIM_STEP);assert.ok(Math.abs(e.vy-(-430+1450*SIM_STEP))<1e-9);e.destroy();
 });
 test('Every screen gets the same Ridge course',()=>{
@@ -164,7 +164,7 @@ test('The tap that resumes Ridge Run carries on the paused flight instead of for
 test('A Ridge run with pauses replays to the same score, and an old-format replay is refused',async()=>{
   const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:21,motion:false});e.action();
   for(let t=0;t<120*20&&!e.ended;t++){if(t%300===150){e.pause(true);e.pause(false);}const next=e.gates.find(g=>!g.passed);if(e.waiting&&t%300===170)e.action();else if(!e.waiting&&next&&e.py>next.cy+12&&e.vy>-60)e.action();e.step(SIM_STEP);}
-  e.finish();const rep=out.result.replay;assert.equal(rep.v,4);assert.ok(rep.resumes.length>0);
+  e.finish();const rep=out.result.replay;assert.equal(rep.v,5);assert.ok(rep.resumes.length>0);
   assert.equal((await replayRidge(rep)).score,out.result.score);
   await assert.rejects(replayRidge({...rep,v:3}),/Not a Ridge Run replay/);e.destroy();
 });
@@ -390,23 +390,23 @@ test('Sequence shows a working hint after 5 idle seconds and clears it on the ne
 
 // ---------- Ridge Run: moving vials and peptide orbs ----------
 test('Ridge vials start moving at gate 15, swing further by gate 45, stay inside the playfield and stay reachable',()=>{
-  for(let seed=1;seed<=40;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false});while(e.index<80)e.addGate();
+  for(let seed=1;seed<=40;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false,version:4});while(e.index<80)e.addGate();
     for(let i=0;i<e.gates.length;i++){const g=e.gates[i],lo=RIDGE.EDGE+g.gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-g.gap/2;
-      if(i<RIDGE.MOVE_START)assert.equal(g.amp,0,`gate ${i} still`);
-      assert.ok(g.amp<=RIDGE.MOVE_AMP_TO+1e-9);assert.ok(g.gy-g.amp>=lo-1e-9&&g.gy+g.amp<=hi+1e-9,'never bobs past the edges');
+      if(i<RIDGE_V4.MOVE_START)assert.equal(g.amp,0,`gate ${i} still`);
+      assert.ok(g.amp<=RIDGE_V4.MOVE_AMP_TO+1e-9);assert.ok(g.gy-g.amp>=lo-1e-9&&g.gy+g.amp<=hi+1e-9,'never bobs past the edges');
       if(i){const p=e.gates[i-1];assert.ok(Math.abs(g.gy-p.gy)+g.amp+p.amp<=Math.max(40+g.amp+p.amp,e.jumpFor(i))+1e-9,'reachable at any phase');}}
     const late=e.gates.slice(50),moving=late.filter(g=>g.amp>0).length;assert.ok(moving/late.length>.6,'most late gates move');e.destroy();}
 });
 test('Moving Ridge vials really move, and the hit test follows them',()=>{
-  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:4,motion:false});const g={x:e.px-RIDGE.PW/2,gy:300,cy:300,gap:80,amp:50,phase:0,rate:2,passed:true};assert.equal(e.hits(g),false,"safe before it moves");
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:4,motion:false,version:4});const g={x:e.px-RIDGE.PW/2,gy:300,cy:300,gap:80,amp:50,phase:0,rate:2,passed:true};assert.equal(e.hits(g),false,"safe before it moves");
   e.gates=[g];e.nextX=1e7;e.orbs=[];e.action();e.py=300;e.vy=0;e.runTime=Math.PI/4-SIM_STEP;e.step(SIM_STEP);
   assert.ok(Math.abs(g.cy-(300+50*Math.sin(Math.PI/2)))<1,'gap centre moved down by the swing');assert.ok(e.dead,'the vial now hits the top glass');e.destroy();
 });
 test('Peptide orbs appear from gate 3, sit between gates, and pay 2 points when collected',()=>{
-  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:6,motion:false});while(e.index<200)e.addGate();
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:6,motion:false,version:4});while(e.index<200)e.addGate();
   assert.ok(e.orbs.length>40&&e.orbs.length<100,`${e.orbs.length} orbs in 200 gates`);
   for(const o of e.orbs){assert.ok(o.y>=RIDGE.EDGE&&o.y<=RIDGE.GROUND-RIDGE.EDGE);assert.ok(!e.gates.some(g=>o.x>g.x-RIDGE.ORB_R&&o.x<g.x+RIDGE.PW+RIDGE.ORB_R),'never inside a gate');}
-  const f=new RidgeEngine(canvas(),callbacks().cb,{seed:6,motion:false});for(const g of f.gates)g.x=1e6;f.nextX=1e7;f.orbs=[{x:f.px+4,y:f.py,taken:false}];f.action();f.step(SIM_STEP);
+  const f=new RidgeEngine(canvas(),callbacks().cb,{seed:6,motion:false,version:4});for(const g of f.gates)g.x=1e6;f.nextX=1e7;f.orbs=[{x:f.px+4,y:f.py,taken:false}];f.action();f.step(SIM_STEP);
   assert.equal(f.orbsTaken,1);assert.equal(f.score,2);assert.equal(f.gatesPassed,0,'orbs are not gates');e.destroy();f.destroy();
 });
 
@@ -487,4 +487,76 @@ test('Both v1 and v2 Blocks replays verify, each with the generator it was playe
     createBlocks(31337,2).state.tray.map(p=>p.shape.length).join(','));
   const rep=blocksResult(createBlocks(5,2)).replay;
   assert.throws(()=>replayBlocks({...rep,v:3}),/Unknown Peak Blocks replay version/);
+});
+
+// --- Ridge Run difficulty curve (v5) -----------------------------------------------------------------------
+const ridgeCourse=(seed,version,count=90)=>{const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false,version});
+ while(e.index<count)e.addGate();const out=e.gates.map(g=>({gy:g.gy,gap:g.gap,amp:g.amp,x:g.x}));const orbs=e.orbs.map(o=>({x:o.x,y:o.y}));e.destroy();return {out,orbs};};
+
+test('The Ridge course is deterministic from its seed',()=>{
+  assert.deepEqual(ridgeCourse(4242,5),ridgeCourse(4242,5),'the same seed must build the same course twice');
+  assert.notDeepEqual(ridgeCourse(4242,5).out,ridgeCourse(4243,5).out,'different seeds should differ');
+  // The two course versions are genuinely different, which is why the version travels with the replay.
+  assert.notDeepEqual(ridgeCourse(4242,4).out,ridgeCourse(4242,5).out);
+});
+
+test('Ridge pickups start at gate 4, never fill two gaps running, and land near one gap in five',()=>{
+  let gaps=0,orbs=0,adjacent=0,earliest=1e9;
+  for(let seed=0;seed<60;seed++){
+    const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false,version:5});
+    while(e.index<120)e.addGate();
+    const gateX=e.gates.map(g=>g.x),where=[];
+    for(const o of e.orbs){const idx=gateX.findIndex(x=>x>o.x);if(idx>0)where.push(idx);}
+    where.sort((a,b)=>a-b);
+    for(let i=1;i<where.length;i++)if(where[i]-where[i-1]<2)adjacent++;
+    if(where.length)earliest=Math.min(earliest,where[0]);
+    orbs+=where.length;gaps+=e.gates.length-1;e.destroy();
+  }
+  assert.equal(adjacent,0,'no two gaps in a row may hold a pickup');
+  assert.ok(earliest>=4,`pickups start at gate 4, saw one at ${earliest}`);
+  const rate=orbs/gaps;
+  // The roll is ORB_CHANCE (0.2); the no-two-in-a-row rule trims what actually lands to about one gap in six.
+  assert.ok(rate>.12&&rate<.22,`pickup rate ${(rate*100).toFixed(1)}% should sit near one gap in five`);
+});
+
+test('Ridge moving columns arrive in stages off the RAMP knob, and every column stays reachable',()=>{
+  // The gate numbers come from RIDGE.RAMP rather than being written down, so retuning the knob retunes the test.
+  const start=RIDGE.MOVE_START,full=RIDGE.MOVE_FULL,half=Math.round((start+full)/2);
+  const share={},swing={};let firstMover=Infinity;
+  for(let seed=0;seed<60;seed++){
+    const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false,version:5});
+    while(e.index<full+15)e.addGate();
+    e.gates.forEach((g,i)=>{share[i]??={m:0,n:0};swing[i]??=[];share[i].n++;
+      if(g.amp>0){share[i].m++;swing[i].push(g.amp);if(i<firstMover)firstMover=i;}
+      const lo=RIDGE.EDGE+g.gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-g.gap/2;
+      assert.ok(g.gy-g.amp>=lo-1e-6&&g.gy+g.amp<=hi+1e-6,`gate ${i} swings out of the playfield`);});
+    e.destroy();
+  }
+  const shareAt=i=>share[i].m/share[i].n;
+  const meanSwing=i=>{const all=[];for(let j=Math.max(0,i-2);j<=i+2;j++)all.push(...(swing[j]??[]));return all.length?all.reduce((a,b)=>a+b,0)/all.length:0;};
+  assert.ok(firstMover>=start,`nothing may move before gate ${start}, saw one at ${firstMover}`);
+  assert.equal(shareAt(Math.max(0,start-2)),0,'the gates before the first mover hold still');
+  assert.ok(shareAt(half)>.25,`about a third should move by the midpoint, got ${(shareAt(half)*100).toFixed(0)}%`);
+  assert.ok(shareAt(full+8)>.8,`nearly all should move past RAMP, got ${(shareAt(full+8)*100).toFixed(0)}%`);
+  assert.ok(meanSwing(full+8)>meanSwing(half),'and they should swing further than they did at the midpoint');
+});
+
+test('Both v4 and v5 Ridge replays verify, each on the course it was flown',async()=>{
+  for(const version of [4,5]){
+    const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:777,motion:false,version});
+    e.action();
+    for(let t=0;t<120*40&&!e.ended;t++){if(ridgeBot(e)&&!e.dead)e.action();e.step(SIM_STEP);}
+    if(!e.ended)e.finish();
+    const rep=out.result.replay;
+    assert.equal(rep.v,version,'a replay carries the course it was flown on');
+    const again=await replayRidge(rep);
+    assert.equal(again.score,out.result.score,`a v${version} replay must reproduce its score`);
+    e.destroy();
+  }
+  // Anything else is refused rather than quietly replayed on the wrong course.
+  const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:5,motion:false});
+  e.action();for(let t=0;t<600&&!e.ended;t++)e.step(SIM_STEP);
+  e.finish();
+  await assert.rejects(replayRidge({...out.result.replay,v:6}),/Not a Ridge Run replay/);
+  e.destroy();
 });
