@@ -14,7 +14,7 @@ const {playSequence,greedyMove,randomMove,driveSequence}=await import('../tools/
 const noop=()=>{};
 function canvas(width=480,height=720){const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:()=>ctx,set:(t,k,v)=>(t[k]=v,true)});return {getContext:()=>ctx,getBoundingClientRect:()=>({width,height,left:0,top:0}),addEventListener:noop,removeEventListener:noop,setPointerCapture:noop};}
 function callbacks(){const out={result:null,messages:[]};out.cb={hud:noop,sound:noop,effect:noop,ready:noop,message(m){out.messages.push(m);},end(r){out.result??=r;}};return out;}
-const engine=(seed,level=1,out=callbacks())=>new SequenceEngine(canvas(),out.cb,{seed,level,motion:false});
+const engine=(seed,level=1,out=callbacks())=>new SequenceEngine(canvas(),out.cb,{seed,level,rulesVersion:1,motion:false});
 // No legal swap and no line: rows run 0,3,2,1,... shifted by one each row.
 const DEAD=Array.from({length:49},(_,i)=>(Math.floor(i/7)+3*(i%7))%4);
 

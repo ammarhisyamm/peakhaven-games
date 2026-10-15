@@ -61,3 +61,12 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .in-game .block-tray .shape-preview{grid-template-columns:repeat(var(--cols),15px);grid-template-rows:repeat(var(--rows),15px);gap:1px}
 .in-game .block-tray .shape-preview i{width:15px;height:15px}
 @media(max-height:700px){.in-game .block-tray .shape-slot{height:84px;min-height:84px;max-height:84px}.in-game .block-tray .shape-preview{grid-template-columns:repeat(var(--cols),13px);grid-template-rows:repeat(var(--rows),13px)}.in-game .block-tray .shape-preview i{width:13px;height:13px}}
+
+/* Live objectives sit between the HUD and board, within the existing gameplay gutters. */
+.sequence-goals{position:absolute;z-index:4;top:calc(max(16px,env(safe-area-inset-top)) + 80px);left:var(--game-gutter);right:var(--game-gutter);display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px;background:#06264bed;border-radius:10px;color:#e8faff;font:600 12px/1.4 Inter,sans-serif;font-variant-numeric:tabular-nums;pointer-events:none}
+.sequence-goals strong{color:#fff;white-space:nowrap}
+.sequence-goals span{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.sequence-goals img{width:22px;height:22px;object-fit:contain}
+.sequence-goals .is-complete{color:#a8f0c7}
+
+.sequence-goals[hidden]{display:none}

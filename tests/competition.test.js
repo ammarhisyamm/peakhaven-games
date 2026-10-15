@@ -27,8 +27,8 @@ function blocksReplay(seed,moves=6){
   for(let m=0;m<moves&&!g.ended;m++){const i=g.state.tray.findIndex(p=>p&&placements(g.state.grid,p.shape).length);if(i<0)break;const [r,c]=placements(g.state.grid,g.state.tray[i].shape)[0];blocksPlace(g,i,r,c);}
   const res=blocksResult(g);return {replay:res.replay,score:res.score,seconds:0};
 }
-function sequenceReplay(seed,level){
-  const out=stubCallbacks(),e=new SequenceEngine(stubCanvas(),out.cb,{seed,level,motion:false});
+function sequenceReplay(seed,level,rulesVersion=2){
+  const out=stubCallbacks(),e=new SequenceEngine(stubCanvas(),out.cb,{seed,level,motion:false,rulesVersion});
   driveSequence(e,greedyMove);e.destroy();
   return {replay:out.result.replay,score:out.result.score,won:out.result.won,seconds:e.ticks*SIM_STEP};
 }
@@ -181,7 +181,7 @@ test('Sequence runs go level by level; each cleared level unlocks the next board
   w.advance(l1.seconds+1);
   let f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:l1.replay}});
   assert.equal(f.status,200);assert.equal(f.body.done,false);assert.equal(f.body.nextLevel,2);
-  const day=dayKey(w.now());assert.equal(f.body.nextSeed,seedFor(SECRET,'sequence',day,2));
+  const day=dayKey(w.now());assert.equal(f.body.nextSeed,seedFor(SECRET,'sequence-v2',day,2));
   // Replaying level 1's board as level 2 doesn't work.
   const wrong=sequenceReplay(s.body.seed,2);w.advance(wrong.seconds+1);
   const bad=await w.api.finish({token:t,body:{runId:s.body.runId,replay:wrong.replay}});
@@ -313,4 +313,16 @@ test('Retry comparison tolerates Postgres jsonb object key order',async()=>{
  const body={runId:start.runId,replay:r.replay};assert.equal((await w.api.finish({token,body})).status,200);
  const stored=w.store.runs.get(start.runId),rep=stored.replays[0];stored.replays=[Object.fromEntries(Object.entries(rep).reverse())];
  assert.equal((await w.api.finish({token,body})).status,200,'jsonb reorders object keys without changing the replay');assert.equal(stored.segments,1);
+});
+
+
+test('New Sequence competition runs cannot downgrade to v1, while pre-upgrade runs keep their course',async()=>{
+ const w=world(),token=await w.join('sequence-version@x.com','Version Check');
+ const start=await w.api.start({token,body:{game:'sequence'}});assert.equal(start.body.rulesVersion,2);
+ const oldReplay=sequenceReplay(start.body.seed,1,1);w.advance(oldReplay.seconds+1);
+ const downgrade=await w.api.finish({token,body:{runId:start.body.runId,replay:oldReplay.replay}});assert.equal(downgrade.status,422);assert.match(downgrade.body.reason,/different level rules/);
+ const player=await w.auth.userFromToken(token),day=dayKey(w.now()),seed=seedFor(SECRET,'sequence',day,1);
+ const legacy=await w.store.startRun({playerId:player.id,game:'sequence',day,seed,limit:3});
+ const replay=sequenceReplay(seed,1,1);assert.ok(replay.won);w.advance(replay.seconds+1);
+ const finish=await w.api.finish({token,body:{runId:legacy.id,replay:replay.replay}});assert.equal(finish.status,200);assert.equal(finish.body.done,false);assert.equal(finish.body.nextSeed,seedFor(SECRET,'sequence',day,2));
 });
