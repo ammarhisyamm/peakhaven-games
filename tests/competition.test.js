@@ -8,7 +8,7 @@ const {RidgeEngine,RIDGE,hitsVial,SequenceEngine}=await import('../dist/tryout-g
 const {createBlocks,blocksPlace,blocksResult,placements}=await import('../dist/blocks-core.js');
 const {SIM_STEP}=await import('../dist/rng.js');
 const {greedyMove,driveSequence}=await import('../tools/sequence-bot.mjs');
-const {COMPETITION,dayKey,monthKey,seedFor,cleanName,cleanCode,monthlyStandings,yearlyStandings,pointsForRank}=await import('../arcade/server/competition.mjs');
+const {COMPETITION,dayKey,monthKey,seedFor,cleanName,cleanCode,monthlyStandings,yearlyStandings,pointsForRank,podiumMonths}=await import('../arcade/server/competition.mjs');
 const {createHandlers}=await import('../arcade/server/handlers.mjs');
 const {createMemoryStore,createMemoryAuth}=await import('../arcade/server/memory-store.mjs');
 
@@ -214,13 +214,53 @@ test('Leaderboard shows verified scores as rank points, with your own row',async
   }
   const s=await w.api.start({token:ben,body:{game:'blocks'}});const b=blocksReplay(s.body.seed);
   await w.api.finish({token:ben,body:{runId:s.body.runId,replay:b.replay}});
-  await w.api.profile({token:ann,body:{name:'Ann Peak',bottle:'golden-peak'}});
+  assert.equal((await w.api.profile({token:ann,body:{name:'Ann Peak',bottle:'golden-peak'}})).status,403);
+  assert.equal((await w.api.profile({token:ann,body:{name:'Ann Peak'}})).status,200);
   const lb=(await w.api.leaderboard({token:ann,query:{period:'monthly'}})).body;
   assert.equal(lb.key,monthKey(w.now()));assert.equal(lb.players,2);
   assert.deepEqual(lb.top.map(r=>[r.rank,r.name,r.points]),[[1,'Ben',190],[2,'Ann Peak',100]]);
-  assert.equal(lb.top[1].bottle,'golden-peak');assert.equal(lb.me.you,true);assert.equal(lb.me.rank,2);
+  assert.equal(lb.top[1].bottle,'ph-original');assert.equal(lb.me.you,true);assert.equal(lb.me.rank,2);
   assert.equal(lb.top[0].games.blocks.points,100);
   const year=(await w.api.leaderboard({token:ann,query:{period:'yearly'}})).body;
   assert.equal(year.period,'yearly');assert.equal(year.top[0].points,190);
   assert.equal((await w.api.profile({token:ann,body:{bottle:'gold'}})).status,400);
+});
+
+test('Each game has its own board of best scores, monthly and yearly',async()=>{
+  const w=world(),ann=await w.join('a@x.com','Ann'),ben=await w.join('b@x.com','Ben');
+  const scores={};
+  for(const [token,gates] of [[ann,6],[ben,3]]){
+    const s=await w.api.start({token,body:{game:'ridge'}});const r=ridgeReplay(s.body.seed,gates);w.advance(r.seconds+2);
+    scores[token]=(await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay}})).body.score;
+  }
+  const s=await w.api.start({token:ben,body:{game:'blocks'}});const b=blocksReplay(s.body.seed);
+  await w.api.finish({token:ben,body:{runId:s.body.runId,replay:b.replay}});
+  const ridge=(await w.api.leaderboard({token:ben,query:{period:'monthly',game:'ridge'}})).body;
+  assert.equal(ridge.game,'ridge');assert.equal(ridge.players,2);
+  assert.deepEqual(ridge.top.map(r=>[r.rank,r.name,r.points]),[[1,'Ann',scores[ann]],[2,'Ben',scores[ben]]]);
+  assert.equal(ridge.me.rank,2);
+  const blocks=(await w.api.leaderboard({token:ann,query:{period:'yearly',game:'blocks'}})).body;
+  assert.deepEqual(blocks.top.map(r=>r.name),['Ben']);assert.equal(blocks.me,null);
+  const unknown=(await w.api.leaderboard({token:ann,query:{period:'monthly',game:'tower'}})).body;
+  assert.equal(unknown.game,null);
+});
+
+test('Lifetime points from finished games unlock bottles',async()=>{
+  const w=world(),ann=await w.join('a@x.com','Ann');
+  assert.equal((await w.api.me({token:ann})).body.player.points,0);
+  assert.equal((await w.api.profile({token:ann,body:{bottle:'sky-molecule'}})).status,403);
+  const {store}=w,id=[...store.players.keys()][0];
+  for(let i=0;i<2;i++)store.runs.set(`seed-${i}`,{id:`seed-${i}`,player_id:id,game:'ridge',day:dayKey(w.now()),score:2500,status:'closed',segments:1,updated_at:w.now().toISOString()});
+  const me=(await w.api.me({token:ann})).body.player;
+  assert.equal(me.points,500);assert.equal(me.podium,false);
+  assert.equal((await w.api.profile({token:ann,body:{bottle:'sky-molecule'}})).status,200);
+  assert.equal((await w.api.profile({token:ann,body:{bottle:'ice-flow'}})).status,403);
+});
+
+test('A top-three monthly finish is found for Golden Peak',()=>{
+  const run=(player_id,score,day)=>({player_id,game:'ridge',score,day,updated_at:`${day}T01:00:00Z`});
+  const runs=[run('a',90,'2026-08-03'),run('b',80,'2026-08-04'),run('c',70,'2026-08-05'),run('d',60,'2026-08-06'),run('d',99,'2026-09-02')];
+  assert.deepEqual(podiumMonths(runs,'c'),['2026-08']);
+  assert.deepEqual(podiumMonths(runs,'d'),['2026-09']);
+  assert.deepEqual(podiumMonths(runs,'e'),[]);
 });
