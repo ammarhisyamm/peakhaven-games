@@ -44,7 +44,25 @@ export function keepGoingOffer(free,coins){
  return 'shop';
 }
 
-export function showReferenceResults({game='blocks',result=null,best=0,level=1,onReplay,onExit,onRanks,shopOnly=false,assetBase='assets/',motion=true}){
+// Competition runs pass `ranked` (see rankedResults in app.js): plays come from the server, so the panel shows the
+// verified result, the player's place on this month's board and the server's plays left, and never offers coins.
+export function rankedOffer(state){
+ if(!state||state.phase==='checking')return {label:'CHECKING SCORE…',note:'Verifying your run',action:null};
+ if(state.phase==='next')return {label:'NEXT LEVEL',note:`Level ${state.level} · run total ${fmt(state.score)}`,action:'next'};
+ const plays=Math.max(0,Number(state.plays)||0);
+ if(plays>0)return {label:'PLAY AGAIN',note:`${plural(plays,'free play','free plays')} left today`,action:'again'};
+ return {label:'BACK TO ARCADE',note:'More free plays at midnight',action:'exit'};
+}
+export function rankedLine(state,name){
+ if(!state||state.phase==='checking')return '';
+ if(state.phase==='error')return state.error||'This run could not be verified.';
+ if(state.phase==='next')return 'Level verified. Keep the run going.';
+ const b=state.board;
+ if(!b||!(state.score>0))return 'Score some points to get on this month’s board.';
+ if(b.rank===1)return `You’re top of this month’s ${name} board!`;
+ return `#${b.rank} of ${b.players} on this month’s ${name} board`;
+}
+export function showReferenceResults({game='blocks',result=null,best=0,level=1,onReplay,onExit,onRanks,shopOnly=false,assetBase='assets/',motion=true,ranked=null}){
  document.querySelector('.kg-dialog')?.remove();
  const cfg=GAMES[game]||GAMES.blocks,won=Boolean(result?.won),ctx={won,level,result,best};
  const dialog=document.createElement('dialog');
@@ -58,6 +76,7 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
 <section class="kg-result" aria-labelledby="kg-result-title">
  <div class="kg-art">${mascot('kg-mascot')}<span class="kg-spark kg-spark-a">${svg('spark')}</span><span class="kg-spark kg-spark-b">${svg('spark')}</span></div>
  <header class="kg-head"><p class="kg-eyebrow">${eyebrow}</p><h1 id="kg-result-title" class="kg-title">${title}</h1><p class="kg-intro">${cfg.intro(ctx)}</p></header>
+ <p class="kg-ranked" role="status" aria-live="polite" hidden><span class="kg-best-badge" hidden>NEW BEST THIS MONTH</span><span class="kg-ranked-text"></span></p>
  <dl class="kg-stats">${cfg.stats(ctx).map(([value,label])=>`<div><dt>${label}</dt><dd>${fmt(value)}</dd></div>`).join('')}</dl>
  <button class="kg-primary" id="kg-replay" type="button">${svg(won?'next':'restart')}<span class="kg-primary-copy"><strong class="kg-primary-label"></strong><small class="kg-primary-note"></small></span></button>
  <div class="kg-actions"><button class="kg-secondary" id="kg-ranks" type="button">${svg('ranks')}<span>View ${cfg.name} ranks</span></button><button class="kg-secondary" id="kg-exit" type="button">${svg('back')}<span>Back to arcade</span></button></div>
@@ -78,10 +97,18 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
  <p class="kg-feedback" role="status" aria-live="polite"></p>
 </section>`;
  document.body.append(dialog);
- let busy=false;
+ let busy=false,rankedState=null;
  const $=s=>dialog.querySelector(s);
  const feedback=message=>{$('.kg-feedback').textContent=message;};
  const refresh=()=>{
+  if(ranked){
+   const offer=rankedOffer(rankedState),line=rankedLine(rankedState,cfg.name),box=$('.kg-ranked');
+   dialog.dataset.offer='ranked';$('.kg-wallet').hidden=true;
+   $('.kg-primary-label').textContent=offer.label;$('.kg-primary-note').textContent=offer.note;$('#kg-replay').disabled=!offer.action;
+   box.hidden=!line;$('.kg-ranked-text').textContent=line;$('.kg-best-badge').hidden=!(rankedState?.phase==='done'&&rankedState.board?.newBest);
+   if(game==='sequence'&&rankedState?.phase==='done')$('.kg-intro').textContent=`Run over at Level ${level}. Run total ${fmt(rankedState.score)}.`;
+   return;
+  }
   const coins=playWallet().coins,free=freePlaysLeft(game),offer=keepGoingOffer(free,coins);
   dialog.querySelectorAll('.kg-wallet-count').forEach(el=>el.textContent=fmt(coins));
   dialog.dataset.offer=offer;
@@ -96,10 +123,11 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
   refresh();dialog.scrollTop=0;
   requestAnimationFrame(()=>$(mode==='shop'?'input:checked':'#kg-replay')?.focus({preventScroll:true}));
  };
- const close=()=>{dialog.close();dialog.remove();};
+ const close=()=>{ranked?.close();dialog.close();dialog.remove();};
  const exit=()=>{close();onExit?.();};
  const replay=()=>{
   if(busy)return;
+  if(ranked){const action=rankedOffer(rankedState).action;if(!action)return;busy=true;close();if(action==='next')ranked.nextLevel();else if(action==='again')ranked.playAgain();else onExit?.();return;}
   if(!availablePlays(game)){setMode('shop');return;}
   const use=consumePlay(game);
   if(!use.ok){setMode('shop');feedback(use.reason==='storage'?'Your browser could not save play credits. Please allow site storage and try again.':'No plays left. Choose a blue coin pack.');return;}
@@ -122,7 +150,8 @@ export function showReferenceResults({game='blocks',result=null,best=0,level=1,o
  };
  if(shopOnly)dialog.classList.add('kg-shop-only');
  dialog.showModal();
- setMode(shopOnly||keepGoingOffer(freePlaysLeft(game),playWallet().coins)==='shop'?'shop':'result');
+ setMode(!ranked&&(shopOnly||keepGoingOffer(freePlaysLeft(game),playWallet().coins)==='shop')?'shop':'result');
+ ranked?.subscribe(state=>{rankedState=state;if(dialog.isConnected)refresh();});
  if(motion&&!matchMedia('(prefers-reduced-motion: reduce)').matches)dialog.animate([{opacity:.65,transform:'translateY(12px) scale(.98)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.16,1,.3,1)'});
  return {close,dialog};
 }

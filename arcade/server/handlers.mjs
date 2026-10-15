@@ -99,9 +99,21 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
       const done=run.game!=='sequence'||!result.won,score=run.score+result.score;
       const claimed=Number(body?.claimed);
       const flagged=run.flagged||(Number.isFinite(claimed)&&claimed!==result.score);
+      // For the end-of-run screen: where this run puts the player on this month's board for the game, and whether
+      // it beats their earlier best this month. Read before the update so this run's own earlier levels are excluded.
+      const month=String(run.day).slice(0,7),range=monthRange(month);
+      const before=done?(await store.scoredRuns(range.from,range.to)).filter(r=>r.id!==run.id):null;
       const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
       if(!updated)return fail(409,'This run was already updated.');
-      return ok({score,levelScore:result.score,done,nextLevel:done?null:level+1,nextSeed:done?null:seedFor(secret,run.game,run.day,level+1)});
+      const out={score,levelScore:result.score,done,nextLevel:done?null:level+1,nextSeed:done?null:seedFor(secret,run.game,run.day,level+1)};
+      if(done){
+        const previousBest=before.filter(r=>r.player_id===s.player.id&&r.game===run.game).reduce((m,r)=>Math.max(m,r.score),0);
+        const rows=score>0?[...before,{id:run.id,player_id:s.player.id,game:run.game,score,day:run.day,updated_at:at.toISOString()}]:before;
+        const table=gameStandings(rows,run.game),mine=table.find(r=>r.player_id===s.player.id);
+        out.board={month,rank:mine?.rank??null,players:table.length,best:mine?.best??0,previousBest,newBest:score>0&&score>previousBest};
+        out.plays=await playsLeft(s.player.id,dayKey(at));
+      }
+      return ok(out);
     },
 
     // With a game, that game's board: best scores this month or year. Without one, the overall rank-points table.

@@ -137,3 +137,8 @@
  .kg-pack-coin{width:min(100%,56px);margin:4px 0}
 }
 @media (prefers-reduced-motion:reduce){.kg-dialog,.kg-dialog *{animation:none!important;transition:none!important}}
+/* Competition result: verified place on this month's board */
+.kg-ranked{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;margin:0;padding:9px 12px;border:1px solid #6fd6f566;border-radius:14px;background:#0a3d7359;color:#eafaff;font-size:14px;font-weight:700;line-height:1.35;text-align:center}
+.kg-ranked[hidden],.kg-best-badge[hidden]{display:none}
+.kg-best-badge{padding:3px 10px;border-radius:999px;background:linear-gradient(#ffe48a,#f2b632);color:#5a3500;font-size:11px;font-weight:900;letter-spacing:.06em;box-shadow:0 0 14px #ffd24d88}
+.kg-primary:disabled{opacity:.7;cursor:progress}
