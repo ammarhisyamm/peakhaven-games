@@ -12,11 +12,16 @@ export const BLOCK_SCORE=Object.freeze({cell:1,clearCell:10,lineMult:[0,1,3,6,10
 export function clearPoints(cells,lines,combo){const m=BLOCK_SCORE.lineMult[Math.min(lines,BLOCK_SCORE.lineMult.length-1)];return Math.round(cells*BLOCK_SCORE.clearCell*m*(1+BLOCK_SCORE.comboStep*Math.max(0,combo-1)));}
 const clone=value=>structuredClone(value);
 
-export function createBlocks(seed){
+// Replay format. v1 dealt trays with no difficulty ramp and no near-clear assist; v2 adds both. Runs started
+// before the ramp shipped still carry v:1, so they keep being verified with the generator they were played on.
+export const BLOCKS_REPLAY_VERSION=2;
+const trayOpts=g=>({version:g.version,moves:g.state.moves,score:g.state.score});
+export function createBlocks(seed,version=BLOCKS_REPLAY_VERSION){
   const state={grid:emptyGrid(),tray:null,selected:0,score:0,lines:0,chain:0,sinceClear:0,bestChain:0,moves:0,rng:seed>>>0};
+  const g={seed:seed>>>0,state,history:[],tools:{...BLOCK_TOOLS},ended:false,log:[],version:version===1?1:2};
   // The generator state lives inside `state`, so Undo also rewinds it and replaying a move deals the same tray.
-  state.tray=makeTray(state.grid,()=>nextRandom(state));
-  return {seed:seed>>>0,state,history:[],tools:{...BLOCK_TOOLS},ended:false,log:[]};
+  state.tray=makeTray(state.grid,()=>nextRandom(state),trayOpts(g));
+  return g;
 }
 export const anyFit=g=>g.state.tray.some(p=>p&&placements(g.state.grid,p.shape).length>0);
 // The run ends when nothing fits and no tool that adds space is left. This runs after every action,
@@ -40,7 +45,7 @@ export function blocksPlace(g,index,r,c){
   out.points=p.shape.length*BLOCK_SCORE.cell+bonus;out.clearPoints=bonus;out.combo=s.chain;
   s.score+=out.points;
   s.tray[index]=null;
-  if(s.tray.every(x=>!x))s.tray=makeTray(s.grid,()=>nextRandom(s));
+  if(s.tray.every(x=>!x))s.tray=makeTray(s.grid,()=>nextRandom(s),trayOpts(g));
   s.selected=s.tray.findIndex(Boolean);
   g.log.push(['p',index,r,c]);
   checkEnd(g);
@@ -62,7 +67,7 @@ export function blocksUndo(g){
 export function blocksShuffle(g){
   if(g.ended||!g.tools.shuffle)return false;
   remember(g);const s=g.state;
-  s.tray=makeTray(s.grid,()=>nextRandom(s));s.selected=0;g.tools.shuffle--;
+  s.tray=makeTray(s.grid,()=>nextRandom(s),trayOpts(g));s.selected=0;g.tools.shuffle--;
   g.log.push(['s']);checkEnd(g);return true;
 }
 export function blocksHint(g){
@@ -72,12 +77,14 @@ export function blocksHint(g){
   if(!best)return null;
   g.tools.hint--;s.selected=best.i;g.log.push(['h']);return best;
 }
-export function blocksResult(g){const s=g.state;return {score:s.score,lines:s.lines,moves:s.moves,bestCombo:s.bestChain||0,won:false,replay:{v:1,game:'blocks',seed:g.seed,log:g.log.map(x=>[...x])}};}
+export function blocksResult(g){const s=g.state;return {score:s.score,lines:s.lines,moves:s.moves,bestCombo:s.bestChain||0,won:false,replay:{v:g.version,game:'blocks',seed:g.seed,log:g.log.map(x=>[...x])}};}
 
 // Server side: rebuild a run from its seed and log. Any illegal step means the log was tampered with.
 export function replayBlocks(replay){
   if(!replay||replay.game!=='blocks'||!Array.isArray(replay.log))throw new Error('Not a Peak Blocks replay');
-  const g=createBlocks(replay.seed);
+  const version=replay.v===undefined?1:replay.v;
+  if(version!==1&&version!==2)throw new Error(`Unknown Peak Blocks replay version ${version}`);
+  const g=createBlocks(replay.seed,version);
   for(const step of replay.log){
     const [kind,...a]=step;
     const ok=kind==='p'?blocksPlace(g,a[0],a[1],a[2]):kind==='b'?blocksBomb(g,a[0],a[1]):kind==='u'?blocksUndo(g):kind==='s'?blocksShuffle(g):kind==='h'?blocksHint(g):null;
