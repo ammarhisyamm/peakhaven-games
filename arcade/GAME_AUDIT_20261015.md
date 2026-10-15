@@ -19,11 +19,12 @@ Scope: the production Arcade's Peak Blocks, Sequence and Ridge Run, including gu
 | P2 | An open tab retains yesterday's exhausted allowances | Refresh server allowances when the visible tab returns, without interrupting a game or modal. |
 | P2 | Denied access to the `localStorage` getter throws before credit error handling | Guard access to storage itself; reject an unsaved play or simulated purchase with recovery feedback. |
 | P2 | Invalid replay clocks or unconsumed inputs can be accepted as a truncated replay | Validate input clocks and replay duration, reject unused inputs, and process legitimate inputs on the final tick before manual Finish. |
+| P2 | Preview server can crash on unreadable files, malformed URL encoding, or an interrupted request body | Read file bytes before writing headers; return 400 for bad URLs and absorb aborted request-body reads. A child-process regression verifies the preview stays alive. |
 | P3 | Guest sample standings can be confused with competition standings | Label the preview **Demo standings**. |
 
 ## Verification evidence
 
-- `npm test`: **160 passed, 0 failed** (149 at baseline, 11 added regression cases).
+- `npm test`: **161 passed, 0 failed** (149 at baseline, 12 added regression cases).
 - `npm ci` in `arcade/`: pinned dependencies installed, audit reported 0 vulnerabilities. `npm run build` passed module syntax and import validation.
 - `tools/audit-games.cjs`: **13 scenario groups passed in Chrome and WebKit**, each including four viewport widths (1440, 826, 390, 320). Covers all three games: actual input, pause/resume, Finish, replay, ranks, credit exhaustion, simulated coins, storage denial, corrupt save, ranked nonzero Blocks score, lost accepted finish response, lost accepted start response plus reload, pending score recovery, slow start/cancel, proxy HTML error, missing game module recovery, leaderboard outage, and a real canvas-driven Sequence win followed by the server-seeded second level within the same run.
 - `tools/audit-negative-cases.cjs`: synthesized Chrome touch events with two fingers and cancellation for Blocks and Sequence, followed by working input; failed `/me` recovery; 401 session expiry; empty/invalid invite form. All five groups passed, with no unhandled page errors.
