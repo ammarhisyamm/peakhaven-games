@@ -31,9 +31,9 @@ const ridgeCourse=(RAMP)=>Object.freeze({...RIDGE_V4,RAMP,
  // The first column moves at about a quarter of the way in, half of them are moving by halfway, and by RAMP
  // nearly all of them are, at full swing.
  MOVE_START:Math.max(1,Math.round(RAMP*.27)),MOVE_FULL:RAMP,MOVE_AMP:9,MOVE_AMP_TO:28,
- MOVE_SPEED:.85,MOVE_SPEED_TO:1.6,MOVE_SHARE:.25,MOVE_SHARE_TO:.95,
+ MOVE_SPEED:.85,MOVE_SPEED_TO:1.6,STEP_MAX:80,MOVE_SHARE:.25,MOVE_SHARE_TO:.95,
  ORB_START:4,ORB_CHANCE:.2,ORB_GAP:2,ORB_OFFSET_END:Math.round(RAMP*4/3)});
-const RIDGE=ridgeCourse(40);
+const RIDGE=ridgeCourse(30);
 // The vial profile in pixels down from the crimp cap: cap 0-16 at half-width 22, neck 16-24 at 15,
 // shoulder 24-38 ramping 15 to 30, body 30 beyond. The drawing and the collision read the same numbers.
 export const RIDGE_VIAL=Object.freeze({cap:16,neck:24,shoulder:38,capW:22,neckW:15,bodyW:30});
@@ -145,7 +145,7 @@ export class RidgeEngine extends MiniEngine{
  // gate 60, openings 150 shrinking to 118 between gates 10 and 50, and each opening a random step of up to
  // 120 (rising to 220 by gate 40) from the last. The ceiling stops you instead of ending the run.
  constructor(canvas,cb,options){super(canvas,cb,options);this.courseV=options?.version===4?4:5;this.C=this.courseV===4?RIDGE_V4:RIDGE;this.lastOrbI=-99;this.flapAt=-9;this.bursts=[];this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.lastAmp=0;this.trail=[];this.tilt=0;this.gatesPassed=0;this.orbs=[];this.orbsTaken=0;this.runTime=0;this.popups=[];
-  this.inputs=[];this.resumes=[];this.nextX=this.C.FIRST_X;for(let i=0;i<4;i++)this.addGate();this.fillGates();
+  this.inputs=[];this.resumes=[];this.nextX=this.C.FIRST_X;this.nextT=(this.C.FIRST_X-this.px)/this.speedFor(0);for(let i=0;i<4;i++)this.addGate();this.fillGates();
   this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message('Tap anywhere to lift your vial. Fly through the open gates.');}
  // The course (sky to ground, 0 to GROUND in world units) fills the space between the bottom of the HUD and the
  // bottom of the screen, so no vial hides under the score boxes and the ground sits on the screen's bottom edge.
@@ -156,10 +156,13 @@ export class RidgeEngine extends MiniEngine{
  measureHud(){try{const hud=document.querySelector('.in-game .hud'),r=this.canvas.getBoundingClientRect(),b=hud?hud.getBoundingClientRect().bottom-r.top:0;this.hudTop=b>0?(b+10)/this.scale:this.top;}catch{this.hudTop=this.top;}this.hudAt=this.time;}
  sy(y){return this.oy+y*this.ws;}
  get worldW(){return this.w/this.ws;}
- get speed(){const C=this.C,g=this.gatesPassed;
-  if(C.RAMP===undefined)return C.SPEED+C.SPEED_GAIN*clamp(g/60,0,1);
-  const base=C.SPEED+C.SPEED_GAIN*clamp(g/C.RAMP,0,1);
-  return base*(1+C.SPEED_LATE*clamp((g-C.RAMP)/C.RAMP,0,1));}
+ // Speed for a given number of gates passed. The scroll only depends on how many gates are behind the vial, not
+ // on how it is flying, so the time the vial reaches gate i is the same for everyone who gets there.
+ speedFor(passed){const C=this.C;
+  if(C.RAMP===undefined)return C.SPEED+C.SPEED_GAIN*clamp(passed/60,0,1);
+  const base=C.SPEED+C.SPEED_GAIN*clamp(passed/C.RAMP,0,1);
+  return base*(1+C.SPEED_LATE*clamp((passed-C.RAMP)/C.RAMP,0,1));}
+ get speed(){return this.speedFor(this.gatesPassed);}
  // Gap and reach ramp off the gate's own index, not the live score, so the course is the same for everyone
  // however well they are playing.
  // The opening gates are wider still and ease down to the normal gap, so the first seconds of a run forgive the
@@ -176,17 +179,28 @@ export class RidgeEngine extends MiniEngine{
  addGate(){const i=this.index++,gap=this.gapFor(i),lo=this.C.EDGE+gap/2,hi=this.C.GROUND-this.C.EDGE-gap/2,ramp=clamp((i-this.C.MOVE_START)/(this.C.MOVE_FULL-this.C.MOVE_START),0,1);
   const share=this.C.MOVE_SHARE===undefined?.4+.6*ramp:this.C.MOVE_SHARE+(this.C.MOVE_SHARE_TO-this.C.MOVE_SHARE)*ramp;
   const moves=i>=this.C.MOVE_START&&this.random()<share,want=moves?this.C.MOVE_AMP+(this.C.MOVE_AMP_TO-this.C.MOVE_AMP)*ramp:0;
-  // Two columns that both swing can otherwise end up far enough apart, out of phase, that no line threads both.
-  // v5 takes a wider margin off the step for the swing either side; v4 keeps the rule it always had.
-  const swingRoom=(want+this.lastAmp)*(this.C.SWING_SAFETY??1);
-  const jump=Math.max(40,this.jumpFor(i)-swingRoom);
-  const a=Math.max(lo,this.lastGy-jump),b=Math.min(hi,this.lastGy+jump),gy=a+this.random()*(b-a),amp=Math.min(want,gy-lo,hi-gy);
-  const gate={x:this.nextX,gy,cy:gy,gap,amp,phase:this.random()*TAU,rate:this.C.MOVE_SPEED+(this.C.MOVE_SPEED_TO-this.C.MOVE_SPEED)*ramp,passed:false};
-  const prev=this.gates.at(-1);
+  const prev=this.gates.at(-1),phased=this.C.RAMP!==undefined,tCross=this.nextT;
+  // Where the previous opening actually is at the moment the vial is in it, rather than where its centre sits.
+  const anchor=phased&&prev?prev.gy+prev.amp*Math.sin(prev.phase+prev.rate*prev.t):this.lastGy;
+  // v4 pays for the swing up front by shrinking every step. v5 keeps the full step and instead limits the swing
+  // of this column alone, and only by as much as its own phase at the crossing actually costs.
+  const reach=phased?Math.min(this.jumpFor(i),this.C.STEP_MAX??1e9):Math.max(40,this.jumpFor(i)-want-this.lastAmp);
+  const a=Math.max(lo,anchor-reach),b=Math.min(hi,anchor+reach),gy=a+this.random()*(b-a);
+  const rate=this.C.MOVE_SPEED+(this.C.MOVE_SPEED_TO-this.C.MOVE_SPEED)*ramp,phase=this.random()*TAU;
+  // The opening is gy+amp*sin(phase+rate*t). At the crossing that offset is amp*s, and the player has only the
+  // room the step has not already used. A column caught mid-swing (s near 0) keeps its full amplitude.
+  // Two things about the crossing matter. Where the opening is: it must be within reach of the last one.
+  // And how fast it is sweeping: a column caught at its centre is moving quickest, and a player cannot thread a
+  // target that slides faster than they can follow. sin and cos are complementary, so one of the two always bites.
+  const sinT=Math.sin(phase+rate*tCross),cosT=Math.cos(phase+rate*tCross);
+  const slack=Math.max(0,reach-Math.abs(gy-anchor));
+  const byPlace=slack/Math.max(Math.abs(sinT),1e-3),bySpeed=(this.C.SWEEP_MAX??1e9)/Math.max(rate*Math.abs(cosT),1e-3);
+  const amp=phased?Math.min(want,gy-lo,hi-gy,byPlace,bySpeed):Math.min(want,gy-lo,hi-gy);
+  const gate={x:this.nextX,gy,cy:gy,gap,amp,phase,rate,t:tCross,passed:false};
   const orbRoom=prev&&i>=this.C.ORB_START&&(this.C.ORB_GAP===undefined||i-this.lastOrbI>=this.C.ORB_GAP);
   if(orbRoom&&this.random()<this.C.ORB_CHANCE){this.lastOrbI=i;const off=(this.C.ORB_OFFSET+(this.C.ORB_OFFSET_TO-this.C.ORB_OFFSET)*clamp(i/(this.C.ORB_OFFSET_END??40),0,1))*(this.random()<.5?-1:1);
    this.orbs.push({x:prev.x+this.C.PW+(this.C.SPACE-this.C.PW)/2,y:clamp((prev.gy+gy)/2+off,this.C.EDGE,this.C.GROUND-this.C.EDGE),taken:false});}
-  this.lastGy=gy;this.lastAmp=amp;this.gates.push(gate);this.nextX+=this.C.SPACE;}
+  this.lastGy=gy;this.lastAmp=amp;this.gates.push(gate);this.nextX+=this.C.SPACE;this.nextT+=this.C.SPACE/this.speedFor(i+1);}
  // Gates sit at fixed world positions; wider screens just get a few more of the same gates created ahead of time.
  fillGates(){while(this.nextX<this.worldW+this.C.PW*2)this.addGate();}
  // The tap that ends a post-pause wait only picks the flight back up, at the speed it had when it paused; it does

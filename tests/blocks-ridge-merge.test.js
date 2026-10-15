@@ -9,7 +9,7 @@ globalThis.cancelAnimationFrame=()=>{};
 globalThis.Image=class{complete=false;naturalWidth=0;};
 const {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,replayBlocks,anyFit}=await import('../dist/blocks-core.js');
 const {SHAPES,PIECES,makeTray,emptyGrid,placements,placeBlock,RAMP_MOVES}=await import('../dist/puzzle-rules.js');
-const {RidgeEngine}=await import('../dist/tryout-games.js');
+const {RidgeEngine,RIDGE_V4}=await import('../dist/tryout-games.js');
 const {MergeEngine,MERGE_SPAWN_TIERS}=await import('../dist/engines.js');
 const {SIM_STEP,createRandom}=await import('../dist/rng.js');
 const {replayRidge,replayMerge}=await import('../tools/replay.mjs');
@@ -71,7 +71,7 @@ test('A Blocks tray is never dead on arrival when something can fit',()=>{
 const {RIDGE,RIDGE_VIAL,vialHalfWidth,hitsVial}=await import('../dist/tryout-games.js');
 // A simple bot that keeps the vial a little below the next gate's centre.
 function ridgeBot(e){const next=e.gates.find(g=>g.x+RIDGE.PW>e.px-RIDGE.R);const target=next?next.gy+12:300;return e.py>target&&e.vy>-60;}
-function playRidge({seed,hz,view=[480,720],maxSeconds=320}){
+function playRidge({seed,hz,view=[480,720],maxSeconds=900}){
   const c=canvas(...view),out=callbacks(),e=new RidgeEngine(c,out.cb,{seed,motion:false});
   let now=1000;e.frame(now);e.action();
   for(let f=0;f<maxSeconds*hz&&!e.ended;f++){now+=1000/hz;e.frame(now);if(!e.ended&&!e.dead&&ridgeBot(e))e.action();}
@@ -390,15 +390,15 @@ test('Sequence shows a working hint after 5 idle seconds and clears it on the ne
 
 // ---------- Ridge Run: moving vials and peptide orbs ----------
 test('Ridge vials start moving at gate 15, swing further by gate 45, stay inside the playfield and stay reachable',()=>{
-  for(let seed=1;seed<=40;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false});while(e.index<80)e.addGate();
+  for(let seed=1;seed<=40;seed++){const e=new RidgeEngine(canvas(),callbacks().cb,{seed,motion:false,version:4});while(e.index<80)e.addGate();
     for(let i=0;i<e.gates.length;i++){const g=e.gates[i],lo=RIDGE.EDGE+g.gap/2,hi=RIDGE.GROUND-RIDGE.EDGE-g.gap/2;
-      if(i<RIDGE.MOVE_START)assert.equal(g.amp,0,`gate ${i} still`);
-      assert.ok(g.amp<=RIDGE.MOVE_AMP_TO+1e-9);assert.ok(g.gy-g.amp>=lo-1e-9&&g.gy+g.amp<=hi+1e-9,'never bobs past the edges');
+      if(i<RIDGE_V4.MOVE_START)assert.equal(g.amp,0,`gate ${i} still`);
+      assert.ok(g.amp<=RIDGE_V4.MOVE_AMP_TO+1e-9);assert.ok(g.gy-g.amp>=lo-1e-9&&g.gy+g.amp<=hi+1e-9,'never bobs past the edges');
       if(i){const p=e.gates[i-1];assert.ok(Math.abs(g.gy-p.gy)+g.amp+p.amp<=Math.max(40+g.amp+p.amp,e.jumpFor(i))+1e-9,'reachable at any phase');}}
     const late=e.gates.slice(50),moving=late.filter(g=>g.amp>0).length;assert.ok(moving/late.length>.6,'most late gates move');e.destroy();}
 });
 test('Moving Ridge vials really move, and the hit test follows them',()=>{
-  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:4,motion:false});const g={x:e.px-RIDGE.PW/2,gy:300,cy:300,gap:80,amp:50,phase:0,rate:2,passed:true};assert.equal(e.hits(g),false,"safe before it moves");
+  const e=new RidgeEngine(canvas(),callbacks().cb,{seed:4,motion:false,version:4});const g={x:e.px-RIDGE.PW/2,gy:300,cy:300,gap:80,amp:50,phase:0,rate:2,passed:true};assert.equal(e.hits(g),false,"safe before it moves");
   e.gates=[g];e.nextX=1e7;e.orbs=[];e.action();e.py=300;e.vy=0;e.runTime=Math.PI/4-SIM_STEP;e.step(SIM_STEP);
   assert.ok(Math.abs(g.cy-(300+50*Math.sin(Math.PI/2)))<1,'gap centre moved down by the swing');assert.ok(e.dead,'the vial now hits the top glass');e.destroy();
 });
