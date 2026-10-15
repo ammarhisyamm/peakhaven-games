@@ -11,7 +11,7 @@ const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d
 // radius 13 at x 100, and gates whose openings are the box-era 150..118 less VIAL_SLACK, the room the
 // vial-shaped collision below hands back. Shrinking the gap by exactly that keeps the vial a reskin
 // rather than an easier game.
-const RIDGE=Object.freeze({H:640,W:360,GROUND:570,FLOOR_PAD:6,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,
+const RIDGE=Object.freeze({H:640,W:360,GROUND:570,FLOOR_PAD:6,CLOSE:7,GRAVITY:1450,FLAP:430,PW:62,SPACE:210,SPEED:165,SPEED_GAIN:65,
  SLACK:2.6,GAP:150,GAP_TO:118,GAP_START:10,GAP_END:50,JUMP:120,JUMP_TO:220,JUMP_END:40,EDGE:60,R:13,FIRST_X:450,
  // Moving vials and peptide orbs (additions on top of the Tryout Arcade course).
  MOVE_START:15,MOVE_FULL:45,MOVE_AMP:18,MOVE_AMP_TO:55,MOVE_SPEED:1.2,MOVE_SPEED_TO:2.2,
@@ -31,6 +31,8 @@ export function hitsVial(bx,by,r,cx,capY,dir){
   const hw=vialHalfWidth((py-capY)*dir);if(hw>0&&Math.abs(px-cx)<hw)return true;}
  return false;}
 export {RIDGE};
+// Gate counts that get a big on-screen callout in Ridge Run.
+const RIDGE_MILESTONES=[10,25,50,75,100,150,200];
 const colors=['#0ea5ff','#27d8f3','#ffd24d','#ba75ff','#24d58b','#ff609a','#f2fbff'];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const angularDistance=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
@@ -175,10 +177,12 @@ export class RidgeEngine extends MiniEngine{
   for(const g of this.gates)g.cy=g.gy+g.amp*Math.sin(g.phase+g.rate*this.runTime);
   for(const o of this.orbs){o.x-=sp*dt;if(!o.taken&&Math.hypot(o.x-this.px,o.y-this.py)<RIDGE.R+RIDGE.ORB_R){o.taken=true;this.orbsTaken++;this.score+=RIDGE.ORB_POINTS;this.popups.push({x:o.x,y:o.y,t:0});this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('bond');this.burst(o.x*this.ws,this.sy(o.y),'#ffd24d',14);}}
   this.orbs=this.orbs.filter(o=>o.x>-RIDGE.ORB_R*2);
-  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px-RIDGE.R){g.passed=true;this.gatesPassed++;this.score++;this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.sy(this.py),'#8fffff',12);}}
+  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+RIDGE.PW<this.px-RIDGE.R){g.passed=true;this.gatesPassed++;this.score++;if(g.minClear<RIDGE.CLOSE)this.popups.push({x:this.px+18,y:this.py-22,t:0,text:'CLOSE!'});if(RIDGE_MILESTONES.includes(this.gatesPassed))this.cb.effect?.(`${this.gatesPassed} GATES!`,'ridge');this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.sy(this.py),'#8fffff',12);}}
   this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-RIDGE.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
   if(this.py<RIDGE.R){this.py=RIDGE.R;this.vy=0;}
   if(this.py+RIDGE.R>RIDGE.GROUND){this.py=RIDGE.GROUND-RIDGE.R;this.crash();}else if(this.gates.some(g=>this.hits(g)))this.crash();
+  // Near misses, for the "CLOSE!" popup only: the tightest gap to the glass while inside each gate's column.
+  if(!this.dead)for(const g of this.gates)if(!g.passed&&this.px+RIDGE.R>g.x&&this.px-RIDGE.R<g.x+RIDGE.PW)g.minClear=Math.min(g.minClear??Infinity,this.py-RIDGE.R-(g.cy-g.gap/2),g.cy+g.gap/2-(this.py+RIDGE.R));
   if(this.motion){this.trail.push({x:this.px,y:this.py});for(const p of this.trail)p.x-=sp*dt;if(this.trail.length>14)this.trail.shift();}
  }
  crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.sy(this.py),'#ffd383');this.cb.sound('miss');}
@@ -194,7 +198,7 @@ export class RidgeEngine extends MiniEngine{
   for(const o of this.orbs){if(o.taken)continue;const pulse=1+.12*Math.sin(this.time*6+o.x*.05);c.save();c.shadowColor='#ffd24d';c.shadowBlur=16;
    c.strokeStyle='#ffe9a3';c.lineWidth=1.5;for(let k=0;k<3;k++){const a=this.time*2.4+k*TAU/3,ax=o.x+Math.cos(a)*RIDGE.ORB_R*1.5,ay=o.y+Math.sin(a)*RIDGE.ORB_R*1.5;c.beginPath();c.moveTo(o.x,o.y);c.lineTo(ax,ay);c.stroke();c.fillStyle='#fff6d6';c.beginPath();c.arc(ax,ay,2.6,0,TAU);c.fill();}
    const gr=c.createRadialGradient(o.x,o.y,1,o.x,o.y,RIDGE.ORB_R*pulse);gr.addColorStop(0,'#fffbe8');gr.addColorStop(.5,'#ffd24d');gr.addColorStop(1,'#ff9d2e');c.fillStyle=gr;c.beginPath();c.arc(o.x,o.y,RIDGE.ORB_R*pulse*.8,0,TAU);c.fill();c.restore();}
-  for(const p of this.popups){c.save();c.globalAlpha=1-p.t/.8;c.fillStyle='#ffe9a3';c.shadowColor='#ff9d2e';c.shadowBlur=10;c.font='900 18px Inter, sans-serif';c.textAlign='center';c.fillText(`+${RIDGE.ORB_POINTS}`,p.x,p.y-14-p.t*30);c.restore();}
+  for(const p of this.popups){c.save();c.globalAlpha=1-p.t/.8;c.fillStyle='#ffe9a3';c.shadowColor='#ff9d2e';c.shadowBlur=10;c.font='900 18px Inter, sans-serif';c.textAlign='center';c.fillText(p.text??`+${RIDGE.ORB_POINTS}`,p.x,p.y-14-p.t*30);c.restore();}
   for(const g of this.gates){const top=g.cy-g.gap/2,bottom=g.cy+g.gap/2,cx=g.x+RIDGE.PW/2;drawBottleObstacle(c,cx,top,top+this.oy/k,RIDGE.PW,true);drawBottleObstacle(c,cx,bottom,RIDGE.GROUND-bottom,RIDGE.PW,false);}
   c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,RIDGE.GROUND);c.lineTo(this.worldW,RIDGE.GROUND);c.stroke();
   c.shadowColor='#8fffff';c.shadowBlur=16;drawSprite(c,'vial-cyan',this.px,this.py,RIDGE.R*2,RIDGE.R*2.6,this.tilt);
@@ -289,14 +293,14 @@ export class SequenceEngine extends MiniEngine{
   const from=this.selection,to=swapWith??index,next=sequenceExchange(this.board,from,to);
   if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message('Swap neighbours to make a line of three.');return;}
   this.inputs.push([this.ticks,from,to]);
-  const matched=sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=SEQ_SWAP;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
+  const matched=sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;if(this.moves===5&&this.score<this.target)this.cb.effect?.('5 MOVES LEFT','sequence');this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=SEQ_SWAP;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
  }
  // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
  resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();let sx=0,sy=0;
   for(const i of matches){this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);sx+=i%7;sy+=Math.floor(i/7);}
   const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;
   this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
-  if(this.chain>1)this.banner={text:`Chain ×${this.chain}`,t:0};if(matches.size>=8&&this.motion)this.shake=1;
+  if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
  // Any swap that makes a line, for the idle hint.
  findMove(){for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
