@@ -3,10 +3,10 @@ import {randomUUID} from 'node:crypto';
 
 export function createMemoryStore({invites={},now=()=>new Date()}={}){
   const codes=new Map(Object.entries(invites).map(([code,max])=>[code,{max,uses:0}]));
-  const players=new Map(),runs=new Map();
+  const players=new Map(),runs=new Map(),results=new Map(),prizes=new Map();
   const copy=v=>v&&structuredClone(v);
   return {
-    codes,players,runs,
+    codes,players,runs,results,prizes,
     async inviteAvailable(code){const c=codes.get(code);return Boolean(c&&c.uses<c.max);},
     async useInvite(code){const c=codes.get(code);if(!c||c.uses>=c.max)return false;c.uses++;return true;},
     async createPlayer(p){players.set(p.id,{...p,created_at:now().toISOString()});return copy(players.get(p.id));},
@@ -27,6 +27,13 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     async updateRunIf(id,segments,patch){const r=runs.get(id);if(!r||r.segments!==segments||r.status!=='open')return null;Object.assign(r,patch);return copy(r);},
     async finishedScores(playerId){return [...runs.values()].filter(r=>r.player_id===playerId&&r.status==='closed').map(r=>r.score);},
     async scoredRuns(from,to){return [...runs.values()].filter(r=>r.status!=='rejected'&&r.score>0&&r.day>=from&&r.day<=to).map(({id,player_id,game,score,day,updated_at})=>({id,player_id,game,score,day,updated_at}));},
+    // Finished months, archived once an admin finalises them.
+    async monthResults(month){return (results.get(month)??[]).map(copy);},
+    async saveMonthResults(month,rows){results.set(month,rows.map(r=>({...r,month,finalised_at:now().toISOString()})));return (results.get(month)??[]).map(copy);},
+    async finalisedMonths(){return [...results.keys()].filter(m=>results.get(m)?.length).sort();},
+    async prizes(){return Object.fromEntries(prizes);},
+    async setPrize(game,text){prizes.set(game,text);return text;},
+    async monthEndReady(){return true;},
   };
 }
 
@@ -39,5 +46,6 @@ export function createMemoryAuth(){
     async createUser(email){const existing=[...users.values()].find(u=>u.email===email);if(existing)return {exists:true,id:existing.id};const u={id:randomUUID(),email};users.set(u.id,u);return {id:u.id};},
     async deleteUser(id){users.delete(id);},
     async sendLink(email,redirectTo){sent.push({email,redirectTo});},
+    async emailsByIds(ids){return ids.map(id=>users.get(id)).filter(Boolean).map(u=>({id:u.id,email:u.email}));},
   };
 }

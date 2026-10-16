@@ -8,10 +8,10 @@ function setup(){
   const env=supabaseEnv();
   if(!env.ready)return null;
   const {store,auth}=createSupabaseBackend(env);
-  handlers=createHandlers({store,auth,secret:env.secret});
+  handlers=createHandlers({store,auth,secret:env.secret,admins:env.admins});
   return handlers;
 }
-const METHODS={join:'POST',me:'GET',profile:'POST',start:'POST',finish:'POST',leaderboard:'GET'};
+const METHODS={join:'POST',me:'GET',profile:'POST',start:'POST',finish:'POST',leaderboard:'GET',results:'GET',finalise:'POST'};
 
 export function route(name){
   return async function handler(req,res){

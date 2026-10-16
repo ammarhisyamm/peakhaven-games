@@ -78,3 +78,55 @@ tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.fo
 .game-load-state p{max-width:38ch;color:#fff;font-size:16px;margin:0}
 .game-load-state button{min-height:44px;padding:10px 20px}
 .game-load-state .text-link{color:#80e9ff}
+/* What first place wins, under the board's title. Only first place wins anything. */
+.prize-line{display:flex;align-items:center;gap:8px;margin-top:10px;padding:8px 12px;border-radius:10px;background:#def8ff;color:#06436d;font-size:13px;font-weight:600;line-height:1.35}
+.prize-line svg{width:17px;height:17px;flex:none}
+/* Last month's podium: the winner takes the crown, second and third are runners-up. */
+.last-month-list{list-style:none;margin:16px 0 12px;padding:0;display:grid;gap:8px}
+.last-month-list li{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:#fbfeff}
+.last-month-list img{width:30px;height:30px;object-fit:contain;flex:none}
+.last-month-list .past-who{flex:1;min-width:0;display:flex;flex-direction:column}
+.last-month-list .past-who strong{font-size:15px;letter-spacing:-.02em}
+.last-month-list .past-who small{color:var(--muted);font-size:12px}
+.last-month-list .past-score{font-weight:700;font-size:14px;white-space:nowrap}
+.last-month-list .past-place{width:30px;text-align:center;font-size:12px;font-weight:750;color:var(--muted);flex:none}
+.last-month-list .past-crown{width:30px;display:grid;place-items:center;flex:none}
+.last-month-list .past-crown svg{width:24px;height:24px;fill:#ffd24d;stroke:#8b5400;stroke-width:1.4}
+.last-month-list .winner{background:linear-gradient(100deg,#fff8de,#fffdf5);border-color:#f0d183;padding-block:14px}
+.last-month-list .winner .past-who strong{font-size:17px}
+.last-month-list .winner .past-who small{color:#8b5400;font-weight:700}
+.last-month-list .runner-up{padding-block:7px;opacity:.9}
+.last-month-list .runner-up img{width:24px;height:24px}
+.last-month-list .runner-up .past-who strong{font-size:14px}
+/* Winning modal, for a first place only. */
+.win-games{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+.win-games li{display:flex;align-items:center;gap:10px;font-weight:650;padding:8px 12px;border-radius:10px;background:#fff8de}
+.win-games svg{width:19px;height:19px;flex:none;color:#8b5400}
+/* Running the competition: admin.html. Not part of the player-facing pages. */
+.admin-page{display:grid;gap:14px;padding-block:18px}
+.admin-page h2{font-size:22px;margin-bottom:6px}
+.admin-page h3{font-size:16px;margin-bottom:6px}
+.admin-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;margin-top:14px}
+.admin-field{display:grid;gap:6px;font-size:13px;font-weight:650;min-width:min(260px,100%)}
+.admin-field input,.admin-field select{min-height:44px;border:1px solid #c4dfed;border-radius:10px;padding:8px 12px;background:#fff;font-weight:500}
+.admin-prizes{display:grid;gap:12px}
+.admin-prizes .admin-field{min-width:0}
+.admin-hint{color:var(--muted);font-size:12px;line-height:1.5}
+.admin-state{margin-top:12px;font-size:13px;color:var(--muted)}
+.admin-state.good{color:#0a6b3d;font-weight:650}
+.admin-note{margin-top:10px;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:600;background:#def8ff;color:#06436d}
+.admin-note.good{background:#e2fbee;color:#0a6b3d}
+.admin-note.bad{background:#ffe9e9;color:#8a1f1f}
+.admin-list{list-style:none;margin:12px 0;padding:0;display:grid;gap:8px}
+.admin-list li{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:#fbfeff}
+.admin-list li>div{flex:1;min-width:0;display:flex;flex-direction:column}
+.admin-list small{color:var(--muted);font-size:12px;word-break:break-all}
+.admin-list .admin-game{min-width:96px;font-size:12px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:#06436d}
+.admin-list .admin-place{min-width:34px;font-size:12px;font-weight:750;color:var(--muted)}
+.admin-list .admin-score{font-weight:700;white-space:nowrap}
+.admin-list.winners li{background:linear-gradient(100deg,#fff8de,#fffdf5);border-color:#f0d183}
+.admin-list.backups li{opacity:.92}
+.admin-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.admin-game-block+.admin-game-block{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.admin-signin{display:grid;gap:12px;margin-top:14px;max-width:360px}
+.ranks-layout .last-month{grid-column:1/-1}
