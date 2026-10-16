@@ -2,7 +2,9 @@ import {isDeepStrictEqual} from 'node:util';
 // The competition API, written against two small interfaces so it can be tested without a network:
 //   auth:  userFromToken(token), createUser(email), sendLink(email, redirectTo)
 //   store: see supabase-store.mjs (memory-store.mjs in the tests implements the same calls)
-import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,monthlyStandings,yearlyStandings,gameStandings,podiumMonths} from './competition.mjs';
+import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,cleanMonth,cleanPrize,monthlyStandings,yearlyStandings,gameStandings,podiumMonths,previousMonth,monthResults} from './competition.mjs';
+import {MonthEndNotReady} from './competition.mjs';
+import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
 
@@ -10,7 +12,9 @@ export const BOTTLES=BOTTLE_SKINS.map(b=>b.id);
 const ok=body=>({status:200,body});
 const fail=(status,error,extra={})=>({status,body:{error,...extra}});
 
-export function createHandlers({store,auth,secret,now=()=>new Date()}){
+export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]}){
+  // Whoever runs the competition, by email (ARCADE_ADMIN_EMAILS). Nobody else can see or finalise results.
+  const adminEmails=new Set([...admins].map(e=>String(e).trim().toLowerCase()).filter(Boolean));
   async function signedIn(token){
     const user=token?await auth.userFromToken(token):null;
     if(!user)return {error:fail(401,'Please sign in again.')};
@@ -18,6 +22,46 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
     if(!player)return {error:fail(403,'This account has no arcade profile. Join with an invite code.')};
     return {user,player};
   }
+  async function adminIn(token){
+    const s=await signedIn(token);if(s.error)return s;
+    if(!adminEmails.has(String(s.user.email||'').toLowerCase()))return {error:fail(403,'This account cannot run the competition.')};
+    return s;
+  }
+
+  // The newest month an admin has finalised, with its archived podium. Nothing is shown to players before that,
+  // so a month under review never puts a winner on the board.
+  async function archivedPodium(){
+    const months=await store.finalisedMonths();
+    const month=months.at(-1)??null;
+    return {month,rows:month?await store.monthResults(month):[]};
+  }
+
+  // One finished month for the admin page: the podium per game, the three prize winners with their emails, and
+  // second and third kept separately as backups in case a winner's run is disqualified during review.
+  // False until the month-end migration has run. Everything else works without it, so this only gates
+  // finalising and puts a notice on the admin page.
+  const monthEndReady=async()=>(await store.monthEndReady?.())??true;
+
+  async function resultsView(month){
+    const archived=await store.monthResults(month);
+    const range=monthRange(month);
+    const rows=archived.length?archived:monthResults(await store.scoredRuns(range.from,range.to),month);
+    const ids=[...new Set(rows.map(r=>r.player_id))];
+    const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
+    const emails=new Map(((await auth.emailsByIds?.(ids))||[]).map(e=>[e.id,e.email]));
+    const prizes=await store.prizes();
+    const view=r=>({game:r.game,gameLabel:gameLabel(r.game),rank:r.rank,winner:Boolean(r.winner),player_id:r.player_id,
+      name:people.get(r.player_id)?.name??'Player',bottle:people.get(r.player_id)?.bottle??BOTTLES[0],
+      score:r.score,email:emails.get(r.player_id)??null});
+    const all=rows.map(view);
+    return {month,label:monthLabel(month),thisMonth:monthKey(now()),finished:month<monthKey(now()),ready:await monthEndReady(),
+      finalised:archived.length>0,finalisedAt:archived[0]?.finalised_at??null,source:archived.length?'archive':'live',
+      games:COMPETITION.games.map(game=>({game,label:gameLabel(game),prize:prizeLine(prizes,game),text:prizes[game]??'',
+        podium:all.filter(r=>r.game===game).sort((a,b)=>a.rank-b.rank)})),
+      winners:all.filter(r=>r.winner),backups:all.filter(r=>!r.winner).sort((a,b)=>a.rank-b.rank),
+      finalisedMonths:await store.finalisedMonths()};
+  }
+
   async function playsLeft(playerId,day){
     const used=await store.countRuns(playerId,day);
     return Object.fromEntries(COMPETITION.games.map(g=>[g,Math.max(0,COMPETITION.triesPerDay-(used[g]||0))]));
@@ -73,7 +117,10 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
       const s=await signedIn(token);if(s.error)return s.error;
       const day=dayKey(now());
       const p=await progress(s.player.id);
-      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day)});
+      // Only a first place wins a prize, so only a first place raises the winner modal.
+      const last=await archivedPodium();
+      const wins=last.rows.filter(r=>r.winner&&r.player_id===s.player.id).map(r=>({game:r.game,month:last.month}));
+      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:adminEmails.has(String(s.user.email||'').toLowerCase())});
     },
 
     async profile({token,body}){
@@ -144,10 +191,54 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
       const runs=await store.scoredRuns(range.from,range.to);
       const table=game?gameStandings(runs,game):period==='yearly'?yearlyStandings(runs):monthlyStandings(runs);
       const shown=table.slice(0,20),mine=table.find(r=>r.player_id===s.player.id)??null;
-      const ids=[...new Set([...shown.map(r=>r.player_id),...(mine?[mine.player_id]:[])])];
+      // Last month's podium rides along with the board: first place won the prize, second and third are runners-up.
+      const last=await archivedPodium();
+      const lastRows=game?last.rows.filter(r=>r.game===game).sort((a,b)=>a.rank-b.rank):[];
+      const ids=[...new Set([...shown.map(r=>r.player_id),...(mine?[mine.player_id]:[]),...lastRows.map(r=>r.player_id)])];
       const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
       const view=r=>({rank:r.rank,name:people.get(r.player_id)?.name??'Player',bottle:people.get(r.player_id)?.bottle??BOTTLES[0],points:r.points,games:r.games,you:r.player_id===s.player.id});
-      return ok({period,key,game,players:table.length,top:shown.map(view),me:mine?view(mine):null});
+      const past=r=>({rank:r.rank,winner:Boolean(r.winner),name:people.get(r.player_id)?.name??'Player',bottle:people.get(r.player_id)?.bottle??BOTTLES[0],score:r.score,you:r.player_id===s.player.id});
+      const prizes=await store.prizes();
+      const lines=Object.fromEntries(COMPETITION.games.map(g=>[g,prizeLine(prizes,g)]));
+      return ok({period,key,game,players:table.length,top:shown.map(view),me:mine?view(mine):null,
+        prize:game?lines[game]:null,prizes:lines,
+        lastMonth:lastRows.length?{month:last.month,label:monthLabel(last.month),podium:lastRows.map(past)}:null});
+    },
+
+    // Admin: one month's podium, its three prize winners and the runners-up kept as backups. Before the month is
+    // finalised this is worked out live from the runs, so results can be checked before anyone is told they won.
+    async results({token,query}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const month=cleanMonth(query?.month)??previousMonth(monthKey(now()));
+      return ok(await resultsView(month));
+    },
+
+    // Admin: writes the month's podium and marks its winners, which is what raises the winner modal and puts
+    // last month's winners on the boards. Safe to run again after a disqualification: it replaces that month's
+    // rows. Prize text can be saved on its own by leaving the month out.
+    async finalise({token,body}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const month=cleanMonth(body?.month);
+      if(body?.month!==undefined&&!month)return fail(400,'Pick a month as YYYY-MM.');
+      if(!(await monthEndReady()))return fail(503,new MonthEndNotReady().message);
+      if(body?.prizes!==undefined){
+        if(!body.prizes||typeof body.prizes!=='object'||Array.isArray(body.prizes))return fail(400,'Prize text must be one line per game.');
+        for(const game of Object.keys(body.prizes))if(!COMPETITION.games.includes(game))return fail(400,'That game is not in the competition.');
+      }
+      if(month&&month>=monthKey(now()))return fail(400,'That month has not finished yet.');
+      if(!month&&body?.prizes===undefined)return fail(400,'Pick a month as YYYY-MM.');
+      // The tables can still go missing between the check above and the write, so the write says so too.
+      try{
+        if(body?.prizes!==undefined)for(const [game,text] of Object.entries(body.prizes))await store.setPrize(game,cleanPrize(text));
+        if(month){
+          const range=monthRange(month);
+          await store.saveMonthResults(month,monthResults(await store.scoredRuns(range.from,range.to),month));
+        }
+      }catch(error){
+        if(error instanceof MonthEndNotReady)return fail(503,error.message);
+        throw error;
+      }
+      return ok(await resultsView(month??previousMonth(monthKey(now()))));
     },
   };
 }

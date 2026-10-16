@@ -10,7 +10,9 @@ import {createMemoryStore,createMemoryAuth} from './server/memory-store.mjs';
 
 const root=join(dirname(fileURLToPath(import.meta.url)),'build'),port=Number(process.env.PORT||8775);
 const store=createMemoryStore({invites:{DEV:1000,DEV2:1000}}),auth=createMemoryAuth();
-const api=createHandlers({store,auth,secret:process.env.RUN_SEED_SECRET||'local-dev-secret'});
+// Join with this email to reach /admin.html locally, or set ARCADE_ADMIN_EMAILS.
+const admins=String(process.env.ARCADE_ADMIN_EMAILS||'admin@dev.test').split(',');
+const api=createHandlers({store,auth,secret:process.env.RUN_SEED_SECRET||'local-dev-secret',admins});
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.wav':'audio/wav','.ttf':'font/ttf','.woff2':'font/woff2'};
 
 async function body(req){let raw='';for await(const chunk of req)raw+=chunk;try{return raw?JSON.parse(raw):{};}catch{return {};}}
@@ -23,7 +25,7 @@ createServer(async(req,res)=>{
     if(name==='config')return send(res,200,{accounts:true,dev:true});
     let data;try{data=req.method==='POST'?await body(req):{};}catch{res.destroy();return;}
     if(name==='dev-login'){const t=auth.tokenFor(String(data.email||'').trim().toLowerCase());return t?send(res,200,{devToken:t}):send(res,404,{error:'No account uses that email yet. Join with your invite code.'});}
-    if(!['join','me','profile','start','finish','leaderboard'].includes(name))return send(res,404,{error:'Not found'});
+    if(!['join','me','profile','start','finish','leaderboard','results','finalise'].includes(name))return send(res,404,{error:'Not found'});
     try{
       const out=await api[name]({token,body:data,query:Object.fromEntries(url.searchParams),origin:`http://${req.headers.host}/`});
       if(name==='join'&&out.status===200)out.body.devToken=auth.tokenFor(String(data.email).trim().toLowerCase());
