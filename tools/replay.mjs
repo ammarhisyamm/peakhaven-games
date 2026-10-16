@@ -76,7 +76,7 @@ export async function replayMerge(rep){
 
 export async function replaySequence(rep){
   installStubs();
-  if(rep?.game!=='sequence'||![1,2].includes(rep.v)||rep.step!==SIM_STEP)throw new Error('Not a Sequence replay for this build');
+  if(rep?.game!=='sequence'||![1,2,3].includes(rep.v)||rep.step!==SIM_STEP)throw new Error('Not a Sequence replay for this build');
   const level=rep.level;if(!Number.isInteger(level)||level<1)throw new Error('Bad Sequence level');
   if(!Array.isArray(rep.moves)||!rep.moves.every(m=>Array.isArray(m)&&m.length===3&&m.every(Number.isInteger)))throw new Error('Bad Sequence move log');
   replayClock(rep,rep.moves.map(m=>m[0]));

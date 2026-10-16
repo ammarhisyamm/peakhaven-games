@@ -27,7 +27,7 @@ function blocksReplay(seed,moves=6){
   for(let m=0;m<moves&&!g.ended;m++){const i=g.state.tray.findIndex(p=>p&&placements(g.state.grid,p.shape).length);if(i<0)break;const [r,c]=placements(g.state.grid,g.state.tray[i].shape)[0];blocksPlace(g,i,r,c);}
   const res=blocksResult(g);return {replay:res.replay,score:res.score,seconds:0};
 }
-function sequenceReplay(seed,level,rulesVersion=2){
+function sequenceReplay(seed,level,rulesVersion=3){
   const out=stubCallbacks(),e=new SequenceEngine(stubCanvas(),out.cb,{seed,level,motion:false,rulesVersion});
   driveSequence(e,greedyMove);e.destroy();
   return {replay:out.result.replay,score:out.result.score,won:out.result.won,seconds:e.ticks*SIM_STEP};
@@ -181,7 +181,7 @@ test('Sequence runs go level by level; each cleared level unlocks the next board
   w.advance(l1.seconds+1);
   let f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:l1.replay}});
   assert.equal(f.status,200);assert.equal(f.body.done,false);assert.equal(f.body.nextLevel,2);
-  const day=dayKey(w.now());assert.equal(f.body.nextSeed,seedFor(SECRET,'sequence-v2',day,2));
+  const day=dayKey(w.now());assert.equal(f.body.nextSeed,seedFor(SECRET,'sequence-v3',day,2));
   // Replaying level 1's board as level 2 doesn't work.
   const wrong=sequenceReplay(s.body.seed,2);w.advance(wrong.seconds+1);
   const bad=await w.api.finish({token:t,body:{runId:s.body.runId,replay:wrong.replay}});
@@ -316,13 +316,31 @@ test('Retry comparison tolerates Postgres jsonb object key order',async()=>{
 });
 
 
-test('New Sequence competition runs cannot downgrade to v1, while pre-upgrade runs keep their course',async()=>{
+test('New Sequence competition runs cannot downgrade to v1 or v2, while older runs keep their course',async()=>{
  const w=world(),token=await w.join('sequence-version@x.com','Version Check');
- const start=await w.api.start({token,body:{game:'sequence'}});assert.equal(start.body.rulesVersion,2);
+ const start=await w.api.start({token,body:{game:'sequence'}});assert.equal(start.body.rulesVersion,3);
  const oldReplay=sequenceReplay(start.body.seed,1,1);w.advance(oldReplay.seconds+1);
  const downgrade=await w.api.finish({token,body:{runId:start.body.runId,replay:oldReplay.replay}});assert.equal(downgrade.status,422);assert.match(downgrade.body.reason,/different level rules/);
  const player=await w.auth.userFromToken(token),day=dayKey(w.now()),seed=seedFor(SECRET,'sequence',day,1);
  const legacy=await w.store.startRun({playerId:player.id,game:'sequence',day,seed,limit:3});
  const replay=sequenceReplay(seed,1,1);assert.ok(replay.won);w.advance(replay.seconds+1);
  const finish=await w.api.finish({token,body:{runId:legacy.id,replay:replay.replay}});assert.equal(finish.status,200);assert.equal(finish.body.done,false);assert.equal(finish.body.nextSeed,seedFor(SECRET,'sequence',day,2));
+});
+
+// Three plays a day, so the v2 half of the story needs its own player.
+test('A Sequence run already on the v2 course keeps the v2 engine, and a v3 run refuses a v2 replay',async()=>{
+ const w=world(),token=await w.join('sequence-v2-run@x.com','Legacy Two');
+ const player=await w.auth.userFromToken(token),day=dayKey(w.now());
+ // A run whose first seed is the v2 course stays on v2: v2 engine, v2 next course.
+ const v2Seed=seedFor(SECRET,'sequence-v2',day,1);
+ const v2Run=await w.store.startRun({playerId:player.id,game:'sequence',day,seed:v2Seed,limit:3});
+ const v2Replay=sequenceReplay(v2Seed,1,2);assert.ok(v2Replay.won,'the bot clears v2 level 1');w.advance(v2Replay.seconds+1);
+ const v2Finish=await w.api.finish({token,body:{runId:v2Run.id,replay:v2Replay.replay}});
+ assert.equal(v2Finish.status,200,JSON.stringify(v2Finish.body));assert.equal(v2Finish.body.done,false);
+ assert.equal(v2Finish.body.nextSeed,seedFor(SECRET,'sequence-v2',day,2));
+ // A new run is on v3, and a v2 replay of its board is refused for using the wrong rules.
+ const fresh=await w.api.start({token,body:{game:'sequence'}});assert.equal(fresh.body.rulesVersion,3);
+ const stale=sequenceReplay(fresh.body.seed,1,2);w.advance(stale.seconds+1);
+ const refused=await w.api.finish({token,body:{runId:fresh.body.runId,replay:stale.replay}});
+ assert.equal(refused.status,422);assert.match(refused.body.reason,/different level rules/);
 });

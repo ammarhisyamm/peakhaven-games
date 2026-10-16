@@ -8,7 +8,7 @@ import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 
 const TAU=Math.PI*2;
 export const BOND_HIT=.17,BOND_KNEE=6,BOND_MAX_FIXED=5,BOND_FIXED_GAP=.55,BOND_CLOCK_MAX=4,BOND_CLOCK_MIN=2.5,BOND_CLOCK_FROM=5,BOND_CLOCK_TO=20;
-const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d);
+const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,SEQ_BONUS_RATE=.4,fallTime=d=>.12+.05*Math.abs(d);
 // What a v3 combo is called when it goes off. The bigger the blast, the louder the word.
 const COMBO_LABELS={stripeStripe:'CROSS BLAST!',stripeWrap:'MEGA CROSS!',wrapWrap:'DOUBLE BLAST!',bombStripe:'COLOUR STRIPES!',bombWrap:'COLOUR BLAST!',bombBomb:'BOARD CLEAR!'};
 // Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
@@ -442,7 +442,7 @@ export class SequenceEngine extends MiniEngine{
   this.cb.haptic?.(hap,true);
   this.cb.sound(this.chain>1||label?'perfect':'crystal',{rate:Math.pow(2,depth*2/12)});
   if(this.motion)this.shake=Math.min(1.8,(plan.clear.size+(label?14:0))/10);
-  this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;
+  this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR*(this.bonus?SEQ_BONUS_RATE:1);
  }
  // The end-of-level bonus. Every move the player did not need fires a striped crystal, in the order this
  // run's own generator picks, and then anything still special on the board goes off. It is drawn from the
@@ -482,7 +482,7 @@ export class SequenceEngine extends MiniEngine{
    for(const [at,cell] of this.creating??[])held[at]=cell;
    const settled=settleV3(held,this.random,this.palette,this.progress);
    this.board=settled.board;this.falls=settled.falls;this.clearing=null;this.creating=null;this.phase='fall';
-   this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
+   this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)))*(this.bonus?SEQ_BONUS_RATE:1);this.pending=this.fallDur;return;}
   if(this.phase==='clear'&&this.rulesVersion===2){const gone=this.clearing,cleared=this.board.map((v,i)=>gone.has(i)?-1:v),settled=settleProgression(cleared,this.random,this.palette,this.progress);this.board=settled.board;this.falls=settled.falls;this.clearing=null;this.phase='fall';this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
   if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,this.random,7,this.palette);this.phase='fall';
    // Crystals fall like they have weight: each one accelerates and takes longer the further it drops.

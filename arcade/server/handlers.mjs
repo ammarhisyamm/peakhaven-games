@@ -32,8 +32,19 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
     return {points,podium:podiumMonths(past,playerId).length>0};
   }
 
-  const sequenceVersion=run=>run.game==='sequence'&&run.seed===seedFor(secret,'sequence-v2',run.day,1)?2:1;
-  const courseGame=run=>run.game==='sequence'&&sequenceVersion(run)===2?'sequence-v2':run.game;
+  // A Sequence run's rules are read back from the seed it was started with, newest first, so a run already
+  // in flight keeps the engine it began on and a new run cannot submit an easier older replay.
+  const sequenceVersion=run=>{
+   if(run.game!=='sequence')return 1;
+   if(run.seed===seedFor(secret,'sequence-v3',run.day,1))return 3;
+   if(run.seed===seedFor(secret,'sequence-v2',run.day,1))return 2;
+   return 1;
+  };
+  const courseGame=run=>{
+   if(run.game!=='sequence')return run.game;
+   const version=sequenceVersion(run);
+   return version===1?'sequence':`sequence-v${version}`;
+  };
 
   async function finishView(run,playerId){
     const done=run.status!=='open',level=run.segments;
@@ -96,7 +107,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date()}){
       const game=body?.game;if(!COMPETITION.games.includes(game))return fail(400,'That game is not in the competition.');
       const requestId=body?.requestId??null;
       if(requestId!==null&&(typeof requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)))return fail(400,'Invalid start request. Please reopen the game.');
-      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v2':game,day,1);
+      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v3':game,day,1);
       const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId});
       if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day)});
       if(run.game!==game||run.status!=='open'||run.segments>0)return fail(409,'This run has already been played. Please start a new one.');

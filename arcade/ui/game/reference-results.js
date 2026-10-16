@@ -25,7 +25,7 @@ const GAMES={
   eyebrow:({level})=>`Sequence · Level ${level}`,
   title:({won})=>won?'LEVEL CLEARED':'LEVEL NOT CLEARED',
   intro:({won,result})=>won?'Lovely work. The next level is ready.':result?.objectives?.some(g=>g.left)?'Clear every objective before your moves run out.':'Try this level again with a fresh board.',
-  stats:({result,level})=>[[result?.score,'Score'],[result?.target??sequenceTarget(level),'Goal'],[Math.max(0,25-(result?.moves||0)),'Moves']],
+  stats:({result,level})=>[[result?.score,'Score'],[result?.target??sequenceTarget(level),'Goal'],[Math.max(0,(result?.movesTotal??25)-(result?.moves||0)),'Moves']],
   retry:({won,level})=>won?`Play Level ${level+1}`:`Retry Level ${level}`,
   after:({won,level})=>won?`play Level ${level+1}`:`retry Level ${level}`,
  },
