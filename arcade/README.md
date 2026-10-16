@@ -115,6 +115,11 @@ Second and third are archived so last month's podium can be shown, and win nothi
   whoever got there first. Exactly one winner per game.
 - `month_results` keeps the top three of each game with a `winner` flag, true for rank 1 only.
   `month_prizes` keeps one line of prize text per game.
+- **Existing projects need the migration**: run `supabase/month-end.sql` once in the Supabase SQL editor.
+  It is idempotent, and new projects get these tables from `schema.sql` already. Until it has run, the
+  arcade carries on without them — the leaderboard, `/api/me` and the games behave normally, every board
+  shows the default prize line, "Last month's winners" stays hidden, and the admin page says to run the file.
+  Finalising a month is the only thing that needs the tables, and it answers 503 naming the file.
 - `/admin.html` (admins only): check a finished month's podium, write the prize lines, and **Finalise**. Until
   it is finalised nothing is announced and the boards show no podium, so results can be reviewed first.
   Finalising marks the winners, which is what raises each winner's modal and puts the podium on the boards.
@@ -136,6 +141,7 @@ Running the competition (Supabase SQL editor):
 ```sql
 insert into public.invites (code, max_uses, note) values ('PEAK-7Q2X', 1, 'for Sam');      -- new invite
 select * from public.runs where flagged or status = 'rejected' order by updated_at desc;     -- review
+select * from public.month_results where month = '2026-09' order by game, rank;              -- last month
 ```
 
 ## Temporary guest prototype

@@ -33,6 +33,7 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     async finalisedMonths(){return [...results.keys()].filter(m=>results.get(m)?.length).sort();},
     async prizes(){return Object.fromEntries(prizes);},
     async setPrize(game,text){prizes.set(game,text);return text;},
+    async monthEndReady(){return true;},
   };
 }
 

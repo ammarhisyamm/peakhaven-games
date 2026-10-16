@@ -3,6 +3,7 @@ import {isDeepStrictEqual} from 'node:util';
 //   auth:  userFromToken(token), createUser(email), sendLink(email, redirectTo)
 //   store: see supabase-store.mjs (memory-store.mjs in the tests implements the same calls)
 import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,cleanMonth,cleanPrize,monthlyStandings,yearlyStandings,gameStandings,podiumMonths,previousMonth,monthResults} from './competition.mjs';
+import {MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
@@ -37,6 +38,10 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
 
   // One finished month for the admin page: the podium per game, the three prize winners with their emails, and
   // second and third kept separately as backups in case a winner's run is disqualified during review.
+  // False until the month-end migration has run. Everything else works without it, so this only gates
+  // finalising and puts a notice on the admin page.
+  const monthEndReady=async()=>(await store.monthEndReady?.())??true;
+
   async function resultsView(month){
     const archived=await store.monthResults(month);
     const range=monthRange(month);
@@ -49,7 +54,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
       name:people.get(r.player_id)?.name??'Player',bottle:people.get(r.player_id)?.bottle??BOTTLES[0],
       score:r.score,email:emails.get(r.player_id)??null});
     const all=rows.map(view);
-    return {month,label:monthLabel(month),thisMonth:monthKey(now()),finished:month<monthKey(now()),
+    return {month,label:monthLabel(month),thisMonth:monthKey(now()),finished:month<monthKey(now()),ready:await monthEndReady(),
       finalised:archived.length>0,finalisedAt:archived[0]?.finalised_at??null,source:archived.length?'archive':'live',
       games:COMPETITION.games.map(game=>({game,label:gameLabel(game),prize:prizeLine(prizes,game),text:prizes[game]??'',
         podium:all.filter(r=>r.game===game).sort((a,b)=>a.rank-b.rank)})),
@@ -215,19 +220,25 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
       const s=await adminIn(token);if(s.error)return s.error;
       const month=cleanMonth(body?.month);
       if(body?.month!==undefined&&!month)return fail(400,'Pick a month as YYYY-MM.');
+      if(!(await monthEndReady()))return fail(503,new MonthEndNotReady().message);
       if(body?.prizes!==undefined){
         if(!body.prizes||typeof body.prizes!=='object'||Array.isArray(body.prizes))return fail(400,'Prize text must be one line per game.');
         for(const game of Object.keys(body.prizes))if(!COMPETITION.games.includes(game))return fail(400,'That game is not in the competition.');
-        for(const [game,text] of Object.entries(body.prizes))await store.setPrize(game,cleanPrize(text));
       }
-      if(!month){
-        if(body?.prizes===undefined)return fail(400,'Pick a month as YYYY-MM.');
-        return ok(await resultsView(previousMonth(monthKey(now()))));
+      if(month&&month>=monthKey(now()))return fail(400,'That month has not finished yet.');
+      if(!month&&body?.prizes===undefined)return fail(400,'Pick a month as YYYY-MM.');
+      // The tables can still go missing between the check above and the write, so the write says so too.
+      try{
+        if(body?.prizes!==undefined)for(const [game,text] of Object.entries(body.prizes))await store.setPrize(game,cleanPrize(text));
+        if(month){
+          const range=monthRange(month);
+          await store.saveMonthResults(month,monthResults(await store.scoredRuns(range.from,range.to),month));
+        }
+      }catch(error){
+        if(error instanceof MonthEndNotReady)return fail(503,error.message);
+        throw error;
       }
-      if(month>=monthKey(now()))return fail(400,'That month has not finished yet.');
-      const range=monthRange(month);
-      await store.saveMonthResults(month,monthResults(await store.scoredRuns(range.from,range.to),month));
-      return ok(await resultsView(month));
+      return ok(await resultsView(month??previousMonth(monthKey(now()))));
     },
   };
 }

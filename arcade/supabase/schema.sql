@@ -122,3 +122,5 @@ alter table public.month_prizes enable row level security;
 
 --   Last month's winners:  select * from public.month_results where month = '2026-09' and winner;
 --   Backups for review:    select * from public.month_results where month = '2026-09' and not winner order by game, rank;
+
+-- Existing projects: the two tables above also live in month-end.sql, which is safe to run on its own.

@@ -55,10 +55,15 @@ async function savePrizes(){
   say('Prize text saved.','good');
 }
 
+const notReady=()=>view&&view.ready===false;
+function migrationNotice(){
+  if(!notReady())return '';
+  return `<p class="admin-note bad">The monthly results tables are not set up on this deployment yet. Run <b>arcade/supabase/month-end.sql</b> in the Supabase SQL editor, then reload this page. Until then the arcade runs normally, every board shows the default prize line, and last month&rsquo;s winners stay hidden.</p>`;
+}
 function prizeInputs(){
-  return `<div class="admin-prizes">${view.games.map(g=>`<label class="admin-field"><span>${escape(g.label)}</span><input type="text" maxlength="120" data-prize="${g.game}" value="${escape(g.text)}" placeholder="${escape(PRIZE_FALLBACK)}"></label>`).join('')}
+  return `<div class="admin-prizes">${view.games.map(g=>`<label class="admin-field"><span>${escape(g.label)}</span><input type="text" maxlength="120" data-prize="${g.game}" value="${escape(g.text)}" placeholder="${escape(PRIZE_FALLBACK)}"${notReady()?' disabled':''}></label>`).join('')}
     <p class="admin-hint">One line per game, for first place. Left blank, a board shows &ldquo;${escape(PRIZE_FALLBACK)}&rdquo;.</p>
-    <button class="secondary" id="save-prizes"${busy?' disabled':''}>Save prize text</button></div>`;
+    <button class="secondary" id="save-prizes"${busy||notReady()?' disabled':''}>Save prize text</button></div>`;
 }
 
 function winnerRows(){
@@ -99,8 +104,9 @@ function render(){
       <p>Three prizes a month: whoever tops Peak Blocks, whoever tops Sequence, whoever tops Ridge Run.</p>
       <div class="admin-controls">
         <label class="admin-field"><span>Month</span><select id="month">${options}</select></label>
-        <button class="primary" id="finalise"${busy||!view.finished?' disabled':''}>${view.finalised?'Finalise again':'Finalise'} ${escape(monthName(view.month))}</button>
+        <button class="primary" id="finalise"${busy||!view.finished||notReady()?' disabled':''}>${view.finalised?'Finalise again':'Finalise'} ${escape(monthName(view.month))}</button>
       </div>
+      ${migrationNotice()}
       <p class="admin-state ${view.finalised?'good':''}">${view.finalised?`Finalised${view.finalisedAt?` ${escape(new Date(view.finalisedAt).toLocaleString('en-AU'))}`:''}. Winners are marked, so they see their prize message and the boards show this podium.`:view.finished?`Not finalised yet. The podium below is worked out live from ${escape(monthName(view.month))}&rsquo;s runs, and nobody has been told anything.`:'This month is still being played. You can look, but not finalise.'}</p>
       ${note?`<p class="admin-note ${noteKind}">${escape(note)}</p>`:''}
     </section>
@@ -110,8 +116,9 @@ function render(){
     <section class="panel"><h2>Every podium</h2>${view.games.map(g=>`<div class="admin-game-block"><h3>${escape(g.label)}</h3><p class="admin-hint">${escape(prizeLine({[g.game]:g.text},g.game))}</p><ol class="admin-list">${g.podium.length?g.podium.map(r=>`<li><span class="admin-place">${r.rank===1?'1st':r.rank===2?'2nd':'3rd'}</span><div><strong>${escape(r.name)}</strong><small>${r.winner?'Winner':'Runner-up'}</small></div><span class="admin-score">${fmt(r.score)}</span></li>`).join(''):'<li class="admin-hint">No scores.</li>'}</ol></div>`).join('')}</section>`;
 
   $('#month').onchange=e=>load(e.target.value);
-  $('#finalise').onclick=finalise;
-  $('#save-prizes').onclick=savePrizes;
+  const finaliseButton=$('#finalise'),saveButton=$('#save-prizes');
+  if(finaliseButton)finaliseButton.onclick=finalise;
+  if(saveButton)saveButton.onclick=savePrizes;
   const copy=$('#copy-emails');
   if(copy)copy.onclick=()=>copyEmails(winnerEmails(view.winners));
 }

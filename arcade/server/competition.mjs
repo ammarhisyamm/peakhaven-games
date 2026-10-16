@@ -40,6 +40,17 @@ export const cleanMonth=value=>/^\d{4}-(0[1-9]|1[0-2])$/.test(String(value??'').
 // One line of prize text, as typed by whoever runs the competition.
 export const cleanPrize=value=>String(value??'').replace(/[\u0000-\u001f\u007f<>]/g,' ').replace(/\s+/g,' ').trim().slice(0,120);
 
+// The month-end tables arrive with a migration (supabase/month-end.sql), so a deployment may not have them
+// yet. Reading then behaves as if the archive were empty, which leaves the boards, /api/me and the games
+// working; only finalising a month needs the tables, and it raises this instead of failing opaquely.
+export class MonthEndNotReady extends Error{
+  constructor(){super('The monthly results tables are not set up yet. Run arcade/supabase/month-end.sql in Supabase, then try again.');this.name='MonthEndNotReady';}
+}
+// PostgREST reports an absent table either with Postgres' own undefined_table code or, once it has cached the
+// schema, with its own code and a message about the schema cache.
+const MISSING_TABLE=/does not exist|could not find the table|schema cache/i;
+export const tableMissing=error=>Boolean(error)&&(error.code==='42P01'||error.code==='PGRST205'||MISSING_TABLE.test(String(error.message??'')));
+
 export function pointsForRank(rank){return COMPETITION.points[rank-1]??COMPETITION.minPoints;}
 
 // Each player's best score in one game, ranked. `runs` are scored runs ({player_id, game, score, updated_at}).
