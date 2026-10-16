@@ -94,3 +94,31 @@ begin
 end $$;
 revoke all on function public.start_run(uuid,text,text,bigint,int,uuid) from public, anon, authenticated;
 grant execute on function public.start_run(uuid,text,text,bigint,int,uuid) to service_role;
+
+-- End of month. The top three of each game's monthly board are archived here so last month's podium can be
+-- shown, but only rank 1 wins a prize: three winners a month. Ranks are positional, so equal scores are split
+-- by whoever got there first and a game always has exactly one winner.
+create table if not exists public.month_results (
+  month text not null,                        -- Melbourne calendar month, YYYY-MM
+  game text not null check (game in ('blocks','sequence','ridge')),
+  rank int not null check (rank between 1 and 3),
+  player_id uuid not null references public.players(id) on delete cascade,
+  score int not null,
+  winner boolean not null default false,      -- rank 1 only: this is who gets contacted about the prize
+  finalised_at timestamptz not null default now(),
+  primary key (month, game, rank)
+);
+create index if not exists month_results_winners on public.month_results (month) where winner;
+
+-- One line of prize text per game, shown under that game's leaderboard. Blank falls back to a default line.
+create table if not exists public.month_prizes (
+  game text primary key check (game in ('blocks','sequence','ridge')),
+  text text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+alter table public.month_results enable row level security;
+alter table public.month_prizes enable row level security;
+
+--   Last month's winners:  select * from public.month_results where month = '2026-09' and winner;
+--   Backups for review:    select * from public.month_results where month = '2026-09' and not winner order by game, rank;

@@ -99,8 +99,34 @@ it counts, so a changed client can't post a fake score.
 - Tests: `npm test` in the repo root (`tests/competition.test.js`).
 
 Environment variables (Vercel, Production and Preview): `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY` (added automatically by the Vercel Supabase integration) and `RUN_SEED_SECRET`
-(any long random string; changing it changes every daily course).
+`SUPABASE_SERVICE_ROLE_KEY` (added automatically by the Vercel Supabase integration), `RUN_SEED_SECRET`
+(any long random string; changing it changes every daily course) and `ARCADE_ADMIN_EMAILS` (comma separated;
+these accounts can open `/admin.html` and finalise monthly results).
+
+## End of month
+
+Prizes go to **1st place in each game**, so a month has three winners: Peak Blocks, Sequence and Ridge Run.
+Second and third are archived so last month's podium can be shown, and win nothing.
+
+- `ui/month-prizes.js` holds the rule shared by the pages and the API: the prize line per game (blank falls
+  back to "1st place wins a prize"), the winner modal's wording, and the winner email list.
+- `server/competition.mjs`: `monthPodium` and `monthResults` build a month's archive. A leaderboard lets
+  equal scores share a rank, but a prize cannot, so podium places are positional and equal scores are split by
+  whoever got there first. Exactly one winner per game.
+- `month_results` keeps the top three of each game with a `winner` flag, true for rank 1 only.
+  `month_prizes` keeps one line of prize text per game.
+- `/admin.html` (admins only): check a finished month's podium, write the prize lines, and **Finalise**. Until
+  it is finalised nothing is announced and the boards show no podium, so results can be reviewed first.
+  Finalising marks the winners, which is what raises each winner's modal and puts the podium on the boards.
+  **Winners** and **Copy winner emails** cover the three 1st places only; 2nd and 3rd are listed separately as
+  backups. If a winner's run is disqualified during review, throw the run out and finalise again: the month's
+  rows are replaced and the backup is promoted.
+- Players see the prize line under a board's title, "Last month's winners" with 1st crowned and 2nd and 3rd as
+  runners-up, and a winner sees one modal listing every game they topped (once per month, per device).
+- Tests: `tests/month-end.test.js`.
+
+To reach the admin page locally: `ARCADE_ADMIN_EMAILS=you@example.com npm run dev` and join with that email,
+or join as `admin@dev.test`, which is the default.
 
 Local preview with working accounts and no Supabase: `npm install && npm run build && npm run dev`, then open
 http://localhost:8775/#play and join with invite code `DEV`. Data is kept in memory only.

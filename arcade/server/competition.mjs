@@ -1,5 +1,6 @@
 // Competition rules shared by the API and its tests. Everything here is pure: no network, no database.
 import {createHmac} from 'node:crypto';
+import {PODIUM_PLACES} from '../ui/month-prizes.js';
 
 export const COMPETITION=Object.freeze({
   // Calendar days and months follow Melbourne time, so "today" and "this month" match the prize rules.
@@ -35,6 +36,9 @@ export function cleanEmail(value){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&email.length<=254?email:null;
 }
 export const cleanCode=value=>String(value??'').trim().toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,32)||null;
+export const cleanMonth=value=>/^\d{4}-(0[1-9]|1[0-2])$/.test(String(value??'').trim())?String(value).trim():null;
+// One line of prize text, as typed by whoever runs the competition.
+export const cleanPrize=value=>String(value??'').replace(/[\u0000-\u001f\u007f<>]/g,' ').replace(/\s+/g,' ').trim().slice(0,120);
 
 export function pointsForRank(rank){return COMPETITION.points[rank-1]??COMPETITION.minPoints;}
 
@@ -97,4 +101,23 @@ export function podiumMonths(runs,playerId){
   const byMonth=new Map();
   for(const r of runs){const m=String(r.day).slice(0,7);if(!byMonth.has(m))byMonth.set(m,[]);byMonth.get(m).push(r);}
   return [...byMonth].filter(([,monthRuns])=>monthlyStandings(monthRuns).some(r=>r.player_id===playerId&&r.rank<=3)).map(([m])=>m).sort();
+}
+
+// The month before this one, in YYYY-MM.
+export function previousMonth(month){
+  const year=Number(String(month).slice(0,4)),m=Number(String(month).slice(5,7));
+  return m>1?`${year}-${String(m-1).padStart(2,'0')}`:`${year-1}-12`;
+}
+
+// The prize podium for one game in one month: first place wins, second and third are archived as runners-up.
+// A leaderboard lets equal scores share a rank, but a prize cannot, so places here are positional and equal
+// scores are split by whoever got there first. That makes exactly one winner per game.
+export function monthPodium(runs,game,places=PODIUM_PLACES){
+  return gameStandings(runs,game).slice(0,places)
+    .map((r,i)=>({game,player_id:r.player_id,score:r.best,rank:i+1,winner:i===0}));
+}
+
+// Every game's podium for a month, ready to archive: three rows a game, three winners in all.
+export function monthResults(runs,month){
+  return COMPETITION.games.flatMap(game=>monthPodium(runs,game).map(row=>({month,...row})));
 }
