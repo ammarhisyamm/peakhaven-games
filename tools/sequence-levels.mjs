@@ -85,7 +85,7 @@ const legalV2 = (board, state) => {
 
 // ---------------------------------------------------------------- bots
 
-function makeBots(rules) {
+export function makeBots(rules) {
   if (rules === 3) {
     const {v3Legal, previewV3Move} = v3;
     const legal = e => v3Legal(e.board, e.progress);
@@ -113,8 +113,8 @@ function makeBots(rules) {
         let best = null, bestValue = -Infinity;
         for (const [a, b] of legal(e)) {
           const p = previewV3Move(e.board, e.progress, e.config, a, b);
-          const cap = c.collect?.count ?? 0;
-          const collected = Math.min(cap, p.collected) - Math.min(cap, 0);
+          // Only the crystals this move still needs are worth anything.
+          const collected = Math.min(p.collected, collectLeft);
           // A special left on the board is worth more than the points it would score right now: it is
           // ammunition for a combo, and every move left at the end fires one for free.
           const stock = p.made.stripe * 260 + p.made.wrap * 420 + p.made.bomb * 700;
@@ -179,10 +179,12 @@ function canvas() {
 
 const MAX_TICKS = 120 * 60 * 20;
 
-function play(level, seed, pick, rules) {
+export function play(level, seed, pick, rules, targetOverride = null) {
   let result = null, reshuffles = 0;
   const cb = {hud: noop, message: m => {if (/Fresh crystals/.test(m)) reshuffles++;}, sound: noop, effect: noop, goals: noop, ready: noop, end(r) {result ??= r;}};
   const e = new SequenceEngine(canvas(), cb, {seed, level, motion: false, rulesVersion: rules});
+  // The tuner uses this to ask "this level, but with that score goal", which is how the curve was solved.
+  if (targetOverride !== null) e.target = targetOverride;
   e.goalsNow = () => rules === 3 ? v3.v3Goals(e.config, e.progress) : sequenceGoals(e.config, e.progress);
   let stuck = 0;
   while (!e.ended && e.ticks < MAX_TICKS) {
@@ -252,6 +254,8 @@ function measure(level) {
   return row;
 }
 
+// Imported by the tuner for its bots; only the direct `node tools/sequence-levels.mjs` run reports.
+if (pathToFileURL(resolve(process.argv[1] ?? '')).href !== import.meta.url) { /* library use */ } else {
 console.log(`Sequence level curve - rulesVersion ${RULES}, ${SEEDS} seeds per level per bot, real engine`);
 
 const summary = [];
@@ -325,3 +329,4 @@ const floor = summary.filter(r => r.smart.winRate < 0.20);
 if (floor.length) {console.log(`  MISS smart under 20% at level(s) ${floor.map(r => r.level).join(', ')}`); bad += floor.length;}
 else console.log('  ok   smart never under 20% at any level measured');
 if (flag('strict') && bad) process.exitCode = 1;
+}

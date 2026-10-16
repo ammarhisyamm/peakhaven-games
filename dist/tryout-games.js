@@ -1,5 +1,6 @@
 import {SEQUENCE_RULES_VERSION,sequenceLevel,createSequenceProgress,sequenceGoals,sequenceComplete,sequenceBrief,applySequenceWave,progressionExchange,progressionMove,settleProgression,createProgressionBoard} from './sequence-progression.js';
 import {createSequenceBoard,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES} from './sequence-rules.js';
+import {SEQUENCE_V3_VERSION,v3Level,createV3Progress,createV3Board,v3Goals,v3AllGoals,v3Complete,v3Brief,v3Exchange,v3SwapKind,v3Move,v3Moves,planV3Wave,applyV3Wave,settleV3,v3BonusPick,v3RemainingSpecials,kindOf,colourOf,isSpecial,PLAIN,STRIPE_V,STRIPE_H,WRAP,BOMB} from './sequence-v3.js';
 import {drawSprite,drawBottleObstacle,crystalSprites,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {reachStart,reachThroughGate,REACH} from './ridge-reach.js';
@@ -8,6 +9,8 @@ import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 const TAU=Math.PI*2;
 export const BOND_HIT=.17,BOND_KNEE=6,BOND_MAX_FIXED=5,BOND_FIXED_GAP=.55,BOND_CLOCK_MAX=4,BOND_CLOCK_MIN=2.5,BOND_CLOCK_FROM=5,BOND_CLOCK_TO=20;
 const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,fallTime=d=>.12+.05*Math.abs(d);
+// What a v3 combo is called when it goes off. The bigger the blast, the louder the word.
+const COMBO_LABELS={stripeStripe:'CROSS BLAST!',stripeWrap:'MEGA CROSS!',wrapWrap:'DOUBLE BLAST!',bombStripe:'COLOUR STRIPES!',bombWrap:'COLOUR BLAST!',bombBomb:'BOARD CLEAR!'};
 // Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
 // Every number here is the Tryout Arcade's Flap Dash, in its fixed 360x640 world: ground H-70, a node of
 // radius 13 at x 100, and gates whose openings are the box-era 150..118 less VIAL_SLACK, the room the
@@ -365,7 +368,13 @@ export class SequenceEngine extends MiniEngine{
   super(canvas,cb,options);
   // Every draw (the opening board, each refill, any reshuffle) comes from the seeded generator, in that order,
   // so the seed plus the logged swaps rebuild the run exactly.
-  this.rulesVersion=options?.rulesVersion===1?1:SEQUENCE_RULES_VERSION;this.config=sequenceLevel(this.level);this.progress=createSequenceProgress(this.config);this.palette=sequencePalette(this.level);this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):createProgressionBoard(this.config,this.random,this.progress);this.inputs=[];this.moves=SEQUENCE_MOVES;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  this.rulesVersion=options?.rulesVersion===1?1:options?.rulesVersion===2?2:SEQUENCE_V3_VERSION;const v3=this.rulesVersion===3;
+  this.config=v3?v3Level(this.level):sequenceLevel(this.level);this.progress=v3?createV3Progress(this.config):createSequenceProgress(this.config);this.palette=v3?this.config.palette:sequencePalette(this.level);
+  this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):v3?createV3Board(this.config,this.random,this.progress):createProgressionBoard(this.config,this.random,this.progress);
+  this.inputs=[];this.movesTotal=v3?this.config.moves:SEQUENCE_MOVES;this.moves=this.movesTotal;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.creating=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  // v3 only: what the current cascade is still owed. `again` is the wrapped crystals due a second blast,
+  // `bonus` counts the end-of-level striped crystals still to fire, `blasts` are the effects being drawn.
+  this.trigger=null;this.again=[];this.blasts=[];this.bonus=null;this.bonusDone=false;this.lastCombo=null;this.warned=false;
   this.pointerId=null;
   const owns=e=>this.pointerId!==null&&(e.pointerId===undefined||e.pointerId===this.pointerId);
   this.cancelPointer=()=>{const id=this.pointerId;this.pointerId=null;this.pointerStart=null;this.pressed=null;try{if(canvas.hasPointerCapture?.(id))canvas.releasePointerCapture(id);}catch{}};
@@ -375,21 +384,28 @@ export class SequenceEngine extends MiniEngine{
   this.onpointermove=e=>{if(!owns(e)||!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;const start=this.cellAt(...this.pointerStart);this.pointerStart=null;this.pressed=null;if(start!==null)swapFromGesture(start,dx,dy);};
   this.onpointerup=e=>{if(!owns(e))return;const origin=this.pointerStart,[x,y]=this.pointer(e);this.cancelPointer();if(!origin)return;const start=this.cellAt(...origin),dx=x-origin[0],dy=y-origin[1];if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10)this.choose(start);else swapFromGesture(start,dx,dy);};
   this.onpointercancel=(e={})=>{if(owns(e))this.cancelPointer();};this.onlostpointercapture=this.onpointercancel;this.onblur=()=>this.cancelPointer();window.addEventListener?.('blur',this.onblur);
-  for(const name of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(this.rulesVersion===1?`Match three or more. Reach ${this.target} points in ${this.moves} moves.`:sequenceBrief(this.level));this.reportGoals();
+  for(const name of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(this.rulesVersion===1?`Match three or more. Reach ${this.target} points in ${this.moves} moves.`:this.rulesVersion===3?v3Brief(this.level):sequenceBrief(this.level));this.reportGoals();
  }
- geometry(){const inset=this.rulesVersion===2?38/this.scale:0,top=this.top+inset,bottom=this.bottom+(this.rulesVersion===2?36/this.scale:0),size=Math.min(this.w-36,this.h-top-bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:top+(this.h-top-bottom-size)/2,size,cell};}
- complete(){return this.rulesVersion===1?this.score>=this.target:sequenceComplete(this.score,{...this.config,target:this.target},this.progress);}
- reportGoals(){this.cb.goals?.({version:this.rulesVersion,level:this.level,target:this.target,goals:this.rulesVersion===1?[]:sequenceGoals(this.config,this.progress)});}
+ geometry(){const inset=this.rulesVersion>=2?38/this.scale:0,top=this.top+inset,bottom=this.bottom+(this.rulesVersion>=2?36/this.scale:0),size=Math.min(this.w-36,this.h-top-bottom-24,560),cell=size/7;return{x:(this.w-size)/2,y:top+(this.h-top-bottom-size)/2,size,cell};}
+ complete(){return this.rulesVersion===1?this.score>=this.target:this.rulesVersion===3?v3Complete(this.score,{...this.config,target:this.target},this.progress):sequenceComplete(this.score,{...this.config,target:this.target},this.progress);}
+ reportGoals(){const goals=this.rulesVersion===1?[]:this.rulesVersion===3?v3AllGoals({...this.config,target:this.target},this.progress,this.score):sequenceGoals(this.config,this.progress);this.cb.goals?.({version:this.rulesVersion,level:this.level,target:this.target,moves:this.moves,goals});}
  cellAt(x,y){const g=this.geometry();if(x<g.x||x>=g.x+g.size||y<g.y||y>=g.y+g.size)return null;return Math.floor((y-g.y)/g.cell)*7+Math.floor((x-g.x)/g.cell);}
  choose(index,swapWith=null){
   if(this.paused||this.ended||this.pending||!Number.isInteger(index)||index<0||index>=49)return;
   if(this.rulesVersion===2&&(this.progress.locks[index]||(swapWith!==null&&this.progress.locks[swapWith]))){this.selection=null;this.cb.sound('invalid');this.cb.message('Trapped crystal. Match on or beside it to break the trap. No move used.');return;}if(swapWith!==null)this.selection=index;
   if(this.selection===null){this.selection=index;this.cursor=index;this.cb.sound('select');this.cb.message(`Row ${Math.floor(index/7)+1}, column ${index%7+1} selected. Choose a neighbour.`);return;}
   if(this.selection===index&&swapWith===null){this.selection=null;return;}
-  const from=this.selection,to=swapWith??index,next=this.rulesVersion===1?sequenceExchange(this.board,from,to):progressionExchange(this.board,from,to,this.progress);
-  if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message('Swap neighbours to make a line of three.');return;}
+  const from=this.selection,to=swapWith??index,v3=this.rulesVersion===3;
+  // In v3 a swap of two specials, or any swap involving a colour bomb, is a move even though it makes no
+  // line. Validity is a pure function of the board and the pair, so a replay accepts exactly the same swaps.
+  const trigger=v3?v3SwapKind(this.board,from,to,this.progress):null;
+  const next=v3?(trigger?trigger.next:v3Exchange(this.board,from,to,this.progress)):this.rulesVersion===1?sequenceExchange(this.board,from,to):progressionExchange(this.board,from,to,this.progress);
+  if(!next){const d=Math.abs(Math.floor(to/7)-Math.floor(from/7))+Math.abs(to%7-from%7);if(d!==1){this.selection=to;this.cursor=to;}this.cb.sound('invalid');this.cb.message(v3?'Swap neighbours to make a line of three, or swap two specials together.':'Swap neighbours to make a line of three.');return;}
   this.inputs.push([this.ticks,from,to]);
-  const matched=sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;if(this.moves===5&&this.score<this.target)this.cb.effect?.('5 MOVES LEFT','sequence');this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=SEQ_SWAP;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
+  const matched=v3?trigger!==null:sequenceMatches(next).size>0;this.idle=0;this.hintPair=null;this.selection=null;this.cursor=to;if(matched)this.moves--;this.chain=0;this.trigger=v3?trigger:null;this.again=[];
+  // The warning is about running out of moves, so it does not care whether the score goal is already met.
+  if(this.moves===5&&!this.complete()&&!this.warned){this.warned=true;this.cb.effect?.('5 MOVES LEFT','sequence');}
+  this.swap={from,to,next,original:this.board,matched};this.phase='swap';this.pending=SEQ_SWAP;this.cb.hud(this.score,this.moves,this.target);this.cb.sound('drop');this.cb.message('');
  }
  // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
  resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();let sx=0,sy=0;
@@ -399,23 +415,79 @@ export class SequenceEngine extends MiniEngine{
   if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
  // Any swap that makes a line, for the idle hint.
- findMove(){if(this.rulesVersion===2)return progressionMove(this.board,this.progress);for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
+ // One v3 wave: the blast goes off, the specials it earns are minted, the objectives take their hit, and
+ // anything still owed (a wrapped crystal's second explosion) is held for after the board settles.
+ resolveV3(){
+  const plan=planV3Wave(this.board,this.config,this.progress,{trigger:this.trigger,again:this.again,wave:this.chain+1,create:!this.bonus});
+  this.trigger=null;
+  if(!plan.clear.size&&!plan.create.size){this.again=[];this.finishMove();return;}
+  const g=this.geometry(),cellAt=i=>[g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell];
+  for(const i of plan.clear){const [x,y]=cellAt(i),colour=colourOf(this.board[i]);this.burst(x,y,colors[colour<0||colour>6?6:colour],5);}
+  this.score+=plan.gained;this.chain++;this.clearing=plan.clear;this.creating=plan.create;this.again=plan.againAt;
+  this.progress=applyV3Wave(this.config,this.progress,this.board,plan.clear);this.reportGoals();
+  // Points popup over the middle of whatever went off.
+  const spots=plan.clear.size?[...plan.clear]:[...plan.create.keys()];
+  let sx=0,sy=0;for(const i of spots){sx+=i%7;sy+=Math.floor(i/7);}
+  this.popups.push({text:`+${plan.gained}`,x:g.x+(sx/spots.length+.5)*g.cell,y:g.y+(sy/spots.length+.5)*g.cell,t:0});
+  // Firing effects: a beam for a stripe, a shockwave for a wrapped crystal, a colour pulse for a bomb,
+  // plus a flash on every special that was just made.
+  this.blasts=[...plan.effects.map(e=>({...e,t:0})),...[...plan.create.keys()].map(at=>({type:'make',at,t:0}))];
+  const label=COMBO_LABELS[plan.combo];
+  if(label){this.banner={text:label,t:0};this.cb.effect?.(label,'sequence');}
+  else if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4)this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');}
+  else if(plan.made.bomb)this.cb.effect?.('COLOUR BOMB!','sequence');
+  else if(plan.made.wrap)this.cb.effect?.('WRAPPED!','sequence');
+  // The cascade climbs two semitones a wave, and the buzz is forced through so a fast chain is still felt.
+  const depth=Math.min(7,this.chain-1),hap=this.chain>=5||label?'combo3':this.chain>=3?'combo2':this.chain>1?'perfect':'crystal';
+  this.cb.haptic?.(hap,true);
+  this.cb.sound(this.chain>1||label?'perfect':'crystal',{rate:Math.pow(2,depth*2/12)});
+  if(this.motion)this.shake=Math.min(1.8,(plan.clear.size+(label?14:0))/10);
+  this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;
+ }
+ // The end-of-level bonus. Every move the player did not need fires a striped crystal, in the order this
+ // run's own generator picks, and then anything still special on the board goes off. It is drawn from the
+ // seeded generator at a fixed point in the run, so a replay reproduces every point of it.
+ startBonus(){
+  if(this.rulesVersion!==3||this.bonusDone||!this.complete())return false;
+  if(!this.bonus){
+   if(this.moves<=0&&!v3RemainingSpecials(this.board).length){this.bonusDone=true;return false;}
+   this.bonus={left:Math.max(0,this.moves),sweeps:0};this.banner={text:'BONUS!',t:0};this.cb.effect?.('BONUS!','sequence');this.cb.message('Bonus! Every move you did not need fires a striped crystal.');
+  }
+  if(this.bonus.left>0){
+   this.bonus.left--;
+   const pick=v3BonusPick(this.board,this.progress,this.random);
+   if(pick){this.board=this.board.slice();this.board[pick.at]=pick.cell;this.chain=0;this.trigger={type:'fire',cells:[pick.at]};this.resolveV3();return true;}
+   this.bonus.left=0;
+  }
+  const specials=v3RemainingSpecials(this.board);
+  if(specials.length&&this.bonus.sweeps<12){this.bonus.sweeps++;this.chain=0;this.trigger={type:'fire',cells:specials};this.resolveV3();return true;}
+  this.bonusDone=true;this.bonus=null;return false;
+ }
+ findMove(){if(this.rulesVersion===3)return v3Move(this.board,this.progress);if(this.rulesVersion===2)return progressionMove(this.board,this.progress);for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
  finishMove(){
-  this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.cb.hud(this.score,this.moves,this.target);
+  this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.blasts=[];this.cb.hud(this.score,this.moves,this.target);
+  if(this.startBonus())return;
   if(this.complete()||this.moves<=0){this.finish();return;}
-  if(!this.findMove()){this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):createProgressionBoard(this.config,this.random,this.progress,this.board);this.cb.message('Fresh crystals. No move used.');}else{const remaining=this.rulesVersion===1?[]:sequenceGoals(this.config,this.progress).filter(g=>g.left).map(g=>`${g.left} ${g.label.toLowerCase()}`);this.cb.message(`${this.moves} moves left. ${this.score<this.target?`${Math.max(0,this.target-this.score)} points to go.`:'Score goal reached.'}${remaining.length?' Still needed: '+remaining.join(', ')+'.':''}`);}
+  if(!this.findMove()){this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):this.rulesVersion===3?createV3Board(this.config,this.random,this.progress,this.board):createProgressionBoard(this.config,this.random,this.progress,this.board);this.cb.message('Fresh crystals. No move used.');}else{const remaining=this.rulesVersion===1?[]:(this.rulesVersion===3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress)).filter(g=>g.left).map(g=>`${g.left} ${g.label.toLowerCase()}`);this.cb.message(`${this.moves} moves left. ${this.score<this.target?`${Math.max(0,this.target-this.score)} points to go.`:'Score goal reached.'}${remaining.length?' Still needed: '+remaining.join(', ')+'.':''}`);}
  }
  tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
+  for(const b of this.blasts)b.t+=dt;this.blasts=this.blasts.filter(b=>b.t<.45);
   if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
  update(dt){
   this.tickEffects(dt);if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
-  if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=SEQ_SWAP;return;}this.swap=null;this.resolveMatches();return;}
+  if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=SEQ_SWAP;return;}this.swap=null;if(this.rulesVersion===3){this.resolveV3();return;}this.resolveMatches();return;}
   if(this.phase==='return'){this.board=this.swap.original;this.swap=null;this.phase=null;this.pending=0;this.cb.sound('undo');this.cb.message('Try another pair. No move used.');return;}
+  if(this.phase==='clear'&&this.rulesVersion===3){
+   const gone=this.clearing,held=this.board.map((v,i)=>gone.has(i)?-1:v);
+   for(const [at,cell] of this.creating??[])held[at]=cell;
+   const settled=settleV3(held,this.random,this.palette,this.progress);
+   this.board=settled.board;this.falls=settled.falls;this.clearing=null;this.creating=null;this.phase='fall';
+   this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
   if(this.phase==='clear'&&this.rulesVersion===2){const gone=this.clearing,cleared=this.board.map((v,i)=>gone.has(i)?-1:v),settled=settleProgression(cleared,this.random,this.palette,this.progress);this.board=settled.board;this.falls=settled.falls;this.clearing=null;this.phase='fall';this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
   if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,this.random,7,this.palette);this.phase='fall';
    // Crystals fall like they have weight: each one accelerates and takes longer the further it drops.
    this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
-  if(this.phase==='fall'){this.falls.clear();if(this.complete())this.finishMove();else this.resolveMatches();}
+  if(this.phase==='fall'){this.falls.clear();if(this.rulesVersion===3){this.resolveV3();return;}if(this.complete())this.finishMove();else this.resolveMatches();}
  }
  moveSelection(key){this.keyboard=true;let r=Math.floor(this.cursor/7),c=this.cursor%7;if(key==='ArrowUp')r=(r+6)%7;if(key==='ArrowDown')r=(r+1)%7;if(key==='ArrowLeft')c=(c+6)%7;if(key==='ArrowRight')c=(c+1)%7;this.cursor=r*7+c;if(this.selection!==null)this.choose(this.cursor);else this.cb.message(`Row ${r+1}, column ${c+1}. Press Enter to select.`);}
  action(){if(this.paused||this.ended||this.pending)return;this.keyboard=true;this.choose(this.cursor);}
@@ -426,9 +498,13 @@ export class SequenceEngine extends MiniEngine{
    if(this.phase==='fall'){const d=this.falls.get(i)||0;if(d){const k=clamp((this.fallDur-this.pending)/fallTime(d),0,1);y+=d*g.cell*(1-k*k);}}
    let size=g.cell*.86;const held=this.pressed===i||(this.phase==='swap'&&this.swap&&i===this.swap.from);if(held){size*=1.1;c.save();c.shadowColor='#ffe77a';c.shadowBlur=18;c.fillStyle='#ffe77a33';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();c.restore();}
    if(this.clearing?.has(i)){const p=1-clamp(this.pending/SEQ_CLEAR,0,1),s=1-p*p;size*=s;c.globalAlpha=s;}
-   drawSprite(c,crystalSprites[v],x,y,size,size);c.globalAlpha=1;if(this.rulesVersion===2)this.drawObstacle(i,g);
+   const kind=this.rulesVersion===3?kindOf(v):PLAIN,colour=this.rulesVersion===3?colourOf(v):v;
+   drawSprite(c,crystalSprites[kind===BOMB?6:colour],x,y,size,size);
+   if(kind!==PLAIN)this.drawSpecial(kind,colour,x,y,size);
+   c.globalAlpha=1;if(this.rulesVersion>=2)this.drawObstacle(i,g);
    if(this.selection===i||(this.keyboard&&this.cursor===i)){c.strokeStyle=this.selection===i?'#ffe77a':'#e6ffff';c.lineWidth=3;rounded(c,g.x+col*g.cell+3,g.y+row*g.cell+3,g.cell-6,g.cell-6,9);c.stroke();}
   }
+  if(this.rulesVersion===3&&this.blasts.length)this.drawBlasts(g);
   // Idle hint: after a few seconds without a move, one swap that works pulses gently.
   if(this.hintPair&&!this.pending){const a=.45+.35*Math.sin(this.time*5);c.strokeStyle=`rgba(255,231,122,${a})`;c.lineWidth=3;for(const i of this.hintPair)rounded(c,g.x+i%7*g.cell+3,g.y+Math.floor(i/7)*g.cell+3,g.cell-6,g.cell-6,9),c.stroke();}
   c.restore();
@@ -436,6 +512,57 @@ export class SequenceEngine extends MiniEngine{
   for(const p of this.popups){c.globalAlpha=Math.max(0,1-p.t/.9);c.fillStyle='#ffffff';c.shadowColor='#00c9ff';c.shadowBlur=10;c.font=`800 ${Math.round(g.cell*.36)}px Inter, sans-serif`;c.fillText(p.text,p.x,p.y-p.t*g.cell*.7);}
   if(this.banner){const t=this.banner.t,a=Math.min(1,t*6,(1.1-t)*3);c.globalAlpha=Math.max(0,a);c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font=`900 ${Math.round(g.cell*.5)}px Inter, sans-serif`;c.fillText(this.banner.text.toUpperCase(),g.x+g.size/2,g.y+g.size/2-(1-Math.min(1,t*5))*12);}
   c.globalAlpha=1;c.shadowBlur=0;c.restore();
+ }
+ // Each special reads at a glance: stripes run the way the blast will travel, a wrapped crystal wears a
+ // double box, and a colour bomb is a white crystal inside a spinning ring.
+ drawSpecial(kind,colour,x,y,size){
+  const c=this.ctx,half=size/2,tint=colors[colour<0||colour>6?6:colour];c.save();
+  if(kind===STRIPE_V||kind===STRIPE_H){
+   c.globalAlpha=.9;c.strokeStyle='#f4ffff';c.lineWidth=Math.max(2,size*.085);c.shadowColor=tint;c.shadowBlur=10;
+   for(const off of [-.22,.22]){c.beginPath();
+    if(kind===STRIPE_V){c.moveTo(x+off*size,y-half*.62);c.lineTo(x+off*size,y+half*.62);}
+    else{c.moveTo(x-half*.62,y+off*size);c.lineTo(x+half*.62,y+off*size);}
+    c.stroke();}
+  }else if(kind===WRAP){
+   const pulse=.5+.5*Math.sin(this.time*6);c.globalAlpha=.55+.35*pulse;c.strokeStyle='#fff6c8';c.shadowColor=tint;c.shadowBlur=14;
+   c.lineWidth=Math.max(2,size*.08);rounded(c,x-half*.78,y-half*.78,size*.78,size*.78,6);c.stroke();
+   c.lineWidth=Math.max(1.5,size*.05);rounded(c,x-half*.5,y-half*.5,size*.5,size*.5,4);c.stroke();
+  }else if(kind===BOMB){
+   c.globalAlpha=.95;c.lineWidth=Math.max(2,size*.09);c.shadowColor='#ffffff';c.shadowBlur=16;
+   for(let k=0;k<6;k++){c.strokeStyle=colors[k];c.beginPath();c.arc(x,y,half*.66,this.time*2+k*TAU/6,this.time*2+(k+.8)*TAU/6);c.stroke();}
+   c.globalAlpha=1;c.fillStyle='#06203f';c.beginPath();c.arc(x,y,half*.3,0,TAU);c.fill();
+  }
+  c.restore();
+ }
+ // A beam for a stripe, a shockwave for a wrapped crystal, a colour sweep for a bomb, a flash for a
+ // special being made. Decorative only: none of it touches the simulation.
+ drawBlasts(g){
+  const c=this.ctx;c.save();
+  for(const b of this.blasts){
+   const t=Math.min(1,b.t/.45),fade=1-t,x=g.x+(b.at%7+.5)*g.cell,y=g.y+(Math.floor(b.at/7)+.5)*g.cell;
+   c.globalAlpha=fade;
+   if(b.type==='beam'){
+    c.fillStyle='#f2ffff';c.shadowColor='#5ff3ff';c.shadowBlur=22;
+    const reach=t*g.size;
+    if(b.axis==='h')c.fillRect(x-reach,y-g.cell*.16,reach*2,g.cell*.32);
+    else c.fillRect(x-g.cell*.16,y-reach,g.cell*.32,reach*2);
+   }else if(b.type==='shock'){
+    c.strokeStyle='#fff6c8';c.lineWidth=5*fade+1;c.shadowColor='#ff9d2e';c.shadowBlur=18;
+    c.beginPath();c.arc(x,y,g.cell*(b.radius+.4)*t,0,TAU);c.stroke();
+   }else if(b.type==='pulse'){
+    c.strokeStyle=colors[b.colour<0||b.colour>6?6:b.colour];c.lineWidth=6*fade+1;c.shadowColor=c.strokeStyle;c.shadowBlur=20;
+    c.beginPath();c.arc(x,y,g.size*.75*t,0,TAU);c.stroke();
+   }else if(b.type==='cross'){
+    c.fillStyle='#f2ffff';c.shadowColor='#5ff3ff';c.shadowBlur=22;const w=g.cell*.32*b.width;
+    c.fillRect(g.x,y-w/2,g.size*t,w);c.fillRect(x-w/2,g.y,w,g.size*t);
+   }else if(b.type==='whiteout'){
+    c.globalAlpha=fade*.8;c.fillStyle='#ffffff';c.fillRect(g.x,g.y,g.size,g.size);
+   }else if(b.type==='make'){
+    c.globalAlpha=fade;c.strokeStyle='#ffffff';c.lineWidth=4*fade+1;c.shadowColor='#ffe77a';c.shadowBlur=18;
+    c.beginPath();c.arc(x,y,g.cell*(.3+t*.7),0,TAU);c.stroke();
+   }
+  }
+  c.restore();
  }
  drawObstacle(i,g){
   const c=this.ctx,x=g.x+(i%7)*g.cell+3,y=g.y+Math.floor(i/7)*g.cell+3,w=g.cell-6,ice=this.progress.ice[i],locked=this.progress.locks[i];c.save();
@@ -446,6 +573,6 @@ export class SequenceEngine extends MiniEngine{
   if(locked){c.strokeStyle='#f8d18b';c.lineWidth=3;rounded(c,x+2,y+2,w-4,w-4,6);c.stroke();for(const off of [.35,.65]){c.beginPath();c.moveTo(x+w*off,y+3);c.lineTo(x+w*off,y+w-3);c.stroke();}c.fillStyle='#082546';rounded(c,x+w*.35,y+w*.36,w*.3,w*.28,3);c.fill();c.stroke();}
   c.restore();
  }
- finish(){this.end({score:this.score,moves:SEQUENCE_MOVES-this.moves,won:this.complete(),target:this.target,objectives:this.rulesVersion===1?[]:sequenceGoals(this.config,this.progress),replay:this.replay()});}
+ finish(){this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,objectives:this.rulesVersion===1?[]:this.rulesVersion===3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}
  replay(){return {v:this.rulesVersion,game:'sequence',seed:this.seed,level:this.level,step:SIM_STEP,moves:this.inputs.map(m=>[...m]),endTick:this.ticks};}
 }
