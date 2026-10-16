@@ -196,8 +196,8 @@ export function v3Move(board, state) {
 // Returns the cells cleared, the specials made, the points, the effects to draw, and any wrapped crystal
 // owed a second explosion after the board settles.
 // A trapped crystal clears like any other when a blast reaches it; that is how v2 has always freed traps.
-function detonate(board, seeds) {
-  const clear = new Set(), fired = new Set(), effects = [], againAt = [];
+function detonate(board, seeds, consumed = []) {
+  const clear = new Set(), fired = new Set(consumed), effects = [], againAt = [];
   const queue = [];
   const add = cells => {
     for (const i of cells) {
@@ -299,7 +299,9 @@ export function planV3Wave(board, config, state, {trigger = null, again = [], wa
     if (again.length) effects = again.map(at => ({type: 'shock', at, radius: 1}));
     for (const group of v3Groups(board)) seeds.push(...group.cells);
   }
-  const blast = detonate(board, seeds, state);
+  // A combo consumes the two specials that made it, so they do not also detonate one at a time inside it.
+  // A combo consumes the two specials that made it, so neither also detonates on its own inside it.
+  const blast = detonate(board, seeds, comboName ? [trigger.a, trigger.b] : []);
   effects = [...effects, ...blast.effects];
   againAt = [...againAt, ...blast.againAt];
 
@@ -316,7 +318,7 @@ export function planV3Wave(board, config, state, {trigger = null, again = [], wa
   }
   // A cell that becomes a special is not cleared, and the special it just became does not detonate.
   for (const at of create.keys()) blast.clear.delete(at);
-  againAt = againAt.filter(at => !create.has(at));
+  againAt = [...new Set(againAt)].filter(at => !create.has(at));
 
   const gained = (blast.clear.size * V3_SCORE.cell + bonus) * multiplier;
   return {clear: blast.clear, create, gained, effects, againAt, made, combo: comboName, wave: multiplier};

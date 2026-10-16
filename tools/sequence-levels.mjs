@@ -107,7 +107,7 @@ export function makeBots(rules) {
       // Objectives first, specials and combos valued for what they will be worth later, points only while
       // the score goal is still short.
       smart: () => e => {
-        const c = e.config, goals = e.goalsNow(), left = k => goals.find(g => g.kind === k)?.left ?? 0;
+        const c = e.config, goals = v3.v3Goals(c, e.progress), left = k => goals.find(g => g.kind === k)?.left ?? 0;
         const iceLeft = left('ice'), lockLeft = left('lock'), collectLeft = left('collect');
         const needScore = Math.max(0, e.target - e.score);
         let best = null, bestValue = -Infinity;
@@ -185,7 +185,7 @@ export function play(level, seed, pick, rules, targetOverride = null) {
   const e = new SequenceEngine(canvas(), cb, {seed, level, motion: false, rulesVersion: rules});
   // The tuner uses this to ask "this level, but with that score goal", which is how the curve was solved.
   if (targetOverride !== null) e.target = targetOverride;
-  e.goalsNow = () => rules === 3 ? v3.v3Goals(e.config, e.progress) : sequenceGoals(e.config, e.progress);
+  const goalsNow = () => rules === 3 ? v3.v3Goals(e.config, e.progress) : sequenceGoals(e.config, e.progress);
   let stuck = 0;
   while (!e.ended && e.ticks < MAX_TICKS) {
     if (!e.pending) {
@@ -197,7 +197,7 @@ export function play(level, seed, pick, rules, targetOverride = null) {
   if (!e.ended) e.finish();
   const ticks = e.ticks;
   e.destroy();
-  const goals = e.goalsNow(), left = k => goals.find(g => g.kind === k)?.left ?? 0;
+  const goals = goalsNow(), left = k => goals.find(g => g.kind === k)?.left ?? 0;
   const total = result?.movesTotal ?? SEQUENCE_MOVES;
   return {
     won: Boolean(result?.won),
