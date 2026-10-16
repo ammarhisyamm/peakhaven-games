@@ -8,7 +8,7 @@ const {SequenceEngine}=await import('../dist/tryout-games.js');
 const {driveSequence,greedyMove,SEQUENCE_PAIRS}=await import('../tools/sequence-bot.mjs');
 const {replaySequence}=await import('../tools/replay.mjs');
 const noop=()=>{},canvas=()=>({getContext:()=>new Proxy({},{get:()=>noop}),getBoundingClientRect:()=>({width:480,height:720}),addEventListener:noop,removeEventListener:noop});
-function engine(seed,level){let result;const messages=[],goals=[];const e=new SequenceEngine(canvas(),{hud:noop,sound:noop,message:m=>messages.push(m),goals:g=>goals.push(g),end:r=>result=r},{seed,level,motion:false});return {e,messages,goals,result:()=>result};}
+function engine(seed,level){let result;const messages=[],goals=[];const e=new SequenceEngine(canvas(),{hud:noop,sound:noop,message:m=>messages.push(m),goals:g=>goals.push(g),end:r=>result=r},{seed,level,motion:false,rulesVersion:2});return {e,messages,goals,result:()=>result};}
 
 test('Sequence introduces mechanics gradually, changes layouts and caps finite late-game objectives',()=>{
  assert.equal(sequenceLevel(2).ice.some(Boolean),false);assert.ok(sequenceLevel(3).ice.includes(1));assert.equal(sequenceLevel(4).ice.includes(2),false);assert.ok(sequenceLevel(5).ice.includes(2));

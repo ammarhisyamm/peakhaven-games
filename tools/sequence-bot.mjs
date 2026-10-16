@@ -1,4 +1,5 @@
 import {progressionExchange,applySequenceWave} from '../dist/sequence-progression.js';
+import {v3Legal,previewV3Move} from '../dist/sequence-v3.js';
 // Sequence bots and a headless, pure-rules playthrough that draws from the generator in exactly the
 // engine's order (opening board, each refill, each reshuffle). Used by the tests and by the balance script.
 import {createSequenceBoard,hasSequenceMove,sequenceMatches,sequenceExchange,sequenceCascade,sequencePalette,sequenceTarget,SEQUENCE_MOVES,SEQUENCE_SIZE} from '../dist/sequence-rules.js';
@@ -36,6 +37,7 @@ export function plainMove(board){
 // Greedy: the swap with the most guaranteed points; ties go to the swap lower on the board, which shakes up
 // more crystals and so tends to set off more chains.
 export function greedyMove(board,engine){
+  if(engine?.rulesVersion===3)return v3GreedyMove(board,engine);
   if(engine?.rulesVersion===2)return objectiveMove(board,engine);
   let best=null,bestValue=-1;
   for(const [a,b] of SEQUENCE_PAIRS){const next=sequenceExchange(board,a,b);if(!sequenceMatches(next).size)continue;
@@ -97,6 +99,18 @@ export function objectiveMove(board,engine){
   const ice=engine.progress.ice.reduce((n,v,i)=>n+v-after.ice[i],0),traps=engine.progress.locks.filter(Boolean).length-after.locks.filter(Boolean).length;
   const collected=Math.min(engine.config.collect?.count||0,after.collected)-Math.min(engine.config.collect?.count||0,engine.progress.collected);
   const points=knownCascade(next).gained*(engine.score<engine.target?1:.12),value=points+ice*220+traps*300+collected*190+Math.floor(a/7);
+  if(value>bestValue){bestValue=value;best=[a,b];}
+ }
+ return best;
+}
+
+// v3: the swap worth the most points on the visible board, objectives counted, specials kept as the
+// ammunition they are. Bomb swaps and combos are legal moves here even though they make no line.
+export function v3GreedyMove(board,engine){
+ let best=null,bestValue=-Infinity;
+ for(const [a,b] of v3Legal(board,engine.progress)){
+  const p=previewV3Move(board,engine.progress,engine.config,a,b);if(!p)continue;
+  const value=p.gained+p.comboBonus*1.4+p.made.stripe*260+p.made.wrap*420+p.made.bomb*700+p.ice*300+p.traps*380+p.collected*240+p.chain*70+Math.floor(a/7);
   if(value>bestValue){bestValue=value;best=[a,b];}
  }
  return best;

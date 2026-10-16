@@ -71,7 +71,8 @@ test('Bond supports two well-timed rapid throws into a clear lane',()=>{
 
 test('Sequence animates any neighbour swap back without spending a move if it makes no match',()=>{
  const h=harness(),game=new SequenceEngine(h.canvas,h.cb,{motion:true});game.board=Array.from({length:49},(_,i)=>(i%7+Math.floor(i/7))%4);const original=game.board.slice();
- for(const [from,to] of [[24,23],[24,25],[24,17],[24,31]]){game.choose(from,to);assert.equal(game.phase,'swap');assert.equal(game.moves,25);tick(game,.17);assert.equal(game.phase,'return');assert.notDeepEqual(game.board,original);game.choose(0,1);assert.equal(game.phase,'return','return animation locks duplicate input');tick(game,.17);assert.deepEqual(game.board,original);assert.equal(game.moves,25);assert.equal(game.score,0);assert.equal(game.pending,0);}
+ const budget=game.movesTotal;
+ for(const [from,to] of [[24,23],[24,25],[24,17],[24,31]]){game.choose(from,to);assert.equal(game.phase,'swap');assert.equal(game.moves,budget);tick(game,.17);assert.equal(game.phase,'return');assert.notDeepEqual(game.board,original);game.choose(0,1);assert.equal(game.phase,'return','return animation locks duplicate input');tick(game,.17);assert.deepEqual(game.board,original);assert.equal(game.moves,budget);assert.equal(game.score,0);assert.equal(game.pending,0);}
  assert.ok(h.messages.includes('Try another pair. No move used.'));game.destroy();
 });
 
@@ -84,6 +85,7 @@ test('Sequence long swipes choose one adjacent crystal and cancel never exchange
 test('Sequence resolves one animated swap and settles before returning the winning result',()=>{
  const h=harness(),game=new SequenceEngine(h.canvas,h.cb,{motion:true,level:3});
  game.board.fill(1);game.board[0]=0;game.board[1]=1;game.board[2]=0;game.board[8]=0;game.target=100;game.motion=false;
- game.choose(1,8);assert.equal(game.moves,24);assert.equal(h.result(),null);game.choose(0,1);assert.equal(game.moves,24,'pending swap locks duplicate input');tick(game,2); // crystals now animate even with reduced motion
- assert.ok(game.score>=100);assert.equal(game.board.some(v=>v<0),false,'board settles before completion');const {replay,objectives,target,...result}=h.result();assert.deepEqual(result,{score:game.score,moves:1,won:true});assert.equal(target,100);assert.ok(objectives.every(g=>g.left===0));assert.equal(replay.game,'sequence');assert.equal(replay.level,3);assert.deepEqual(replay.moves.map(m=>m.slice(1)),[[1,8]]);assert.ok(sequenceTarget(4)>sequenceTarget(3));game.destroy();
+ const left=game.movesTotal-1;
+ game.choose(1,8);assert.equal(game.moves,left);assert.equal(h.result(),null);game.choose(0,1);assert.equal(game.moves,left,'pending swap locks duplicate input');tick(game,20); // crystals now animate even with reduced motion, and v3 then plays the end-of-level bonus
+ assert.ok(game.score>=100);assert.equal(game.board.some(v=>v<0),false,'board settles before completion');const {replay,objectives,target,movesTotal,...result}=h.result();assert.deepEqual(result,{score:game.score,moves:1,won:true});assert.equal(movesTotal,game.movesTotal);assert.equal(target,100);assert.ok(objectives.every(g=>g.left===0));assert.equal(replay.game,'sequence');assert.equal(replay.level,3);assert.deepEqual(replay.moves.map(m=>m.slice(1)),[[1,8]]);assert.ok(sequenceTarget(4)>sequenceTarget(3));game.destroy();
 });
