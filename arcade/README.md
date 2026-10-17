@@ -207,9 +207,23 @@ there is not one policy.
   three tables and nothing to `anon`, so the two converge whichever way round they run.
 - Afterwards the service role is the only thing that can write anything, which is how `/api` has always
   worked.
+- The default privileges also stop a **sequence** added later from arriving usable by a browser key. A
+  **function** is the one thing they cannot protect: Postgres grants EXECUTE on every new function to PUBLIC
+  from `acldefault()`, and `ALTER DEFAULT PRIVILEGES` cannot take that away — a REVOKE that would leave the
+  default equal to the built-in one stores nothing. Measured on 15.18 across every form of the command. Since
+  every role is a member of PUBLIC, a function added later is callable by a browser key until **its own
+  migration revokes it**:
+
+  ```sql
+  revoke all on function public.whatever(...) from public, anon, authenticated;
+  grant execute on function public.whatever(...) to service_role;
+  ```
+
+  `schema.sql` and `paid-tries.sql` already do that for all six of ours, and the harness fails if any
+  function in `public` is ever left executable by PUBLIC or a browser key — which is what keeps it true.
 - Proof: `node tools/verify-grants.mjs` stands up a throwaway Postgres with Supabase's roles and default
   privileges, applies the whole stack in both orders, and checks the grants, the policy-backed reads and every
-  service-role path. 48 checks.
+  service-role path. 59 checks.
 
 ### Reviewing runs, and invite codes
 
