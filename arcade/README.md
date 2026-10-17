@@ -221,9 +221,18 @@ there is not one policy.
 
   `schema.sql` and `paid-tries.sql` already do that for all six of ours, and the harness fails if any
   function in `public` is ever left executable by PUBLIC or a browser key — which is what keeps it true.
+- **It only changes default privileges for roles the session can act for.** On Supabase the SQL editor runs
+  as `postgres`, and the platform defaults that hand a new table to the browser keys belong to
+  `supabase_admin`, which `postgres` is not a member of. Asking to change that one raises 42501, and since
+  the file is a single transaction that took the whole migration down with it the first time it was run. Each
+  role is now checked with `pg_has_role` and skipped with a notice if it is not ours, with a per-role
+  exception block behind it. The sweep over objects that already exist is never skipped.
+  What the skip costs: a table created later *by* `supabase_admin` would still arrive with the platform
+  defaults. Nothing here creates tables that way, and section 1 catches any that ever appear.
 - Proof: `node tools/verify-grants.mjs` stands up a throwaway Postgres with Supabase's roles and default
   privileges, applies the whole stack in both orders, and checks the grants, the policy-backed reads and every
-  service-role path. 59 checks.
+  service-role path. It also runs the migration as a role that is **not** a member of a platform role holding
+  default privileges, which is the shape that failed in production. 66 checks.
 
 ### Reviewing runs, and invite codes
 

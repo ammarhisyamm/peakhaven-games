@@ -416,6 +416,83 @@ try {
     order by 1`)).rows.map(r => r.proname);
   check('and the functions the server calls are all there to have been checked', ours.length === 6, ours.join(','));
 
+  section('Run by a role that is not a member of the platform default-privilege owner');
+  // This is the shape of the first live run, which failed. On Supabase the SQL editor runs as postgres,
+  // and the default privileges that hand a new table to the browser keys belong to supabase_admin.
+  // postgres is not a member of it, so ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin raises 42501, and
+  // because the file is one transaction the whole migration rolled back and nothing was applied.
+  const platform = await build(server.url, 'ph_platform', LIVE);
+  const notices = [];
+  platform.on('notice', n => notices.push(String(n.message || '')));
+  // A platform role with its own default ACL in public, which the migrating role cannot touch.
+  await platform.query(`do $BODY$ begin
+    if not exists (select 1 from pg_roles where rolname = 'platform_admin') then
+      create role platform_admin nologin noinherit;
+    end if;
+    if not exists (select 1 from pg_roles where rolname = 'editor') then
+      create role editor nologin noinherit;
+    end if;
+  end $BODY$;`);
+  await platform.query('grant usage, create on schema public to editor');
+  await platform.query('alter default privileges for role platform_admin in schema public'
+    + ' grant all on tables to anon, authenticated');
+  // The migrating role owns what the migrations created, as postgres does on Supabase, and has default
+  // privileges of its own so there is something it can tighten.
+  const owned = (await platform.query(
+    `select tablename from pg_tables where schemaname = 'public' order by tablename`)).rows.map(r => r.tablename);
+  for (const table of owned) await platform.query(`alter table public.${table} owner to editor`);
+  await platform.query('set role editor');
+  await platform.query('alter default privileges in schema public grant all on tables to anon, authenticated');
+  await platform.query('reset role');
+
+  const defaclFor = async role => (await platform.query(
+    `select coalesce(string_agg(defaclacl::text, ' '), '') as acl from pg_default_acl d
+      join pg_roles r on r.oid = d.defaclrole
+     where d.defaclnamespace = 'public'::regnamespace and r.rolname = $1`, [role])).rows[0].acl;
+  const platformBefore = await defaclFor('platform_admin');
+
+  // Now run it exactly as the SQL editor would: as that role, in one transaction.
+  await platform.query('set role editor');
+  let failure = null;
+  try {
+    await platform.query('begin');
+    await platform.query(await sql('tighten-grants.sql'));
+    await platform.query('commit');
+  } catch (error) {
+    failure = error.code ? `${error.code}: ${error.message}` : String(error.message);
+    await platform.query('rollback').catch(() => {});
+  }
+  await platform.query('reset role');
+  check('the migration completes when a platform role owns default privileges it cannot change',
+    failure === null, failure || '');
+  check('and it names the role it left alone',
+    notices.some(n => /platform_admin/.test(n)), notices.join(' ~ ') || '(no notices)');
+
+  // Skipped, not silently mangled.
+  check('the platform default privileges are untouched',
+    (await defaclFor('platform_admin')) === platformBefore, await defaclFor('platform_admin'));
+  // And the role it could act for was tightened.
+  const editorAcl = await defaclFor('editor');
+  check('the default privileges of the migrating role were tightened',
+    !/\banon\b|\bauthenticated\b/.test(editorAcl), editorAcl || '(no row)');
+
+  // The part that must never be skipped: the sweep over objects that already exist.
+  const leftovers = writesOf(await grantsOf(platform));
+  check('every existing table was still swept, in full', leftovers.length === 0,
+    leftovers.length ? JSON.stringify(leftovers) : '');
+  check('and only the three policy-backed reads survive, as in the clean run',
+    keptKey(await grantsOf(platform)) === KEPT_KEY, keptKey(await grantsOf(platform)));
+
+  // Idempotent in this shape too.
+  const firstPrint = (await platform.query(FINGERPRINT)).rows[0].fingerprint;
+  await platform.query('set role editor');
+  await platform.query(await sql('tighten-grants.sql'));
+  await platform.query('reset role');
+  const secondPrint = (await platform.query(FINGERPRINT)).rows[0].fingerprint;
+  check('and running it again changes nothing at all',
+    JSON.stringify(firstPrint) === JSON.stringify(secondPrint));
+  await platform.end();
+
   section('The other order: tighten first, then paid-tries.sql on top');
   const reversed = await build(server.url, 'ph_reversed',
     ['schema.sql', 'month-end.sql', 'tighten-grants.sql', 'paid-tries.sql']);
