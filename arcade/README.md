@@ -278,7 +278,7 @@ It never touches a live database: by default it starts its own server in a tempo
 away afterwards.
 
 ```
-npm i --no-save pg embedded-postgres@15
+npm i --no-save pg embedded-postgres@15.18.0-beta.17
 node tools/verify-sql.mjs
 ```
 
@@ -299,6 +299,18 @@ one the migration has not reached.
 Useful switches: `PGURL` to use a database you already have (it is dropped and rebuilt), `VERIFY_SQL_ROUNDS`
 for the race, `VERIFY_SQL_KEEP=1` to leave the server up afterwards, and `VERIFY_SQL_MODULES` to point at
 where `pg` and `embedded-postgres` are installed.
+
+## Support address
+
+`support@peakhaven.com.au` lives in one constant, `SUPPORT_EMAIL` in `ui/support.js`, and everything that
+shows it or links to it reads it from there: the "No plays left today" help panel, the bottom of the join and
+sign-in screens, and every sign-in error, which all end with "Still stuck? Email …". It is shown as selectable
+text with a `mailto:` link and a Copy button beside it.
+
+The wording lives in `support.js` too — `withSupport()`, `signInError()` and `linkErrorMessage()` — which
+is what lets the words a player actually reads be tested without a browser. `withSupport()` adds the line
+once and only once, so a wrapper and a caller cannot both append it. A test walks `ui/` and fails if the
+address appears anywhere but that module, so changing it stays a one-line change.
 
 ## Temporary guest prototype
 

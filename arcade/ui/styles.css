@@ -165,3 +165,11 @@ tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.fo
 .review-note{min-width:200px;padding:8px 10px;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:10px}
 .invite-max{width:88px;padding:8px 10px;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:10px}
 .admin-review .admin-controls{margin:12px 0}
+
+/* Where to go when something has gone wrong: selectable address, a mailto link and a Copy button. */
+.support-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0 0;font-size:13px;opacity:.85}
+.support-line .support-mail{font-weight:700;color:inherit;user-select:all}
+.support-line .support-copy{padding:4px 10px;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);border-radius:999px;background:none;cursor:pointer}
+.support-line .support-copy:hover{background:var(--line)}
+.join-support{justify-content:center}
+.modal-support{justify-content:center;margin-bottom:4px}
