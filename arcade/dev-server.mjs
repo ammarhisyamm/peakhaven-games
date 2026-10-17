@@ -7,12 +7,19 @@ import {extname,join,normalize,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHandlers} from './server/handlers.mjs';
 import {createMemoryStore,createMemoryAuth} from './server/memory-store.mjs';
+import {createManualProvider} from './server/payments.mjs';
+import {paymentDetails} from './server/coins.mjs';
 
 const root=join(dirname(fileURLToPath(import.meta.url)),'build'),port=Number(process.env.PORT||8775);
 const store=createMemoryStore({invites:{DEV:1000,DEV2:1000}}),auth=createMemoryAuth();
 // Join with this email to reach /admin.html locally, or set ARCADE_ADMIN_EMAILS.
 const admins=String(process.env.ARCADE_ADMIN_EMAILS||'admin@dev.test').split(',');
-const api=createHandlers({store,auth,secret:process.env.RUN_SEED_SECRET||'local-dev-secret',admins});
+// Bank details for the shop. Real ARCADE_PAY_* values are used if they are set; otherwise obvious local
+// placeholders, so the whole buy -> "Mark paid" -> extra try loop works on this machine without them.
+const configured=paymentDetails(process.env);
+const payments=createManualProvider(configured.ready?configured:{accountName:'Peak Haven Dev',bsb:'000-000',
+  accountNumber:'12345678',payId:'dev@peak.test',instruction:'Local dev only. No payment is taken.',ready:true});
+const api=createHandlers({store,auth,secret:process.env.RUN_SEED_SECRET||'local-dev-secret',admins,payments});
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.wav':'audio/wav','.ttf':'font/ttf','.woff2':'font/woff2'};
 
 async function body(req){let raw='';for await(const chunk of req)raw+=chunk;try{return raw?JSON.parse(raw):{};}catch{return {};}}
@@ -25,9 +32,9 @@ createServer(async(req,res)=>{
     if(name==='config')return send(res,200,{accounts:true,dev:true});
     let data;try{data=req.method==='POST'?await body(req):{};}catch{res.destroy();return;}
     if(name==='dev-login'){const t=auth.tokenFor(String(data.email||'').trim().toLowerCase());return t?send(res,200,{devToken:t}):send(res,404,{error:'No account uses that email yet. Join with your invite code.'});}
-    if(!['join','me','profile','start','finish','leaderboard','results','finalise'].includes(name))return send(res,404,{error:'Not found'});
+    if(!['join','me','profile','start','finish','leaderboard','results','finalise','buy','money'].includes(name))return send(res,404,{error:'Not found'});
     try{
-      const out=await api[name]({token,body:data,query:Object.fromEntries(url.searchParams),origin:`http://${req.headers.host}/`});
+      const out=await api[name]({token,body:data,query:Object.fromEntries(url.searchParams),origin:`http://${req.headers.host}/`,method:req.method});
       if(name==='join'&&out.status===200)out.body.devToken=auth.tokenFor(String(data.email).trim().toLowerCase());
       return send(res,out.status,out.body);
     }catch(error){console.error(error);return send(res,500,{error:String(error.message)});}
@@ -46,4 +53,7 @@ createServer(async(req,res)=>{
     const malformed=error instanceof URIError;
     res.writeHead(malformed?400:404);res.end(malformed?'Bad request':'Not found');
   }
-}).listen(port,()=>console.log(`PH Arcade dev server with accounts: http://localhost:${port}/#play (invite code DEV)`));
+}).listen(port,()=>{
+  console.log(`PH Arcade dev server with accounts: http://localhost:${port}/#play (invite code DEV)`);
+  console.log(`Coin shop: ${configured.ready?'using ARCADE_PAY_* from the environment':'using local placeholder bank details'}. Admin: ${admins.join(', ')}`);
+});

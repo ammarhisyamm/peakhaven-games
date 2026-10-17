@@ -7,12 +7,14 @@ import {MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
+import {COIN_CURRENCY,CoinsNotReady,MAX_PENDING_PURCHASES,cleanDelta,cleanNote,cleanPackCoins,formatAmount,newReference,packFor,packList} from './coins.mjs';
+import {createPaymentProvider} from './payments.mjs';
 
 export const BOTTLES=BOTTLE_SKINS.map(b=>b.id);
 const ok=body=>({status:200,body});
 const fail=(status,error,extra={})=>({status,body:{error,...extra}});
 
-export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]}){
+export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],payments=createPaymentProvider({})}){
   // Whoever runs the competition, by email (ARCADE_ADMIN_EMAILS). Nobody else can see or finalise results.
   const adminEmails=new Set([...admins].map(e=>String(e).trim().toLowerCase()).filter(Boolean));
   async function signedIn(token){
@@ -41,6 +43,55 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
   // False until the month-end migration has run. Everything else works without it, so this only gates
   // finalising and puts a notice on the admin page.
   const monthEndReady=async()=>(await store.monthEndReady?.())??true;
+
+  // Paid extra tries. False until supabase/paid-tries.sql has run: nobody has coins, no coin can be spent and
+  // the shop stays hidden, while the boards, /api/me and the games carry on exactly as before.
+  const coinsReady=async()=>Boolean(await store.coinsReady?.());
+  // The shop also needs somewhere for the money to go, so a half-configured deployment shows no shop at all
+  // rather than a pack list that cannot be paid for.
+  const shopReady=async()=>Boolean(payments.ready)&&await coinsReady();
+  const coinBalance=async playerId=>(await coinsReady())?Math.max(0,Number(await store.coinsFor(playerId))||0):0;
+  const purchaseView=row=>({reference:row.reference,coins:Number(row.coins)||0,pack:Number(row.pack)||0,
+    amount:Number(row.amount_cents)||0,price:formatAmount(row.amount_cents),currency:row.currency??COIN_CURRENCY,
+    status:row.status,provider:row.provider,createdAt:row.created_at,resolvedAt:row.resolved_at??null});
+  // What the player is shown: their balance, anything still waiting for payment, and whatever was granted
+  // recently so a "coins added" message can be shown once. Purchases older than this are history.
+  const RECENT_MS=14*24*60*60*1000;
+  async function wallet(playerId){
+    const shop=await shopReady();
+    const base={coins:0,purchases:[],shop:{enabled:shop,provider:payments.id,packs:shop?packList():[],payment:shop?payments.describe():null}};
+    if(!(await coinsReady()))return base;
+    const rows=await store.playerPurchases(playerId,['pending','paid']);
+    const cutoff=now().getTime()-RECENT_MS;
+    return {...base,coins:await coinBalance(playerId),
+      purchases:rows.filter(r=>r.status==='pending'||(Date.parse(r.resolved_at??'')||0)>cutoff).map(purchaseView)};
+  }
+  // The admin view of the money: what is waiting to be matched against the bank feed, every player's balance
+  // for a by-hand adjustment, and the last of the ledger so an action can be seen to have happened.
+  async function coinsView(){
+    if(!(await coinsReady()))return {ready:false,pending:[],settled:[],players:[],ledger:[],provider:payments.id,
+      paymentReady:Boolean(payments.ready),needsAdminConfirmation:Boolean(payments.needsAdminConfirmation)};
+    const pending=await store.purchasesByStatus(['pending']);
+    // Paid, cancelled and refunded, newest first: this is where a refund is started from.
+    const settled=(await store.purchasesByStatus(['paid','cancelled','refunded'])).slice(-20).reverse();
+    const players=await store.allPlayers();
+    const ids=[...new Set([...players.map(p=>p.id),...pending.map(p=>p.player_id),...settled.map(p=>p.player_id)])];
+    const people=new Map(players.map(p=>[p.id,p]));
+    const emails=new Map(((await auth.emailsByIds?.(ids))||[]).map(e=>[e.id,e.email]));
+    const at=now().getTime();
+    return {ready:true,provider:payments.id,paymentReady:Boolean(payments.ready),
+      needsAdminConfirmation:Boolean(payments.needsAdminConfirmation),
+      pending:pending.map(row=>({...purchaseView(row),id:row.id,player_id:row.player_id,
+        name:people.get(row.player_id)?.name??'Player',email:emails.get(row.player_id)??null,
+        ageMinutes:Math.max(0,Math.round((at-(Date.parse(row.created_at)||at))/60000))})),
+      settled:settled.map(row=>({...purchaseView(row),id:row.id,player_id:row.player_id,
+        name:people.get(row.player_id)?.name??'Player',email:emails.get(row.player_id)??null,
+        resolvedBy:row.resolved_by??null})),
+      players:players.map(p=>({id:p.id,name:p.name,email:emails.get(p.id)??null,coins:Math.max(0,Number(p.coins)||0)})),
+      ledger:(await store.coinLedger({limit:40})).map(r=>({delta:r.delta,reason:r.reason,note:r.note,
+        admin_email:r.admin_email??null,created_at:r.created_at,
+        name:people.get(r.player_id)?.name??'Player'}))};
+  }
 
   async function resultsView(month){
     const archived=await store.monthResults(month);
@@ -103,6 +154,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
       const table=gameStandings(rows,run.game),mine=table.find(r=>r.player_id===playerId);
       out.board={month,rank:mine?.rank??null,players:table.length,best:mine?.best??0,previousBest,newBest:run.score>0&&run.score>previousBest};
       out.plays=await playsLeft(playerId,dayKey(now()));
+      out.coins=await coinBalance(playerId);
     }
     return out;
   }
@@ -131,7 +183,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
       // Only a first place wins a prize, so only a first place raises the winner modal.
       const last=await archivedPodium();
       const wins=last.rows.filter(r=>r.winner&&r.player_id===s.player.id).map(r=>({game:r.game,month:last.month}));
-      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:adminEmails.has(String(s.user.email||'').toLowerCase())});
+      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:adminEmails.has(String(s.user.email||'').toLowerCase()),...await wallet(s.player.id)});
     },
 
     async profile({token,body}){
@@ -155,10 +207,12 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
       const requestId=body?.requestId??null;
       if(requestId!==null&&(typeof requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)))return fail(400,'Invalid start request. Please reopen the game.');
       const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v3':game,day,1);
-      const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId});
-      if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day)});
+      // Free tries first, then a coin if there is one. The store spends the coin and creates the run in one
+      // step, so two taps with one coin left can only make one run.
+      const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId,allowPaid:await coinsReady()});
+      if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id),shop:await shopReady()});
       if(run.game!==game||run.status!=='open'||run.segments>0)return fail(409,'This run has already been played. Please start a new one.');
-      return ok({runId:run.id,game,seed:run.seed,level:1,rulesVersion:sequenceVersion(run),plays:await playsLeft(s.player.id,day)});
+      return ok({runId:run.id,game,seed:run.seed,level:1,rulesVersion:sequenceVersion(run),paid:Boolean(run.paid),plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id)});
     },
 
     // Receives one finished game (or, in Sequence, one finished level), replays it, and adds the verified score.
@@ -250,6 +304,97 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[]})
         throw error;
       }
       return ok(await resultsView(month??previousMonth(monthKey(now()))));
+    },
+
+    // A player asks to buy a pack. The pack is chosen by its coin count and priced here, so a browser can
+    // never name its own price. Nothing is granted: this hands back a reference to pay against.
+    async buy({token,body}){
+      const s=await signedIn(token);if(s.error)return s.error;
+      if(!(await shopReady()))return fail(503,'Extra tries are not on sale yet.');
+      const coins=cleanPackCoins(body?.coins);
+      if(!coins)return fail(400,'Choose one of the coin packs.');
+      const pack=packFor(coins);
+      const waiting=await store.playerPurchases(s.player.id,['pending']);
+      if(waiting.length>=MAX_PENDING_PURCHASES)
+        return fail(409,'You already have a payment waiting. Finish that one, or ask us to cancel it, before starting another.',{purchase:purchaseView(waiting[0])});
+      let created=null;
+      try{
+        // The reference is random, so a clash is rare and a unique index catches it; try again with a new one.
+        for(let attempt=0;attempt<6&&!created;attempt++){
+          try{
+            created=await store.createPurchase({playerId:s.player.id,pack:pack.coins,coins:pack.coins,
+              amountCents:pack.cents,currency:COIN_CURRENCY,reference:newReference(),provider:payments.id});
+          }catch(error){
+            if(error instanceof CoinsNotReady)throw error;
+            if(attempt===5||!/duplicate|unique/i.test(String(error.message)))throw error;
+          }
+        }
+        const begun=await payments.begin(created);
+        // A provider that takes the money itself reports 'paid' and the coins are granted now; the manual
+        // provider always reports 'pending' and an admin grants them once the transfer lands.
+        if(begun?.status==='paid')await store.grantPurchase(created.id,payments.id);
+        return ok({purchase:purchaseView(await store.purchaseById(created.id)??created),
+          instructions:begun?.instructions??null,coins:await coinBalance(s.player.id)});
+      }catch(error){
+        if(error instanceof CoinsNotReady)return fail(503,error.message);
+        throw error;
+      }
+    },
+
+    // Everything an admin does with money, behind one route. A deployment is limited in how many functions it
+    // may have, and three of these would be three of them, so /api/money carries all three: GET is the view
+    // and POST says which action it is. The three below stay separate because that is how they are tested.
+    async money({token,body,query,method}){
+      if(String(method??'POST').toUpperCase()!=='POST')return this.purchases({token,query});
+      const action=String(body?.action??'');
+      if(!action)return fail(400,'Unknown action.');
+      return action==='adjust'?this.coins({token,body}):this.purchase({token,body});
+    },
+
+    // Admin: what is waiting for payment, everyone's balance, and the last of the ledger.
+    async purchases({token}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      return ok(await coinsView());
+    },
+
+    // Admin: mark a purchase paid (which grants the coins), cancel it, or refund it. Every one of these is a
+    // single database function, so clicking twice cannot grant twice.
+    async purchase({token,body}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const action=String(body?.action??'');
+      if(!['paid','cancel','refund'].includes(action))return fail(400,'Unknown action.');
+      const id=String(body?.id??'');
+      if(!id)return fail(400,'Which purchase?');
+      if(!(await coinsReady()))return fail(503,new CoinsNotReady().message);
+      const who=String(s.user.email||'').toLowerCase();
+      try{
+        const result=action==='paid'?await store.grantPurchase(id,who)
+          :action==='cancel'?await store.cancelPurchase(id,who)
+          :await store.refundPurchase(id,who);
+        if(!result?.found)return fail(404,'That purchase is not there.');
+        return ok({action,result,...await coinsView()});
+      }catch(error){
+        if(error instanceof CoinsNotReady)return fail(503,error.message);
+        throw error;
+      }
+    },
+
+    // Admin: give or take coins by hand, with a note. Never goes below zero.
+    async coins({token,body}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const delta=cleanDelta(body?.delta),note=cleanNote(body?.note),playerId=String(body?.player??'');
+      if(delta===null)return fail(400,'Enter how many coins to give or take, as a whole number that is not zero.');
+      if(!note)return fail(400,'Write a short note saying why.');
+      if(!playerId||!(await store.getPlayer(playerId)))return fail(404,'That player is not there.');
+      if(!(await coinsReady()))return fail(503,new CoinsNotReady().message);
+      try{
+        const result=await store.adjustCoins(playerId,delta,note,String(s.user.email||'').toLowerCase());
+        if(!result?.found)return fail(404,'That player is not there.');
+        return ok({action:'adjust',result,...await coinsView()});
+      }catch(error){
+        if(error instanceof CoinsNotReady)return fail(503,error.message);
+        throw error;
+      }
     },
   };
 }

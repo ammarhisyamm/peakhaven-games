@@ -2,17 +2,38 @@
 // check a finished month's podium, write the prize line for each game, and finalise the results.
 // Finalising archives the top three of each game and marks the winners: first place only, so three a month.
 // Second and third are kept as backups in case a winner's run is disqualified during review.
+// The same page also runs the money behind paid extra tries, which lives in admin-coins.js.
 import {initAccount} from './account.js';
 import {PRIZE_FALLBACK,prizeLine,winnerEmails,monthLabel,monthName} from './month-prizes.js';
+import {coinsPanels,bindCoins,actionMessage} from './admin-coins.js';
 
 const $=s=>document.querySelector(s),main=$('#main');
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Math.max(0,Number(n)||0).toLocaleString('en-AU');
 const GAMES=['blocks','sequence','ridge'];
 
-let account,view=null,month=null,busy=false,note='',noteKind='';
+let account,view=null,month=null,busy=false,note='',noteKind='',coins=null;
 
 function say(message,kind=''){note=message;noteKind=kind;render();}
+
+// Purchases, balances and the ledger, loaded alongside the month's results and reloaded after every action,
+// because each action answers with the new state of all three.
+async function loadCoins(){
+  const r=await account.api('money');
+  coins=r.ok?r:null;
+  if(!r.ok&&r.status!==403)note=note||r.error||'Extra tries could not load.';
+}
+
+// One admin action on the money: mark paid, cancel, refund, or an adjustment by hand. Each answers with the
+// refreshed view, so the page always shows what the database now says rather than what was clicked.
+async function act(body){
+  busy=true;render();
+  const r=await account.api('money',{body});
+  busy=false;
+  if(!r.ok)return say(r.error||'That did not go through.','bad');
+  coins=r;
+  say(actionMessage(r.action,r.result),'good');
+}
 
 // The twelve months up to this one. The current month can be looked at but not finalised.
 function monthOptions(thisMonth){
@@ -25,7 +46,7 @@ function monthOptions(thisMonth){
 
 async function load(next){
   busy=true;render();
-  const r=await account.api('results',{query:next?{month:next}:undefined});
+  const [r]=await Promise.all([account.api('results',{query:next?{month:next}:undefined}),loadCoins()]);
   busy=false;
   if(!r.ok){view=null;say(r.error||'Monthly results could not load.','bad');return;}
   view=r;month=r.month;note='';noteKind='';render();
@@ -92,8 +113,9 @@ function render(){
     return;
   }
   if(!view){
-    main.innerHTML=`<section class="panel"><h2>Monthly results</h2><p>${busy?'Loading…':escape(note||'Nothing loaded yet.')}</p>${busy?'':'<button class="secondary" id="reload">Try again</button>'}</section>`;
+    main.innerHTML=`<section class="panel"><h2>Monthly results</h2><p>${busy?'Loading…':escape(note||'Nothing loaded yet.')}</p>${busy?'':'<button class="secondary" id="reload">Try again</button>'}</section>${coinsPanels(coins,busy)}`;
     if(!busy)$('#reload').onclick=()=>load(month);
+    bindCoins(main,{act});
     return;
   }
   const finalisedSet=new Set(view.finalisedMonths||[]);
@@ -113,6 +135,7 @@ function render(){
     <section class="panel"><h2>Prize text</h2>${prizeInputs()}</section>
     <section class="panel"><h2>Winners</h2>${winnerRows()}</section>
     ${backupRows()}
+    ${coinsPanels(coins,busy)}
     <section class="panel"><h2>Every podium</h2>${view.games.map(g=>`<div class="admin-game-block"><h3>${escape(g.label)}</h3><p class="admin-hint">${escape(prizeLine({[g.game]:g.text},g.game))}</p><ol class="admin-list">${g.podium.length?g.podium.map(r=>`<li><span class="admin-place">${r.rank===1?'1st':r.rank===2?'2nd':'3rd'}</span><div><strong>${escape(r.name)}</strong><small>${r.winner?'Winner':'Runner-up'}</small></div><span class="admin-score">${fmt(r.score)}</span></li>`).join(''):'<li class="admin-hint">No scores.</li>'}</ol></div>`).join('')}</section>`;
 
   $('#month').onchange=e=>load(e.target.value);
@@ -121,6 +144,7 @@ function render(){
   if(saveButton)saveButton.onclick=savePrizes;
   const copy=$('#copy-emails');
   if(copy)copy.onclick=()=>copyEmails(winnerEmails(view.winners));
+  bindCoins(main,{act});
 }
 
 const readPrizes=()=>Object.fromEntries(GAMES.map(game=>[game,main.querySelector(`[data-prize="${game}"]`)?.value??'']));
@@ -145,6 +169,6 @@ async function copyEmails(text){
 }
 
 try{account=await initAccount();}catch{account={enabled:true,signedIn:()=>false,api:async()=>({ok:false,error:'Sign-in could not load. Refresh to try again.'}),signIn:async()=>({ok:false,error:'Sign-in could not load. Refresh to try again.'}),onChange(){}};}
-account.onChange?.(()=>{view=null;if(account.signedIn())load(month);else render();});
+account.onChange?.(()=>{view=null;coins=null;if(account.signedIn())load(month);else render();});
 if(account.enabled&&account.signedIn())await load();
 render();
