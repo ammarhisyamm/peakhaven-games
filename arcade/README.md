@@ -178,6 +178,28 @@ is verified the same way and nothing on any leaderboard says it was paid for.
   stays the on-device demo in `dist/play-credits.js`.
 - Tests: `tests/paid-tries.test.js`.
 
+### Table grants
+
+Supabase's default privileges hand every new table in `public` to `anon` and `authenticated` as it is
+created, so each table arrived holding insert, update, delete, truncate, references and trigger, and row-level
+security was the only thing in the way. Nothing came of it — every policy is `for select` — but a read policy
+added later for some other reason would have been enough to open the table it was added to, which is exactly
+what happened once on `players`. `month_results` and `month_prizes` are the plainest case: RLS is on and
+there is not one policy.
+
+- **Existing projects need the migration**: run `supabase/tighten-grants.sql` once in the Supabase SQL
+  editor. It is idempotent. It sweeps every table in `public`, revokes the six write privileges from
+  `anon`, `authenticated` and `PUBLIC`, and changes the default privileges so a table added later does not
+  arrive holding them either.
+- **Reads are left exactly as they are**, so the three policy-backed reads keep working and nothing else
+  changes. Order against `paid-tries.sql` does not matter: it revokes a superset of what that file revokes,
+  and that file only ever grants `select`.
+- Afterwards the service role is the only thing that can write anything, which is how `/api` has always
+  worked.
+- Proof: `node tools/verify-grants.mjs` stands up a throwaway Postgres with Supabase's roles and default
+  privileges, applies the whole stack in both orders, and checks the grants, the policy-backed reads and every
+  service-role path. 38 checks.
+
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
 placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
 then play an extra try.
