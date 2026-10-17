@@ -46,9 +46,13 @@ const check = (label, pass, detail = '') => {
 const section = title => console.log(`\n== ${title}`);
 const sql = name => readFile(join(root, 'arcade/supabase', name), 'utf8');
 
-// The six privileges this migration takes away. SELECT is deliberately not among them.
 const WRITES = ['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'];
 const BROWSER_ROLES = ['anon', 'authenticated', 'PUBLIC'];
+// The only grants that may survive: the reads the three policies are written against, for signed-in players
+// alone. A policy that cannot see its table does nothing, so these have to stay.
+const KEPT = [['coin_ledger', 'authenticated'], ['players', 'authenticated'], ['purchases', 'authenticated']];
+const keptKey = rows => rows.map(r => `${r.table_name}:${r.grantee}:${r.privilege_type}`).sort().join(' ');
+const KEPT_KEY = KEPT.map(([table, role]) => `${table}:${role}:SELECT`).sort().join(' ');
 
 // Supabase's own scaffolding, as far as a migration can see it: the roles, the default privileges that make a
 // new public table writable by the browser's keys, and the auth schema the players table points at.
@@ -192,18 +196,21 @@ try {
 
   section('After: what the browser keys hold now');
   const afterGrants = await grantsOf(db);
-  const afterWrites = writesOf(afterGrants);
-  console.log(summarise(afterWrites) || '    (none — every write privilege is gone)');
-  check('no browser key holds a write on any table in public', afterWrites.length === 0,
-    afterWrites.length ? JSON.stringify(afterWrites) : '');
-  if (process.env.VERIFY_GRANTS_TABLE) {
-    console.log('\n  reads that remain:');
-    console.log(summarise(afterGrants.filter(r => r.privilege_type === 'SELECT')) || '    (none)');
+  console.log(summarise(afterGrants) || '    (nothing at all)');
+  check('no browser key holds a write on any table in public', writesOf(afterGrants).length === 0,
+    JSON.stringify(writesOf(afterGrants)));
+  check('anon holds nothing whatsoever, on any table',
+    afterGrants.filter(r => r.grantee === 'anon').length === 0,
+    JSON.stringify(afterGrants.filter(r => r.grantee === 'anon')));
+  check('PUBLIC holds nothing whatsoever either',
+    afterGrants.filter(r => r.grantee === 'PUBLIC').length === 0,
+    JSON.stringify(afterGrants.filter(r => r.grantee === 'PUBLIC')));
+  check('and all that is left is select on the three tables a policy is written against',
+    keptKey(afterGrants) === KEPT_KEY, keptKey(afterGrants) || '(nothing)');
+  for (const table of ['invites', 'runs', 'month_results', 'month_prizes']) {
+    check(`authenticated lost its read on ${table}, which no policy ever mentioned`,
+      !afterGrants.some(r => r.table_name === table && r.grantee === 'authenticated'));
   }
-  const selectsBefore = beforeGrants.filter(r => r.privilege_type === 'SELECT');
-  const selectsAfter = afterGrants.filter(r => r.privilege_type === 'SELECT');
-  check('and every read it had before is still there', JSON.stringify(selectsBefore) === JSON.stringify(selectsAfter),
-    `${selectsAfter.length} select grants`);
   const serviceBefore = await grantsOf(before, ['service_role']);
   const serviceAfter = await grantsOf(db, ['service_role']);
   check('the service role is untouched', JSON.stringify(serviceBefore) === JSON.stringify(serviceAfter),
@@ -259,12 +266,30 @@ try {
   await asRole(db, 'authenticated', other);
   check('and still cannot read somebody else\'s purchases',
     (await db.query('select reference from public.purchases')).rows.length === 0);
-  await asRole(db, 'anon');
-  check('an anonymous key reads no player row',
-    (await db.query('select id from public.players')).rows.length === 0);
-  // paid-tries.sql revoked the table from anon outright, so this is a refusal rather than an empty read.
-  check('and is refused the purchases table outright',
-    (await refused(db.query('select id from public.purchases'))) === '42501');
+  // A logged-out visitor is now refused every table outright, rather than reading an empty result from one.
+  const anonReads = [];
+  for (const table of tables) {
+    await asRole(db, 'anon');
+    anonReads.push(await refused(db.query(`select * from public.${table} limit 1`)));
+  }
+  await asOwner(db);
+  check(`an anonymous key is refused a read of all ${tables.length} tables`,
+    anonReads.every(c => c === '42501'), [...new Set(anonReads)].join(','));
+
+  // A signed-in player keeps exactly the three reads, and sees only their own rows in each.
+  await asRole(db, 'authenticated', player);
+  check('a signed-in player still reads their own player row',
+    (await db.query('select coins from public.players where id = $1', [player])).rows.length === 1);
+  check('and cannot see anybody else in players',
+    (await db.query('select id from public.players')).rows.length === 1);
+  const playerReads = [];
+  for (const table of tables.filter(t => !['players', 'purchases', 'coin_ledger'].includes(t))) {
+    await asRole(db, 'authenticated', player);
+    playerReads.push([table, await refused(db.query(`select * from public.${table} limit 1`))]);
+  }
+  await asOwner(db);
+  check('and is refused every table no policy covers',
+    playerReads.every(([, code]) => code === '42501'), JSON.stringify(playerReads));
   await asOwner(db);
 
   // ---------------------------------------------------------------- the server's own paths
@@ -312,9 +337,13 @@ try {
   section('The other order: tighten first, then paid-tries.sql on top');
   const reversed = await build(server.url, 'ph_reversed',
     ['schema.sql', 'month-end.sql', 'tighten-grants.sql', 'paid-tries.sql']);
-  const reversedWrites = writesOf(await grantsOf(reversed));
-  check('paid-tries.sql cannot reopen anything it runs after', reversedWrites.length === 0,
-    reversedWrites.length ? JSON.stringify(reversedWrites) : '');
+  const reversedGrants = await grantsOf(reversed);
+  check('paid-tries.sql cannot reopen anything it runs after', writesOf(reversedGrants).length === 0,
+    JSON.stringify(writesOf(reversedGrants)));
+  check('and the two orders agree on exactly which reads survive',
+    keptKey(reversedGrants) === KEPT_KEY, keptKey(reversedGrants) || '(nothing)');
+  check('anon holds nothing in that order either',
+    reversedGrants.filter(r => r.grantee === 'anon').length === 0);
   const reversedPlayer = await newPlayer(reversed, 'Rev');
   await asRole(reversed, 'authenticated', reversedPlayer);
   check('a player still cannot write in that order either',
