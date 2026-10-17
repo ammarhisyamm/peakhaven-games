@@ -6,6 +6,7 @@
 import {initAccount} from './account.js';
 import {PRIZE_FALLBACK,prizeLine,winnerEmails,monthLabel,monthName} from './month-prizes.js';
 import {coinsPanels,bindCoins,actionMessage} from './admin-coins.js';
+import {reviewPanels,bindReview,reviewMessage} from './admin-review.js';
 
 const $=s=>document.querySelector(s),main=$('#main');
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -13,26 +14,42 @@ const fmt=n=>Math.max(0,Number(n)||0).toLocaleString('en-AU');
 const GAMES=['blocks','sequence','ridge'];
 
 let account,view=null,month=null,busy=false,note='',noteKind='',coins=null;
+// Which runs the review panel is showing. The month comes from the page's own month selector.
+let reviewGame='',reviewState='';
+// The actions that belong to admin-review.js rather than admin-coins.js, so the right one reports them.
+const REVIEW_ACTIONS=['clear-flag','reject','invite-create','invite-max-uses'];
 
 function say(message,kind=''){note=message;noteKind=kind;render();}
 
 // Purchases, balances and the ledger, loaded alongside the month's results and reloaded after every action,
 // because each action answers with the new state of all three.
-async function loadCoins(){
-  const r=await account.api('money');
+async function loadCoins(target){
+  const r=await account.api('admin',{query:{month:target||month||undefined,
+    game:reviewGame||undefined,state:reviewState||undefined}});
   coins=r.ok?r:null;
-  if(!r.ok&&r.status!==403)note=note||r.error||'Extra tries could not load.';
+  if(!r.ok&&r.status!==403)note=note||r.error||'The admin view could not load.';
 }
 
 // One admin action on the money: mark paid, cancel, refund, or an adjustment by hand. Each answers with the
 // refreshed view, so the page always shows what the database now says rather than what was clicked.
 async function act(body){
   busy=true;render();
-  const r=await account.api('money',{body});
+  const r=await account.api('admin',{body});
   busy=false;
   if(!r.ok)return say(r.error||'That did not go through.','bad');
   coins=r;
-  say(actionMessage(r.action,r.result),'good');
+  const message=REVIEW_ACTIONS.includes(r.action)?reviewMessage(r.action,r.result):actionMessage(r.action,r.result);
+  // A rejection in a finalised month rewrites that month's podium, so the rest of the page is read again.
+  if(r.result?.recomputed){await load(month);return say(message,'good');}
+  say(message,'good');
+}
+
+// A different game or flagged/rejected filter: only the admin view is read again, not the month's results.
+async function filter({game,state}){
+  reviewGame=game??'';reviewState=state??'';
+  busy=true;render();
+  await loadCoins();
+  busy=false;render();
 }
 
 // The twelve months up to this one. The current month can be looked at but not finalised.
@@ -46,7 +63,7 @@ function monthOptions(thisMonth){
 
 async function load(next){
   busy=true;render();
-  const [r]=await Promise.all([account.api('results',{query:next?{month:next}:undefined}),loadCoins()]);
+  const [r]=await Promise.all([account.api('results',{query:next?{month:next}:undefined}),loadCoins(next)]);
   busy=false;
   if(!r.ok){view=null;say(r.error||'Monthly results could not load.','bad');return;}
   view=r;month=r.month;note='';noteKind='';render();
@@ -113,9 +130,9 @@ function render(){
     return;
   }
   if(!view){
-    main.innerHTML=`<section class="panel"><h2>Monthly results</h2><p>${busy?'Loading…':escape(note||'Nothing loaded yet.')}</p>${busy?'':'<button class="secondary" id="reload">Try again</button>'}</section>${coinsPanels(coins,busy)}`;
+    main.innerHTML=`<section class="panel"><h2>Monthly results</h2><p>${busy?'Loading…':escape(note||'Nothing loaded yet.')}</p>${busy?'':'<button class="secondary" id="reload">Try again</button>'}</section>${coinsPanels(coins,busy)}${reviewPanels(coins,busy)}`;
     if(!busy)$('#reload').onclick=()=>load(month);
-    bindCoins(main,{act});
+    bindCoins(main,{act});bindReview(main,{act,filter});
     return;
   }
   const finalisedSet=new Set(view.finalisedMonths||[]);
@@ -136,6 +153,7 @@ function render(){
     <section class="panel"><h2>Winners</h2>${winnerRows()}</section>
     ${backupRows()}
     ${coinsPanels(coins,busy)}
+    ${reviewPanels(coins,busy)}
     <section class="panel"><h2>Every podium</h2>${view.games.map(g=>`<div class="admin-game-block"><h3>${escape(g.label)}</h3><p class="admin-hint">${escape(prizeLine({[g.game]:g.text},g.game))}</p><ol class="admin-list">${g.podium.length?g.podium.map(r=>`<li><span class="admin-place">${r.rank===1?'1st':r.rank===2?'2nd':'3rd'}</span><div><strong>${escape(r.name)}</strong><small>${r.winner?'Winner':'Runner-up'}</small></div><span class="admin-score">${fmt(r.score)}</span></li>`).join(''):'<li class="admin-hint">No scores.</li>'}</ol></div>`).join('')}</section>`;
 
   $('#month').onchange=e=>load(e.target.value);
@@ -144,7 +162,7 @@ function render(){
   if(saveButton)saveButton.onclick=savePrizes;
   const copy=$('#copy-emails');
   if(copy)copy.onclick=()=>copyEmails(winnerEmails(view.winners));
-  bindCoins(main,{act});
+  bindCoins(main,{act});bindReview(main,{act,filter});
 }
 
 const readPrizes=()=>Object.fromEntries(GAMES.map(game=>[game,main.querySelector(`[data-prize="${game}"]`)?.value??'']));

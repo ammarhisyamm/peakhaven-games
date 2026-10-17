@@ -178,6 +178,30 @@ is verified the same way and nothing on any leaderboard says it was paid for.
   stays the on-device demo in `dist/play-credits.js`.
 - Tests: `tests/paid-tries.test.js`.
 
+### Reviewing runs, and invite codes
+
+A run is flagged when the score a browser sent does not match the score its replay produces (`verify.mjs`).
+A flagged run **keeps counting** until somebody decides otherwise, so nobody is disqualified by a glitch.
+
+- `/admin.html` (admins only) lists, for a chosen month, every flagged and every rejected run: the player's
+  name and email, the game, the score, the day, why it is there, and when it last changed. It can be narrowed
+  to one game, or to flagged or rejected only.
+- **Clear flag** leaves the score counting. **Reject** takes it off every board and out of lifetime points,
+  and needs a note saying why, which is what the player's row then shows as its reason.
+- Both are conditional on the run not already being in that state, so clicking twice changes nothing and is
+  logged once. Every action is written to `admin_log` with the admin's email.
+- Rejecting a score in a month that has **already been finalised** writes that month's podium again from the
+  runs as they now stand, which is what "Finalise again" does by hand. A month nobody has finalised is left
+  alone. The admin page reloads the podium when that happens and says so.
+- **Invite codes**: the same page lists every code with its uses, its limit and its note, creates a code, and
+  changes how many times an existing one may be used. Creating a code that already exists leaves it exactly
+  as it is, so a second click cannot widen or reword a code that is already out there.
+- **Existing projects need the migration**: run `supabase/admin-log.sql` once in the Supabase SQL editor. It
+  is idempotent, and new projects get it from `schema.sql` already. Until it has run the page still lists
+  everything, but the buttons are off and say so, because an action that cannot be logged is not worth doing;
+  the actions answer 503 naming the file.
+- Tests: `tests/admin-review.test.js`.
+
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
 placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
 then play an extra try.

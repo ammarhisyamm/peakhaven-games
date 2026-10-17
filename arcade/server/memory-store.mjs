@@ -3,15 +3,22 @@ import {randomUUID} from 'node:crypto';
 import {refundPlan,refundedRunReason} from './coins.mjs';
 
 export function createMemoryStore({invites={},now=()=>new Date()}={}){
-  const codes=new Map(Object.entries(invites).map(([code,max])=>[code,{max,uses:0}]));
-  const players=new Map(),runs=new Map(),results=new Map(),prizes=new Map(),purchases=new Map(),ledger=[];
+  const codes=new Map(Object.entries(invites).map(([code,max])=>[code,{max,uses:0,note:'',created_at:null}]));
+  const players=new Map(),runs=new Map(),results=new Map(),prizes=new Map(),purchases=new Map(),ledger=[],adminEntries=[];
   const copy=v=>v&&structuredClone(v);
   // The ledger is walked in order, so each row needs a stamp and a tie-break that keep insertion order.
   let ledgerSeq=0;
   const log=row=>{const entry={id:`ledger-${String(++ledgerSeq).padStart(6,'0')}`,purchase_id:null,run_id:null,admin_email:null,note:'',created_at:now().toISOString(),...row};ledger.push(entry);return copy(entry);};
   const balance=id=>Math.max(0,Number(players.get(id)?.coins)||0);
+  // Everything an admin does to a run or an invite code, in order, the way admin-log.sql keeps it.
+  let adminSeq=0;
+  const writeAdmin=row=>{
+    const entry={id:`admin-${String(++adminSeq).padStart(6,'0')}`,run_id:null,invite_code:null,note:'',details:{},
+      admin_email:null,created_at:now().toISOString(),...row};
+    adminEntries.push(entry);return copy(entry);
+  };
   return {
-    codes,players,runs,results,prizes,purchases,ledger,
+    codes,players,runs,results,prizes,purchases,ledger,adminEntries,
     async inviteAvailable(code){const c=codes.get(code);return Boolean(c&&c.uses<c.max);},
     async useInvite(code){const c=codes.get(code);if(!c||c.uses>=c.max)return false;c.uses++;return true;},
     async createPlayer(p){players.set(p.id,{coins:0,...p,created_at:now().toISOString()});return copy(players.get(p.id));},
@@ -110,6 +117,58 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     async coinLedger({playerId=null,limit=50}={}){
       return ledger.filter(r=>!playerId||r.player_id===playerId).slice(-limit).reverse().map(copy);
     },
+
+    // Reviewing runs and handing out invite codes. admin-log.sql adds the one table the actions below write
+    // to; until it has run, adminLogReady() is false and every action is refused rather than made untraceably.
+    async adminLogReady(){return true;},
+    // Everything worth a second look in one month: the runs a verification flagged, and the ones already
+    // rejected, newest change first.
+    async runsToReview({from,to,game=null,state=null}){
+      return [...runs.values()]
+        .filter(r=>r.day>=from&&r.day<=to&&(r.flagged||r.status==='rejected'))
+        .filter(r=>!game||r.game===game)
+        .filter(r=>state==='flagged'?r.status!=='rejected':state==='rejected'?r.status==='rejected':true)
+        .sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))||String(b.id).localeCompare(String(a.id)))
+        .map(copy);
+    },
+    // Clearing a flag leaves the run counting; rejecting it stops it counting anywhere. Both say whether they
+    // actually changed anything, so clicking twice is harmless and only the first click is logged.
+    async reviewRun(id,{action,note='',adminEmail=null}){
+      const run=runs.get(id);
+      if(!run)return {found:false};
+      const t=now().toISOString(),was={game:run.game,day:run.day,score:run.score};
+      if(action==='reject'){
+        if(run.status==='rejected')return {found:true,changed:false,run:copy(run)};
+        Object.assign(run,{status:'rejected',reject_reason:note,flagged:false,updated_at:t,finished_at:run.finished_at??t});
+        writeAdmin({action:'run_reject',run_id:run.id,note,details:was,admin_email:adminEmail});
+        return {found:true,changed:true,run:copy(run)};
+      }
+      if(!run.flagged)return {found:true,changed:false,run:copy(run)};
+      Object.assign(run,{flagged:false,updated_at:t});
+      writeAdmin({action:'run_clear_flag',run_id:run.id,note,details:was,admin_email:adminEmail});
+      return {found:true,changed:true,run:copy(run)};
+    },
+    async listInvites(){
+      return [...codes.entries()].map(([code,c])=>({code,uses:c.uses,max_uses:c.max,note:c.note??'',created_at:c.created_at}))
+        .sort((a,b)=>a.code.localeCompare(b.code));
+    },
+    // A code that is already there is left exactly as it is, so a second click cannot widen or reword it.
+    async createInvite({code,maxUses,note='',adminEmail=null}){
+      if(codes.has(code))return {created:false,code,max_uses:codes.get(code).max,uses:codes.get(code).uses};
+      codes.set(code,{max:maxUses,uses:0,note,created_at:now().toISOString()});
+      writeAdmin({action:'invite_create',invite_code:code,note,details:{max_uses:maxUses},admin_email:adminEmail});
+      return {created:true,code,max_uses:maxUses,uses:0};
+    },
+    async setInviteMaxUses(code,maxUses,adminEmail=null){
+      const c=codes.get(code);
+      if(!c)return {found:false};
+      if(c.max===maxUses)return {found:true,changed:false,code,max_uses:c.max,uses:c.uses};
+      const before=c.max;c.max=maxUses;
+      writeAdmin({action:'invite_max_uses',invite_code:code,note:`${before} to ${maxUses}`,
+        details:{from:before,to:maxUses},admin_email:adminEmail});
+      return {found:true,changed:true,code,max_uses:maxUses,uses:c.uses};
+    },
+    async adminActions({limit=30}={}){return adminEntries.slice(-limit).reverse().map(copy);},
   };
 }
 

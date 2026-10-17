@@ -3,7 +3,7 @@ import {isDeepStrictEqual} from 'node:util';
 //   auth:  userFromToken(token), createUser(email), sendLink(email, redirectTo)
 //   store: see supabase-store.mjs (memory-store.mjs in the tests implements the same calls)
 import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,cleanMonth,cleanPrize,monthlyStandings,yearlyStandings,gameStandings,podiumMonths,previousMonth,monthResults} from './competition.mjs';
-import {MonthEndNotReady} from './competition.mjs';
+import {AdminLogNotReady,MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
@@ -91,6 +91,58 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       ledger:(await store.coinLedger({limit:40})).map(r=>({delta:r.delta,reason:r.reason,note:r.note,
         admin_email:r.admin_email??null,created_at:r.created_at,
         name:people.get(r.player_id)?.name??'Player'}))};
+  }
+
+  // Whether arcade/supabase/admin-log.sql has run. The lists read tables that have always been there, so the
+  // page still shows everything without it; only the actions need it, and they say so instead of acting.
+  const adminLogReady=async()=>Boolean(await store.adminLogReady?.());
+  // A whole number of uses for an invite code. The schema will not take zero or less.
+  const cleanMaxUses=value=>{
+    const n=Number(value);
+    return Number.isSafeInteger(n)&&n>=1&&n<=10000?n:null;
+  };
+  // Why a run was flagged. Nothing stores a sentence: verify.mjs sets the flag when the score a browser sent
+  // does not match the score its replay produces, which is the only thing that sets it.
+  const FLAG_REASON='The score sent did not match its replay.';
+
+  // The runs worth a second look in one month: flagged, rejected, or both, with whoever played them.
+  async function reviewRows({month,game,state}){
+    const range=monthRange(month);
+    const rows=await store.runsToReview({from:range.from,to:range.to,game,state});
+    const ids=[...new Set(rows.map(r=>r.player_id))];
+    const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
+    const emails=new Map(((await auth.emailsByIds?.(ids))||[]).map(e=>[e.id,e.email]));
+    return rows.map(r=>({id:r.id,game:r.game,gameLabel:gameLabel(r.game),day:r.day,score:Math.max(0,Number(r.score)||0),
+      name:people.get(r.player_id)?.name??'Player',email:emails.get(r.player_id)??null,
+      flagged:Boolean(r.flagged),status:r.status,counts:r.status!=='rejected',
+      reason:r.status==='rejected'?(r.reject_reason||'Rejected.'):FLAG_REASON,
+      updatedAt:r.updated_at??null}));
+  }
+
+  // A rejection takes a score off the boards. If that month has already been finalised, its archived podium
+  // is written again from the runs as they now stand, which is what "finalise again" does by hand.
+  async function recomputeMonth(day){
+    const month=String(day??'').slice(0,7);
+    if(!cleanMonth(month))return null;
+    const finalised=await store.finalisedMonths();
+    if(!finalised.includes(month))return null;
+    const range=monthRange(month);
+    await store.saveMonthResults(month,monthResults(await store.scoredRuns(range.from,range.to),month));
+    return month;
+  }
+
+  // The whole admin page in one object: the money, the runs to review, the invite codes and the admin log.
+  async function adminViewBody(query,session){
+    const month=cleanMonth(query?.month)??monthKey(now());
+    const game=COMPETITION.games.includes(String(query?.game))?String(query.game):null;
+    const state=['flagged','rejected'].includes(String(query?.state))?String(query.state):null;
+    const ready=await adminLogReady();
+    return {...await coinsView(),
+      you:String(session?.user?.email||'').toLowerCase(),
+      review:{ready,month,game,state,games:COMPETITION.games.map(g=>({game:g,label:gameLabel(g)})),
+        runs:await reviewRows({month,game,state})},
+      invites:{ready,list:await store.listInvites()},
+      actions:ready?await store.adminActions({limit:20}):[]};
   }
 
   async function resultsView(month){
@@ -341,14 +393,82 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       }
     },
 
-    // Everything an admin does with money, behind one route. A deployment is limited in how many functions it
-    // may have, and three of these would be three of them, so /api/money carries all three: GET is the view
-    // and POST says which action it is. The three below stay separate because that is how they are tested.
-    async money({token,body,query,method}){
-      if(String(method??'POST').toUpperCase()!=='POST')return this.purchases({token,query});
+    // Everything an admin does, behind one route. A deployment is limited in how many functions it may have,
+    // and one per action would be seven of them, so /api/admin carries them all: GET is the whole view and
+    // POST says which action it is. /api/money still reaches this, through a rewrite in arcade/vercel.json.
+    // The handlers below stay separate because that is how they are tested.
+    async admin({token,body,query,method}){
+      if(String(method??'POST').toUpperCase()!=='POST')return this.adminView({token,query});
       const action=String(body?.action??'');
       if(!action)return fail(400,'Unknown action.');
-      return action==='adjust'?this.coins({token,body}):this.purchase({token,body});
+      const out=['clear-flag','reject'].includes(action)?await this.review({token,body})
+        :['invite-create','invite-max-uses'].includes(action)?await this.invites({token,body})
+        :action==='adjust'?await this.coins({token,body})
+        :await this.purchase({token,body});
+      // Every action answers with the whole page again, worked out after the change, so no panel is left
+      // showing what was true before it. What the action itself reported stays on top.
+      if(out.status!==200)return out;
+      const s=await adminIn(token);
+      return s.error?out:ok({...await adminViewBody(query,s),...out.body});
+    },
+    // Kept so anything still calling /api/money reaches the same place.
+    async money(context){return this.admin(context);},
+
+    // Admin: the whole admin page in one read — the money, the runs worth a second look, the invite codes,
+    // and the last of the admin log.
+    async adminView({token,query}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      return ok(await adminViewBody(query,s));
+    },
+
+    // Admin: clear a flag (the run keeps counting) or reject a run (it stops counting anywhere). Both are
+    // conditional on the run not already being in that state, so a second click changes and logs nothing.
+    async review({token,body}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const action=String(body?.action??'');
+      if(!['clear-flag','reject'].includes(action))return fail(400,'Unknown action.');
+      const id=String(body?.id??'');
+      if(!id)return fail(400,'Which run?');
+      const note=cleanNote(body?.note);
+      if(action==='reject'&&!note)return fail(400,'Write a short note saying why it was rejected.');
+      if(!(await adminLogReady()))return fail(503,new AdminLogNotReady().message);
+      try{
+        const result=await store.reviewRun(id,{action:action==='reject'?'reject':'clear',
+          note:note??'',adminEmail:String(s.user.email||'').toLowerCase()});
+        if(!result?.found)return fail(404,'That run is not there.');
+        // A rejection takes a score off the boards, so a month that has already been finalised is written
+        // again from the runs as they now stand. Nothing happens for a month nobody has finalised.
+        const recomputed=result.changed?await recomputeMonth(result.run?.day):null;
+        return ok({action,result:{...result,recomputed}});
+      }catch(error){
+        if(error instanceof AdminLogNotReady)return fail(503,error.message);
+        throw error;
+      }
+    },
+
+    // Admin: make a new invite code, or change how many times an existing one may be used.
+    async invites({token,body}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const action=String(body?.action??'');
+      if(!['invite-create','invite-max-uses'].includes(action))return fail(400,'Unknown action.');
+      const code=cleanCode(body?.code);
+      if(!code)return fail(400,'Enter a code. Letters, numbers and dashes.');
+      const maxUses=cleanMaxUses(body?.maxUses);
+      if(maxUses===null)return fail(400,'How many times may it be used? A whole number from 1 to 10000.');
+      if(!(await adminLogReady()))return fail(503,new AdminLogNotReady().message);
+      const who=String(s.user.email||'').toLowerCase();
+      try{
+        if(action==='invite-create'){
+          const result=await store.createInvite({code,maxUses,note:cleanPrize(body?.note??''),adminEmail:who});
+          return ok({action,result});
+        }
+        const result=await store.setInviteMaxUses(code,maxUses,who);
+        if(!result?.found)return fail(404,'There is no code with that name.');
+        return ok({action,result});
+      }catch(error){
+        if(error instanceof AdminLogNotReady)return fail(503,error.message);
+        throw error;
+      }
     },
 
     // Admin: what is waiting for payment, everyone's balance, and the last of the ledger.

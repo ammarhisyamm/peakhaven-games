@@ -367,3 +367,20 @@ grant execute on function public.start_run(uuid, text, text, bigint, int, uuid, 
 --   A player's coins:     select name, coins from public.players order by coins desc;
 --   One player's ledger:  select created_at, delta, reason, note, admin_email from public.coin_ledger where player_id = '...' order by created_at;
 --   Refunded runs:        select * from public.runs where reject_reason like 'Refunded purchase %';
+
+-- Reviewing runs and handing out invite codes. Everything an admin does to a run or an invite code is written
+-- here with their email, so a disqualification or a new code can always be traced back to a person. Existing
+-- projects get this from admin-log.sql.
+create table if not exists public.admin_log (
+  id uuid primary key default gen_random_uuid(),
+  admin_email text not null,
+  action text not null check (action in ('run_clear_flag','run_reject','invite_create','invite_max_uses')),
+  run_id uuid references public.runs(id) on delete set null,
+  invite_code text references public.invites(code) on delete set null,
+  note text not null default '',
+  details jsonb not null default '{}'::jsonb,   -- what changed: the score and game for a run, the uses for a code
+  created_at timestamptz not null default now()
+);
+create index if not exists admin_log_recent on public.admin_log (created_at desc, id desc);
+alter table public.admin_log enable row level security;
+revoke all on public.admin_log from public, anon, authenticated;

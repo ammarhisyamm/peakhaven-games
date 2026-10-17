@@ -153,3 +153,15 @@ tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.fo
 .admin-adjust .admin-field{flex:1 1 180px}
 .admin-adjust .admin-field.wide{flex:1 1 100%}
 .admin-adjust .admin-hint{flex-basis:100%;margin:0}
+
+/* Runs to review and invite codes, laid out like the purchase lists above them. */
+.admin-list.review li,.admin-list.invites li{flex-wrap:wrap}
+.admin-list.review .admin-reason{flex-basis:100%;margin:0}
+.admin-day{font-size:13px;font-variant-numeric:tabular-nums;opacity:.8}
+.admin-status.flagged{background:#fde8c8}
+.admin-status.rejected{background:#f6d3d2}
+.admin-list.review li.is-rejected{opacity:.75}
+.admin-list.invites li.is-used-up .admin-reference{text-decoration:line-through;opacity:.7}
+.review-note{min-width:200px;padding:8px 10px;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:10px}
+.invite-max{width:88px;padding:8px 10px;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:10px}
+.admin-review .admin-controls{margin:12px 0}

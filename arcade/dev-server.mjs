@@ -32,7 +32,7 @@ createServer(async(req,res)=>{
     if(name==='config')return send(res,200,{accounts:true,dev:true});
     let data;try{data=req.method==='POST'?await body(req):{};}catch{res.destroy();return;}
     if(name==='dev-login'){const t=auth.tokenFor(String(data.email||'').trim().toLowerCase());return t?send(res,200,{devToken:t}):send(res,404,{error:'No account uses that email yet. Join with your invite code.'});}
-    if(!['join','me','profile','start','finish','leaderboard','results','finalise','buy','money'].includes(name))return send(res,404,{error:'Not found'});
+    if(!['join','me','profile','start','finish','leaderboard','results','finalise','buy','admin','money'].includes(name))return send(res,404,{error:'Not found'});
     try{
       const out=await api[name]({token,body:data,query:Object.fromEntries(url.searchParams),origin:`http://${req.headers.host}/`,method:req.method});
       if(name==='join'&&out.status===200)out.body.devToken=auth.tokenFor(String(data.email).trim().toLowerCase());

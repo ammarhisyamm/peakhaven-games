@@ -1,6 +1,6 @@
 // Supabase versions of the store and auth interfaces used by handlers.mjs.
 import {createClient} from '@supabase/supabase-js';
-import {MonthEndNotReady,tableMissing} from './competition.mjs';
+import {AdminLogNotReady,MonthEndNotReady,tableMissing} from './competition.mjs';
 import {CoinsNotReady,coinsMissing} from './coins.mjs';
 
 export function supabaseEnv(env=process.env){
@@ -142,7 +142,81 @@ export function createSupabaseBackend(env=supabaseEnv()){
       return coinsOptional(await query.order('created_at',{ascending:false}).order('id',{ascending:false}).limit(limit),[])
         .map(r=>({...r,delta:Number(r.delta)||0}));
     },
+
+    // Reviewing runs and handing out invite codes. Only the writes need admin-log.sql: the two lists below
+    // read tables that have always been there, so the admin page still shows everything without it.
+    async adminLogReady(){
+      const {error}=await admin.from('admin_log').select('id',{head:true,count:'exact'});
+      if(error){if(tableMissing(error))return false;throw new Error(error.message);}
+      return true;
+    },
+    async runsToReview({from,to,game=null,state=null}){
+      let query=admin.from('runs').select(RUN_FIELDS).gte('day',from).lte('day',to);
+      if(game)query=query.eq('game',game);
+      // Flagged or rejected, which PostgREST cannot express as two filters, so it goes as one or().
+      if(state==='rejected')query=query.eq('status','rejected');
+      else if(state==='flagged')query=query.eq('flagged',true).neq('status','rejected');
+      else query=query.or('flagged.eq.true,status.eq.rejected');
+      return must(await query.order('updated_at',{ascending:false}).order('id',{ascending:false}).limit(200)).map(run);
+    },
+    // Both actions are a conditional update, so a second click changes nothing and writes no second log row.
+    async reviewRun(id,{action,note='',adminEmail=null}){
+      if(!/^[0-9a-f-]{36}$/i.test(String(id)))return {found:false};
+      const current=run(must(await admin.from('runs').select(RUN_FIELDS).eq('id',id).maybeSingle()));
+      if(!current)return {found:false};
+      const at=new Date().toISOString(),was={game:current.game,day:current.day,score:current.score};
+      const write=async(patch,match)=>run(must(await admin.from('runs').update(patch).eq('id',id).match(match).select(RUN_FIELDS).maybeSingle()));
+      if(action==='reject'){
+        if(current.status==='rejected')return {found:true,changed:false,run:current};
+        const updated=await write({status:'rejected',reject_reason:note,flagged:false,updated_at:at,
+          finished_at:current.finished_at??at},{status:current.status});
+        if(!updated)return {found:true,changed:false,run:current};
+        await writeAdminLog({action:'run_reject',run_id:id,note,details:was,admin_email:adminEmail});
+        return {found:true,changed:true,run:updated};
+      }
+      if(!current.flagged)return {found:true,changed:false,run:current};
+      const updated=await write({flagged:false,updated_at:at},{flagged:true});
+      if(!updated)return {found:true,changed:false,run:current};
+      await writeAdminLog({action:'run_clear_flag',run_id:id,note,details:was,admin_email:adminEmail});
+      return {found:true,changed:true,run:updated};
+    },
+    async listInvites(){
+      return must(await admin.from('invites').select('code,uses,max_uses,note,created_at').order('code'))
+        .map(r=>({...r,uses:Number(r.uses)||0,max_uses:Number(r.max_uses)||0,note:r.note??''}));
+    },
+    // A code that is already there is left exactly as it is: the insert is ignored rather than overwriting
+    // somebody else's note or widening a code that is already out there.
+    async createInvite({code,maxUses,note='',adminEmail=null}){
+      const existing=must(await admin.from('invites').select('code,uses,max_uses').eq('code',code).maybeSingle());
+      if(existing)return {created:false,code,max_uses:Number(existing.max_uses)||0,uses:Number(existing.uses)||0};
+      const row=must(await admin.from('invites').insert({code,max_uses:maxUses,note}).select('code,uses,max_uses').single());
+      await writeAdminLog({action:'invite_create',invite_code:code,note,details:{max_uses:maxUses},admin_email:adminEmail});
+      return {created:true,code,max_uses:Number(row.max_uses)||0,uses:Number(row.uses)||0};
+    },
+    async setInviteMaxUses(code,maxUses,adminEmail=null){
+      const existing=must(await admin.from('invites').select('code,uses,max_uses').eq('code',code).maybeSingle());
+      if(!existing)return {found:false};
+      const before=Number(existing.max_uses)||0;
+      if(before===maxUses)return {found:true,changed:false,code,max_uses:before,uses:Number(existing.uses)||0};
+      const row=must(await admin.from('invites').update({max_uses:maxUses}).eq('code',code).eq('max_uses',before)
+        .select('code,uses,max_uses').maybeSingle());
+      if(!row)return {found:true,changed:false,code,max_uses:before,uses:Number(existing.uses)||0};
+      await writeAdminLog({action:'invite_max_uses',invite_code:code,note:`${before} to ${maxUses}`,
+        details:{from:before,to:maxUses},admin_email:adminEmail});
+      return {found:true,changed:true,code,max_uses:Number(row.max_uses)||0,uses:Number(row.uses)||0};
+    },
+    async adminActions({limit=30}={}){
+      return optional(await admin.from('admin_log').select('id,admin_email,action,run_id,invite_code,note,details,created_at')
+        .order('created_at',{ascending:false}).order('id',{ascending:false}).limit(limit),[]);
+    },
   };
+
+  // The one write that needs admin-log.sql. It runs after the change it describes, so a missing table is
+  // reported as AdminLogNotReady and the handler refuses the action before ever getting here.
+  async function writeAdminLog(row){
+    const {error}=await admin.from('admin_log').insert(row);
+    if(error){if(tableMissing(error))throw new AdminLogNotReady();throw new Error(error.message);}
+  }
 
   const auth={
     async userFromToken(token){const {data,error}=await admin.auth.getUser(token);return error||!data?.user?null:{id:data.user.id,email:data.user.email};},
