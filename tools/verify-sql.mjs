@@ -1,7 +1,7 @@
 // Runs a Supabase migration against a real, throwaway Postgres before it is ever run in production, and then
 // exercises everything it adds: the functions, their concurrency, the grants and the row-level policies.
 //
-//   npm i --no-save pg embedded-postgres@15
+//   npm i --no-save pg embedded-postgres@15.18.0-beta.17
 //   node tools/verify-sql.mjs
 //
 // It never touches a live database. By default it starts its own Postgres in a temporary directory and throws
@@ -33,7 +33,7 @@ const PORT = Number(process.env.VERIFY_SQL_PORT || 54329);
 const require = createRequire(process.env.VERIFY_SQL_MODULES ? join(resolve(process.env.VERIFY_SQL_MODULES), 'index.cjs') : import.meta.url);
 function load(name) {
   try {return require.resolve(name);}
-  catch {throw new Error(`${name} is not installed. Run: npm i --no-save pg embedded-postgres@15   (or set VERIFY_SQL_MODULES)`);}
+  catch {throw new Error(`${name} is not installed. Run: npm i --no-save pg embedded-postgres@15.18.0-beta.17   (or set VERIFY_SQL_MODULES)`);}
 }
 const pg = require(load('pg'));
 
@@ -86,6 +86,22 @@ async function startPostgres() {
     },
   };
 }
+
+// A database the migration has not reached. schema.sql has carried the paid-tries objects since #23 was
+// squashed into it, so the state before the migration is made by taking them back out again: the seven
+// argument start_run, the four money functions, the two tables and the two columns. The five and six
+// argument start_run stay, which is exactly what an older deployment still has.
+const UNMIGRATE = `
+drop function if exists public.start_run(uuid, text, text, bigint, int, uuid, boolean);
+drop function if exists public.grant_purchase(uuid, text);
+drop function if exists public.cancel_purchase(uuid, text);
+drop function if exists public.adjust_coins(uuid, int, text, text);
+drop function if exists public.refund_purchase(uuid, text);
+drop table if exists public.coin_ledger;
+drop table if exists public.purchases;
+alter table public.players drop column if exists coins;
+alter table public.runs drop column if exists paid;
+`;
 
 // A fresh database, built up to a chosen point: 'production' is what is live now, 'migrated' has the file
 // under test applied on top.
@@ -170,8 +186,11 @@ try {
   const production = await build(server.url, 'ph_production');
   console.log(`  (baseline: ${(await production.db.query('select version()')).rows[0].version.split(',')[0]})`);
   const before = (await production.db.query(FINGERPRINT)).rows[0].fingerprint;
-  check('the production schema has no paid-tries tables yet',
-    !JSON.stringify(before.columns).includes('coin_ledger'));
+  // #23 was squashed into schema.sql, so the live schema already carries the paid-tries objects and running
+  // this file against production is a re-run. That is the thing worth checking, and the thing that has to
+  // stay harmless.
+  check('the production schema already carries the paid-tries objects, so this is a re-run',
+    JSON.stringify(before.columns).includes('coin_ledger'));
 
   let applied = null;
   try {await production.db.query(migration); applied = true;} catch (error) {applied = error.message;}
@@ -475,6 +494,7 @@ try {
   // The reverse order: new code against a database the migration has not reached. The seven argument function
   // is simply not there, which is the 42883 that the store treats as "not set up yet" and falls back on.
   const unmigrated = await build(server.url, 'ph_unmigrated');
+  await unmigrated.db.query(UNMIGRATE);
   const ida = await newPlayer(unmigrated.db, 'Ida');
   const missing = await refused(unmigrated.db.query(START, [ida, 'blocks', DAY, seed, 3, null, true]));
   check('the seven argument start_run is reported as missing, not as a failure', missing === '42883', `code ${missing}`);
