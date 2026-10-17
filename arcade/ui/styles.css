@@ -130,3 +130,26 @@ tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.fo
 .admin-game-block+.admin-game-block{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 .admin-signin{display:grid;gap:12px;margin-top:14px;max-width:360px}
 .ranks-layout .last-month{grid-column:1/-1}
+/* Coin balance and anything waiting for payment, on the profile. */
+.wallet-block{display:grid;gap:10px;padding:14px;border-radius:14px;border:1px solid var(--line);background:#f4fbff}
+.wallet-balance{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:15px;font-weight:650}
+.wallet-balance svg{width:20px;height:20px}
+.wallet-balance b{font-size:20px;font-weight:900;font-variant-numeric:tabular-nums}
+.wallet-balance small{flex-basis:100%;font-size:12px;font-weight:500;opacity:.75}
+.wallet-waiting{margin:0;font-size:13px;line-height:1.5}
+/* Purchases and the coin ledger on the admin page, laid out like the podium lists above them. */
+.admin-coins h3{margin:18px 0 8px;font-size:15px}
+.admin-list.purchases li,.admin-list.ledger li{flex-wrap:wrap}
+.admin-reference{font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.admin-pack,.admin-age,.admin-reason{font-size:13px;opacity:.8}
+.admin-row-actions{display:flex;gap:8px;margin-left:auto}
+.admin-row-actions button{padding:8px 14px;font-size:13px}
+.admin-status{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--line)}
+.admin-status.refunded,.admin-status.cancelled{opacity:.7}
+.admin-delta{min-width:44px;font-weight:900;font-variant-numeric:tabular-nums}
+.admin-delta.in{color:#0a7a3d}
+.admin-delta.out{color:#a4201f}
+.admin-adjust{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-top:12px}
+.admin-adjust .admin-field{flex:1 1 180px}
+.admin-adjust .admin-field.wide{flex:1 1 100%}
+.admin-adjust .admin-hint{flex-basis:100%;margin:0}

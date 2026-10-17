@@ -144,3 +144,12 @@
 .kg-primary:disabled{opacity:.7;cursor:progress}
 
 .kg-objectives{margin:0;text-align:center;color:#c7f0ff;font-size:13px;line-height:1.5;font-variant-numeric:tabular-nums}
+/* Signed-in shop: what to pay, where to send it and the reference, once a purchase has been asked for. */
+.kg-pay{text-align:left;border-radius:16px;border:2px solid #bfe7f8;background:#f3fbff;padding:16px;display:grid;gap:10px}
+.kg-pay-title{margin:0;font-size:15px;font-weight:900;letter-spacing:.02em;color:var(--kg-ink)}
+.kg-pay-lines{margin:0;display:grid;gap:8px}
+.kg-pay-lines>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.kg-pay-lines dt{font-size:13px;color:var(--kg-ink-soft)}
+.kg-pay-lines dd{margin:0;font-size:15px;font-weight:800;color:#16427a;font-variant-numeric:tabular-nums;text-align:right;word-break:break-word}
+.kg-pay-note{margin:0;font-size:12px;line-height:1.4;color:#456082}
+.kg-pay[hidden],.kg-packs[hidden],.kg-rule[hidden],.kg-buy-note[hidden],.kg-buy[hidden]{display:none}

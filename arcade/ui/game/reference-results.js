@@ -50,8 +50,10 @@ export function rankedOffer(state){
  if(!state||state.phase==='checking')return {label:'CHECKING SCORE…',note:'Verifying your run',action:null};
  if(state.phase==='error'&&state.retryable)return {label:'TRY SAVING AGAIN',note:'Your score is kept on this device until you retry',action:'retry'};
  if(state.phase==='next')return {label:'NEXT LEVEL',note:`Level ${state.level} · run total ${fmt(state.score)}`,action:'next'};
- const plays=Math.max(0,Number(state.plays)||0);
+ const plays=Math.max(0,Number(state.plays)||0),coins=Math.max(0,Number(state.coins)||0);
  if(plays>0)return {label:'PLAY AGAIN',note:`${plural(plays,'free play','free plays')} left today`,action:'again'};
+ // Free plays are gone, but a coin buys another go straight away.
+ if(coins>0)return {label:'PLAY AGAIN',note:`No free plays left · uses 1 of your ${fmt(coins)} coins`,action:'again'};
  return {label:'BACK TO ARCADE',note:'More free plays at midnight',action:'exit'};
 }
 export function rankedLine(state,name){
@@ -70,9 +72,17 @@ export function closeCall(game,result,previousBest){
  if(s>p)return p?'New personal best!':'';
  const gap=p-s;return gap>0&&gap<=Math.max(2,Math.ceil(p*.1))?`So close! Just ${fmt(gap)} off your best.`:'';
 }
-export function showReferenceResults({game='blocks',result=null,best=0,previousBest=0,level=1,onReplay,onExit,onRanks,shopOnly=false,assetBase='assets/',motion=true,ranked=null}){
+// `accountShop` turns the shop into the signed-in one: {coins, packs:[{coins,price,popular}], buy(coins)}. The
+// packs and their prices then come from the server, the balance is the player's real one, and buying asks for a
+// payment reference instead of adding coins to this device. Without it nothing changes and the on-device demo
+// keeps its simulated wallet.
+export function showReferenceResults({game='blocks',result=null,best=0,previousBest=0,level=1,onReplay,onExit,onRanks,shopOnly=false,assetBase='assets/',motion=true,ranked=null,accountShop=null}){
  document.querySelector('.kg-dialog')?.remove();
  const cfg=GAMES[game]||GAMES.blocks,won=Boolean(result?.won),ctx={won,level,result,best};
+ // One pack list and one balance, whichever wallet this panel is showing.
+ const packs=(accountShop?.packs?.length?accountShop.packs:COIN_PACKS).map(p=>({coins:Number(p.coins)||0,price:String(p.price??''),popular:Boolean(p.popular)}));
+ const coinsNow=()=>accountShop?Math.max(0,Number(accountShop.coins)||0):playWallet().coins;
+ const freeNow=()=>accountShop?0:freePlaysLeft(game);
  const dialog=document.createElement('dialog');
  dialog.className=`kg-dialog kg-${game}`;
  const assetUrl=file=>new URL(file,new URL(assetBase,document.baseURI)).href;
@@ -93,16 +103,17 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
 </section>
 <section class="kg-shop" aria-labelledby="kg-shop-title">
  <button class="kg-close" type="button" aria-label="Close coin shop">${svg('close')}</button>
- <header class="kg-shop-head">${mascot('kg-shop-mascot')}<div><h2 id="kg-shop-title" class="kg-shop-title">KEEP GOING?</h2><p>One balance. Play any of the three games.</p><span class="kg-pill">1 blue coin = 1 play</span></div></header>
+ <header class="kg-shop-head">${mascot('kg-shop-mascot')}<div><h2 id="kg-shop-title" class="kg-shop-title">${accountShop?'EXTRA TRIES':'KEEP GOING?'}</h2><p>One balance. Play any of the three games.</p><span class="kg-pill">${accountShop?'1 coin = 1 extra try':'1 blue coin = 1 play'}</span></div></header>
  <p class="kg-run-note">${eyebrow} · ${title.toLowerCase()} · ${fmt(result?.score)} pts</p>
  <p class="kg-out-note">Your free plays are used up for today.</p>
- <p class="kg-balance">${coinArt(0)}<span>Shared coins</span><strong class="kg-wallet-count">0</strong></p>
- <fieldset class="kg-packs"><legend class="kg-sr-only">Choose a blue coin pack</legend>${COIN_PACKS.map((pack,index)=>`<label class="kg-pack${pack.popular?' is-popular':''}"><input type="radio" name="kg-pack" value="${pack.coins}"${pack.popular?' checked':''}><span class="kg-pack-body"><span class="kg-pack-badge">${pack.popular?'MOST POPULAR':''}</span><span class="kg-pack-count">${pack.coins}</span><span class="kg-pack-unit">${pack.coins===1?'PLAY COIN':'PLAY COINS'}</span>${coinArt(index,'kg-pack-coin')}<span class="kg-pack-price">${pack.price}</span></span></label>`).join('')}</fieldset>
+ <p class="kg-balance">${coinArt(0)}<span>${accountShop?'Your coins':'Shared coins'}</span><strong class="kg-wallet-count">0</strong></p>
+ <fieldset class="kg-packs"><legend class="kg-sr-only">Choose a blue coin pack</legend>${packs.map((pack,index)=>`<label class="kg-pack${pack.popular?' is-popular':''}"><input type="radio" name="kg-pack" value="${pack.coins}"${pack.popular?' checked':''}><span class="kg-pack-body"><span class="kg-pack-badge">${pack.popular?'MOST POPULAR':''}</span><span class="kg-pack-count">${pack.coins}</span><span class="kg-pack-unit">${pack.coins===1?'PLAY COIN':'PLAY COINS'}</span>${coinArt(index,'kg-pack-coin')}<span class="kg-pack-price">${pack.price}</span></span></label>`).join('')}</fieldset>
  <p class="kg-rule">Coins work across all three games.</p>
- <button class="kg-buy" id="kg-buy" type="button">${shopOnly?'GET BLUE COINS':'BUY &amp; PLAY AGAIN'}</button>
+ <button class="kg-buy" id="kg-buy" type="button">${accountShop?'GET EXTRA TRIES':shopOnly?'GET BLUE COINS':'BUY &amp; PLAY AGAIN'}</button>
  <p class="kg-buy-note">Purchase confirmed first. Then ${cfg.after(ctx)}.</p>
+ <div class="kg-pay" hidden><h3 class="kg-pay-title">Waiting for your payment</h3><dl class="kg-pay-lines"></dl><p class="kg-pay-note"></p></div>
  <button class="kg-ghost" id="kg-shop-exit" type="button">Back to arcade</button>
- <p class="kg-proto-note">No payment is taken.</p>
+ ${accountShop?'':'<p class="kg-proto-note">No payment is taken.</p>'}
  <p class="kg-feedback" role="status" aria-live="polite"></p>
 </section>`;
  document.body.append(dialog);
@@ -118,7 +129,7 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
    if(game==='sequence'&&rankedState?.phase==='done')$('.kg-intro').textContent=`Run over at Level ${level}. Run total ${fmt(rankedState.score)}.`;
    return;
   }
-  const coins=playWallet().coins,free=freePlaysLeft(game),offer=keepGoingOffer(free,coins);
+  const coins=coinsNow(),free=freeNow(),offer=keepGoingOffer(free,coins);
   dialog.querySelectorAll('.kg-wallet-count').forEach(el=>el.textContent=fmt(coins));
   dialog.dataset.offer=offer;
   $('.kg-primary-label').textContent=offer==='shop'?'GET BLUE COINS':won?'NEXT LEVEL':'KEEP GOING';
@@ -137,6 +148,8 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  const replay=()=>{
   if(busy)return;
   if(ranked){const action=rankedOffer(rankedState).action;if(!action)return;if(action==='retry'){ranked.retry();return;}busy=true;close();if(action==='next')ranked.nextLevel();else if(action==='again')ranked.playAgain();else onExit?.();return;}
+  // The signed-in shop never replays from here: the arcade starts a ranked run once the coins are there.
+  if(accountShop){setMode('shop');return;}
   if(!availablePlays(game)){setMode('shop');return;}
   const use=consumePlay(game);
   if(!use.ok){setMode('shop');feedback(use.reason==='storage'?'Your browser could not save play credits. Please allow site storage and try again.':'No plays left. Choose a blue coin pack.');return;}
@@ -148,18 +161,43 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  $('#kg-ranks').onclick=()=>{close();onRanks?.(game);};
  $('.kg-close').onclick=()=>shopOnly?exit():setMode('result');
  dialog.addEventListener('cancel',event=>{event.preventDefault();if(dialog.dataset.mode==='shop'&&!shopOnly)setMode('result');else exit();});
- $('#kg-buy').onclick=()=>{
+ $('#kg-buy').onclick=async()=>{
   if(busy)return;
-  const coins=Number($('input:checked')?.value)||10;
+  const coins=Number($('input:checked')?.value)||packs[0]?.coins||10;
+  // Signed in, this asks the server for a reference to pay against. Nothing is granted here: the coins arrive
+  // once the payment has been matched, so the panel turns into the payment details and stops there.
+  if(accountShop){
+   const button=$('#kg-buy');button.disabled=true;feedback('Setting up your payment…');
+   let answer;try{answer=await accountShop.buy(coins);}catch{answer={ok:false,error:'That did not go through. Please try again.'};}
+   if(!dialog.isConnected)return;
+   button.disabled=false;
+   if(!answer?.ok)return feedback(answer?.error||'That did not go through. Please try again.');
+   showPayment(answer.purchase,answer.instructions);
+   return;
+  }
   const purchase=simulateCoinPurchase(coins);
   if(!purchase.ok){feedback('Your browser could not save the coins. No payment was taken. Please allow site storage and try again.');return;}
   refresh();
   if(shopOnly){feedback(`${coins} blue coins added. No payment was taken.`);return;}
   replay();
  };
+ // The amount, the reference and where to send it, in place of the pack list: once a purchase has been asked
+ // for, nothing more happens here until the money arrives.
+ const payEscape=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ function showPayment(purchase,instructions){
+  const lines=[{label:'Amount',value:purchase?.price??''},{label:'Reference',value:purchase?.reference??''},...(instructions?.lines||[])].filter(line=>line.value);
+  $('.kg-pay-lines').innerHTML=lines.map(line=>`<div><dt>${payEscape(line.label)}</dt><dd>${payEscape(line.value)}</dd></div>`).join('');
+  $('.kg-pay-note').textContent=instructions?.note||'Your coins are added once the payment lands.';
+  $('.kg-pay').hidden=false;
+  $('.kg-packs').hidden=true;$('#kg-buy').hidden=true;$('.kg-rule').hidden=true;$('.kg-buy-note').hidden=true;
+  $('#kg-shop-exit').textContent='Done';
+  feedback('');dialog.scrollTop=0;
+ }
+ // A purchase they already have waiting opens straight onto its details, so the reference is never lost.
+ if(accountShop?.pending)showPayment(accountShop.pending,accountShop.pendingInstructions);
  if(shopOnly)dialog.classList.add('kg-shop-only');
  dialog.showModal();
- setMode(!ranked&&(shopOnly||keepGoingOffer(freePlaysLeft(game),playWallet().coins)==='shop')?'shop':'result');
+ setMode(!ranked&&(shopOnly||accountShop||keepGoingOffer(freeNow(),coinsNow())==='shop')?'shop':'result');
  ranked?.subscribe(state=>{rankedState=state;if(dialog.isConnected)refresh();});
  if(motion&&!matchMedia('(prefers-reduced-motion: reduce)').matches)dialog.animate([{opacity:.65,transform:'translateY(12px) scale(.98)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.16,1,.3,1)'});
  return {close,dialog};
