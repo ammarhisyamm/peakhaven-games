@@ -211,6 +211,46 @@ there is not one policy.
   privileges, applies the whole stack in both orders, and checks the grants, the policy-backed reads and every
   service-role path. 48 checks.
 
+### Reviewing runs, and invite codes
+
+A run is flagged when the score a browser sent does not match the score its replay produces (`verify.mjs`).
+A flagged run **keeps counting** until somebody decides otherwise, so nobody is disqualified by a glitch. Both
+numbers are kept with the run, so the page shows "Claimed 12,400 · Verified 9,850" rather than a sentence: a
+run claiming half as much again is a different conversation from one that is out by ten points.
+
+- `/admin.html` (admins only) lists, for a chosen month, every flagged and every rejected run: the player's
+  name and email, the game, the score, the day, why it is there, and when it last changed. It can be narrowed
+  to one game, or to flagged or rejected only.
+- **Clear flag** leaves the score counting. **Reject** takes it off every board and out of lifetime points,
+  and needs a note saying why, which is what the player's row then shows as its reason.
+- Both are conditional on the run not already being in that state, so clicking twice changes nothing and is
+  logged once. Every action is written to `admin_log` with the admin's email.
+- Rejecting a score in a month that has **already been finalised** does **not** touch the archived podium.
+  Somebody has already been told they won, so nothing is undone behind an admin's back: the boards and the
+  winner modals stay exactly as they were, and the admin page raises a banner naming the game and the month,
+  saying who would move up, and waiting for a deliberate **Finalise again**. A month nobody has finalised
+  needs none of that, since every unfinalised month is worked out live anyway.
+- Whether a finalised month has gone stale is decided from **stored outcomes only** — a run's status and the
+  score it was archived at — and never by putting runs back through today's scoring or ranking code. A podium
+  row is stale when the player it names no longer has a counting run in that month and game reaching the
+  score it was archived at. So tie-breaks, the points table and the size of a podium can all change later
+  without marking one past month stale. Every finalised month is checked, with no window: it costs two reads
+  however many there are.
+- **Invite codes**: the same page lists every code with its uses, its limit and its note, creates a code, and
+  changes how many times an existing one may be used. Creating a code that already exists leaves it exactly
+  as it is, so a second click cannot widen or reword a code that is already out there.
+- **Existing projects need the migration**: run `supabase/admin-log.sql` once in the Supabase SQL editor. It
+  is idempotent, and new projects get it from `schema.sql` already. Until it has run the page still lists
+  everything, but the buttons are off and say so, because an action that cannot be logged is not worth doing;
+  the actions answer 503 naming the file.
+- **Existing projects need a second migration**: run `supabase/flag-details.sql` once in the Supabase SQL
+  editor, for the `claimed_score` and `verified_score` columns on `runs`. Idempotent, and independent of
+  `admin-log.sql` — either order, or one without the other. Until it has run, runs are still flagged, still
+  listed and still reviewable, and the page shows the fixed sentence instead of the numbers.
+- Proof: `node tools/verify-admin-sql.mjs` applies both migrations to a throwaway Postgres on top of the
+  schema as it stands on `origin/main`, twice, in both orders and one without the other. 26 checks.
+- Tests: `tests/admin-review.test.js`.
+
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
 placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
 then play an extra try.

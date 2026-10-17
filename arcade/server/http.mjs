@@ -12,10 +12,13 @@ function setup(){
   handlers=createHandlers({store,auth,secret:env.secret,admins:env.admins,payments:createPaymentProvider()});
   return handlers;
 }
-// One or more methods per route. /api/money answers both: GET is the admin view, POST is an action on it.
+// One or more methods per route. /api/admin answers both: GET is the admin view, POST is an action on it.
 const METHODS={join:'POST',me:'GET',profile:'POST',start:'POST',finish:'POST',leaderboard:'GET',results:'GET',finalise:'POST',
   // Paid extra tries: buy is the player asking for a reference to pay, money is admin only.
-  buy:'POST',money:['GET','POST']};
+  buy:'POST',
+  // Everything an admin does is one function: GET is the whole view, POST is one action on it.
+  // /api/money reaches it too, through the rewrite in arcade/vercel.json.
+  admin:['GET','POST'],money:['GET','POST']};
 const allows=(name,method)=>[METHODS[name]].flat().includes(method);
 
 export function route(name){

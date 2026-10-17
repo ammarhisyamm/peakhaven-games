@@ -46,9 +46,19 @@ export const cleanPrize=value=>String(value??'').replace(/[\u0000-\u001f\u007f<>
 export class MonthEndNotReady extends Error{
   constructor(){super('The monthly results tables are not set up yet. Run arcade/supabase/month-end.sql in Supabase, then try again.');this.name='MonthEndNotReady';}
 }
+// Reviewing a run or an invite code is written to public.admin_log, which arcade/supabase/admin-log.sql adds.
+// Listing still works without it, so the admin page can show what is there; only the actions need the table,
+// and they raise this rather than changing something nobody could trace afterwards.
+export class AdminLogNotReady extends Error{
+  constructor(){super('The admin log table is not set up yet. Run arcade/supabase/admin-log.sql in Supabase, then try again.');this.name='AdminLogNotReady';}
+}
 // PostgREST reports an absent table either with Postgres' own undefined_table code or, once it has cached the
 // schema, with its own code and a message about the schema cache.
 const MISSING_TABLE=/does not exist|could not find the table|schema cache/i;
+// A column Postgres has never heard of, which is how an un-run column migration shows up: PostgREST reports
+// its own code once the schema is cached, and Postgres' undefined_column before that.
+const MISSING_COLUMN=/column .* does not exist|could not find the .* column/i;
+export const columnMissing=error=>Boolean(error)&&(error.code==='42703'||error.code==='PGRST204'||MISSING_COLUMN.test(String(error.message??'')));
 export const tableMissing=error=>Boolean(error)&&(error.code==='42P01'||error.code==='PGRST205'||MISSING_TABLE.test(String(error.message??'')));
 
 export function pointsForRank(rank){return COMPETITION.points[rank-1]??COMPETITION.minPoints;}
