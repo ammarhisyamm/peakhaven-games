@@ -176,7 +176,80 @@ is verified the same way and nothing on any leaderboard says it was paid for.
   resolved, "No free plays left · uses 1 of your N coins" on the game card, and a one-time "+N coins added"
   message the next time they visit after a payment is matched. With no accounts (a static preview) the shop
   stays the on-device demo in `dist/play-credits.js`.
-- Tests: `tests/paid-tries.test.js`.
+- Row Level Security: a player may read their own purchases, their own ledger and their own row (where the
+  balance is cached). Every write goes through the service role, and `anon` and `authenticated` are revoked
+  down to `select` on the two new tables **and on `players`**, so nothing but a service-role call can move a
+  coin even if a policy is added to that table later.
+- Tests: `tests/paid-tries.test.js`, and `tools/verify-sql.mjs` for the SQL itself.
+
+### Table grants
+
+Supabase's default privileges hand every new table in `public` to `anon` and `authenticated` as it is
+created, so each table arrived holding insert, update, delete, truncate, references and trigger, and row-level
+security was the only thing in the way. Nothing came of it — every policy is `for select` — but a read policy
+added later for some other reason would have been enough to open the table it was added to, which is exactly
+what happened once on `players`. `month_results` and `month_prizes` are the plainest case: RLS is on and
+there is not one policy.
+
+- **Existing projects need the migration**: run `supabase/tighten-grants.sql` once in the Supabase SQL
+  editor. It is idempotent. It sweeps every table in `public` and revokes **everything** from `anon`,
+  `authenticated` and `PUBLIC` — the reads as well as the writes — then changes the default privileges so a
+  table added later does not arrive holding anything either.
+- **What survives is `authenticated` select on `players`, `purchases` and `coin_ledger`**, the three
+  tables a policy is written against, because a policy that cannot see its table does nothing. A signed-in
+  player still reads their own player row, their own purchases and their own ledger, and nothing else.
+  `anon` keeps nothing at all and is refused every table outright.
+- Nothing in the browser reads a table directly, which is what makes that safe. The only Supabase client it
+  builds is in `ui/account.js`, and it calls four things, all authentication: `getSession`,
+  `onAuthStateChange`, `signInWithOtp`, `signOut`. Every game, board, wallet and admin read goes through
+  `/api` with the service role.
+- Order against `paid-tries.sql` does not matter: that file grants `select` to `authenticated` on the same
+  three tables and nothing to `anon`, so the two converge whichever way round they run.
+- Afterwards the service role is the only thing that can write anything, which is how `/api` has always
+  worked.
+- Proof: `node tools/verify-grants.mjs` stands up a throwaway Postgres with Supabase's roles and default
+  privileges, applies the whole stack in both orders, and checks the grants, the policy-backed reads and every
+  service-role path. 48 checks.
+
+### Reviewing runs, and invite codes
+
+A run is flagged when the score a browser sent does not match the score its replay produces (`verify.mjs`).
+A flagged run **keeps counting** until somebody decides otherwise, so nobody is disqualified by a glitch. Both
+numbers are kept with the run, so the page shows "Claimed 12,400 · Verified 9,850" rather than a sentence: a
+run claiming half as much again is a different conversation from one that is out by ten points.
+
+- `/admin.html` (admins only) lists, for a chosen month, every flagged and every rejected run: the player's
+  name and email, the game, the score, the day, why it is there, and when it last changed. It can be narrowed
+  to one game, or to flagged or rejected only.
+- **Clear flag** leaves the score counting. **Reject** takes it off every board and out of lifetime points,
+  and needs a note saying why, which is what the player's row then shows as its reason.
+- Both are conditional on the run not already being in that state, so clicking twice changes nothing and is
+  logged once. Every action is written to `admin_log` with the admin's email.
+- Rejecting a score in a month that has **already been finalised** does **not** touch the archived podium.
+  Somebody has already been told they won, so nothing is undone behind an admin's back: the boards and the
+  winner modals stay exactly as they were, and the admin page raises a banner naming the game and the month,
+  saying who would move up, and waiting for a deliberate **Finalise again**. A month nobody has finalised
+  needs none of that, since every unfinalised month is worked out live anyway.
+- Whether a finalised month has gone stale is decided from **stored outcomes only** — a run's status and the
+  score it was archived at — and never by putting runs back through today's scoring or ranking code. A podium
+  row is stale when the player it names no longer has a counting run in that month and game reaching the
+  score it was archived at. So tie-breaks, the points table and the size of a podium can all change later
+  without marking one past month stale. Every finalised month is checked, with no window: it costs two reads
+  however many there are.
+- **Invite codes**: the same page lists every code with its uses, its limit and its note, creates a code, and
+  changes how many times an existing one may be used. Creating a code that already exists leaves it exactly
+  as it is, so a second click cannot widen or reword a code that is already out there.
+- **Existing projects need the migration**: run `supabase/admin-log.sql` once in the Supabase SQL editor. It
+  is idempotent, and new projects get it from `schema.sql` already. Until it has run the page still lists
+  everything, but the buttons are off and say so, because an action that cannot be logged is not worth doing;
+  the actions answer 503 naming the file.
+- **Existing projects need a second migration**: run `supabase/flag-details.sql` once in the Supabase SQL
+  editor, for the `claimed_score` and `verified_score` columns on `runs`. Idempotent, and independent of
+  `admin-log.sql` — either order, or one without the other. Until it has run, runs are still flagged, still
+  listed and still reviewable, and the page shows the fixed sentence instead of the numbers.
+- Proof: `node tools/verify-admin-sql.mjs` applies both migrations to a throwaway Postgres on top of the
+  schema as it stands on `origin/main`, twice, in both orders and one without the other. 26 checks.
+- Tests: `tests/admin-review.test.js`.
 
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
 placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
@@ -197,6 +270,35 @@ select * from public.month_results where month = '2026-09' order by game, rank; 
 select reference, coins, amount_cents, created_at from public.purchases where status = 'pending';  -- to match
 select name, coins from public.players order by coins desc;                                  -- balances
 ```
+
+## Checking a migration before it is run
+
+`tools/verify-sql.mjs` runs a migration against a real, throwaway Postgres and then exercises what it adds.
+It never touches a live database: by default it starts its own server in a temporary directory and throws it
+away afterwards.
+
+```
+npm i --no-save pg embedded-postgres@15.18.0-beta.17
+node tools/verify-sql.mjs
+```
+
+It builds a stand-in for the live project first — Supabase's `anon`, `authenticated` and `service_role` roles,
+its default privileges on the `public` schema (which is why a new table starts out writable by a browser key,
+and why a migration has to revoke that), an `auth.users` table and an `auth.uid()` that reads a session
+setting — then the production schema **as it is on `origin/main`**, and only then the migration under test.
+
+What it then checks, for `supabase/paid-tries.sql`: that it applies to the live schema and applies a second
+time with no change to the schema at all (compared by a fingerprint of every column, constraint, index, policy,
+function body and grant); the shape of what it added; every function for real, including a double grant, a
+refund's oldest-first attribution and an adjustment that cannot go below zero; a genuine race, with two
+connections calling `start_run` for a player with one coin, repeated 50 times; that neither browser role can
+execute any of the functions; that a signed-in player reads only their own rows and can write nothing; and that
+the deployment works in **both** orders — the old code against a migrated database, and the new code against
+one the migration has not reached.
+
+Useful switches: `PGURL` to use a database you already have (it is dropped and rebuilt), `VERIFY_SQL_ROUNDS`
+for the race, `VERIFY_SQL_KEEP=1` to leave the server up afterwards, and `VERIFY_SQL_MODULES` to point at
+where `pg` and `embedded-postgres` are installed.
 
 ## Support address
 

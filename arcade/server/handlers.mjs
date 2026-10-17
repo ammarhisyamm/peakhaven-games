@@ -2,8 +2,8 @@ import {isDeepStrictEqual} from 'node:util';
 // The competition API, written against two small interfaces so it can be tested without a network:
 //   auth:  userFromToken(token), createUser(email), sendLink(email, redirectTo)
 //   store: see supabase-store.mjs (memory-store.mjs in the tests implements the same calls)
-import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,cleanMonth,cleanPrize,monthlyStandings,yearlyStandings,gameStandings,podiumMonths,previousMonth,monthResults} from './competition.mjs';
-import {MonthEndNotReady} from './competition.mjs';
+import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,cleanMonth,cleanPrize,monthlyStandings,yearlyStandings,gameStandings,podiumMonths,previousMonth,monthPodium,monthResults} from './competition.mjs';
+import {AdminLogNotReady,MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
@@ -91,6 +91,116 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       ledger:(await store.coinLedger({limit:40})).map(r=>({delta:r.delta,reason:r.reason,note:r.note,
         admin_email:r.admin_email??null,created_at:r.created_at,
         name:people.get(r.player_id)?.name??'Player'}))};
+  }
+
+  // Whether arcade/supabase/admin-log.sql has run. The lists read tables that have always been there, so the
+  // page still shows everything without it; only the actions need it, and they say so instead of acting.
+  const adminLogReady=async()=>Boolean(await store.adminLogReady?.());
+  // Whether flag-details.sql has run. Without it a flagged run shows the fixed sentence, as it always did.
+  const flagDetailsReady=async()=>Boolean(await store.flagDetailsReady?.());
+  // A whole number of uses for an invite code. The schema will not take zero or less.
+  const cleanMaxUses=value=>{
+    const n=Number(value);
+    return Number.isSafeInteger(n)&&n>=1&&n<=10000?n:null;
+  };
+  // Why a run was flagged. Nothing stores a sentence: verify.mjs sets the flag when the score a browser sent
+  // does not match the score its replay produces, which is the only thing that sets it.
+  const FLAG_REASON='The score sent did not match its replay.';
+
+  // The runs worth a second look in one month: flagged, rejected, or both, with whoever played them.
+  async function reviewRows({month,game,state}){
+    const range=monthRange(month);
+    const rows=await store.runsToReview({from:range.from,to:range.to,game,state});
+    const ids=[...new Set(rows.map(r=>r.player_id))];
+    const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
+    const emails=new Map(((await auth.emailsByIds?.(ids))||[]).map(e=>[e.id,e.email]));
+    return rows.map(r=>({id:r.id,game:r.game,gameLabel:gameLabel(r.game),day:r.day,score:Math.max(0,Number(r.score)||0),
+      name:people.get(r.player_id)?.name??'Player',email:emails.get(r.player_id)??null,
+      flagged:Boolean(r.flagged),status:r.status,counts:r.status!=='rejected',
+      reason:r.status==='rejected'?(r.reject_reason||'Rejected.'):FLAG_REASON,
+      claimedScore:r.claimed_score==null?null:Number(r.claimed_score),
+      verifiedScore:r.verified_score==null?null:Number(r.verified_score),
+      updatedAt:r.updated_at??null}));
+  }
+
+  // Whether a month has been finalised, which is what makes a rejection in it something to report rather
+  // than something to act on.
+  async function isFinalised(day){
+    const month=String(day??'').slice(0,7);
+    if(!cleanMonth(month))return false;
+    return (await store.finalisedMonths()).includes(month);
+  }
+
+  // A finalised month whose published podium no longer stands.
+  //
+  // Rejecting a score after a month has been finalised deliberately leaves the public podium exactly as it
+  // was: somebody has already been told they won, and that is not a thing to undo behind an admin's back. So
+  // the month is reported here instead, with who would move up, and the admin decides by clicking Finalise
+  // again.
+  //
+  // The test is made of stored outcomes only — a run's status and the score it was archived at — and never
+  // puts a run back through today's scoring or ranking code. A podium row is stale when the player it names
+  // no longer has a counting run in that month and game reaching the score it was archived at: something
+  // that counted has stopped counting, which is a rejection or a refund and nothing else. Tie-breaks, the
+  // points table and how many places a podium holds can all change later without marking one past month
+  // stale, which is exactly what would happen if this re-derived each podium and compared it.
+  //
+  // Every finalised month is checked, with no window: two reads however many there are, because month_results
+  // is nine rows a month and the runs come back in one span.
+  async function staleFinalised(){
+    const archived=await store.allMonthResults();
+    if(!archived.length)return [];
+    const months=[...new Set(archived.map(r=>r.month))].sort();
+    const runs=await store.scoredRuns(`${months[0]}-01`,`${months.at(-1)}-31`);
+    // The best score each player still has counting, per month and game. scoredRuns already leaves out
+    // rejected runs and anything that never scored.
+    const best=new Map();
+    for(const r of runs){
+      const key=`${String(r.day??'').slice(0,7)}|${r.game}|${r.player_id}`;
+      best.set(key,Math.max(best.get(key)??0,Number(r.score)||0));
+    }
+    const stands=row=>(best.get(`${row.month}|${row.game}|${row.player_id}`)??0)>=(Number(row.score)||0);
+    const groups=new Map();
+    for(const row of archived){
+      const key=`${row.month}|${row.game}`;
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(row);
+    }
+    const out=[];
+    for(const [key,was] of groups){
+      if(was.every(stands))continue;
+      const [month,game]=key.split('|');
+      // Only now, for a month already known to be stale, is a podium worked out — and only to say who would
+      // move up if an admin re-finalised. Nothing here feeds the decision above.
+      const now=monthPodium(runs.filter(r=>String(r.day??'').slice(0,7)===month),game);
+      const ranked=new Map(was.map(r=>[r.player_id,r.rank]));
+      const ids=[...new Set([...was,...now].map(r=>r.player_id))];
+      const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
+      const name=id=>people.get(id)?.name??'Player';
+      const winner=rows=>{const w=rows.find(r=>r.winner);return w?name(w.player_id):null;};
+      out.push({month,monthLabel:monthLabel(month),game,gameLabel:gameLabel(game),
+        archivedWinner:winner(was),liveWinner:winner(now),
+        dropped:was.filter(r=>!stands(r)).map(r=>({name:name(r.player_id),rank:r.rank})),
+        movesUp:now.filter(r=>!ranked.has(r.player_id)||r.rank<ranked.get(r.player_id))
+          .map(r=>({name:name(r.player_id),from:ranked.get(r.player_id)??null,to:r.rank}))});
+    }
+    return out.sort((a,b)=>a.month.localeCompare(b.month)||a.game.localeCompare(b.game));
+  }
+
+  // The whole admin page in one object: the money, the runs to review, the invite codes and the admin log.
+  async function adminViewBody(query,session){
+    const month=cleanMonth(query?.month)??monthKey(now());
+    const game=COMPETITION.games.includes(String(query?.game))?String(query.game):null;
+    const state=['flagged','rejected'].includes(String(query?.state))?String(query.state):null;
+    const ready=await adminLogReady();
+    return {...await coinsView(),
+      you:String(session?.user?.email||'').toLowerCase(),
+      review:{ready,month,game,state,games:COMPETITION.games.map(g=>({game:g,label:gameLabel(g)})),
+        details:await flagDetailsReady(),
+        stale:await staleFinalised(),
+        runs:await reviewRows({month,game,state})},
+      invites:{ready,list:await store.listInvites()},
+      actions:ready?await store.adminActions({limit:20}):[]};
   }
 
   async function resultsView(month){
@@ -237,8 +347,15 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       }
       const done=run.game!=='sequence'||!result.won,score=run.score+result.score;
       const claimed=Number(body?.claimed);
-      const flagged=run.flagged||(Number.isFinite(claimed)&&claimed!==result.score);
-      const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
+      const mismatch=Number.isFinite(claimed)&&claimed!==result.score;
+      const flagged=run.flagged||mismatch;
+      // What the browser claimed against what the replay produced, both as the run's running total so they
+      // compare with each other and with the score on the board. Only written once flag-details.sql has run;
+      // claimed_score only when a claim disagreed, so an honest later segment cannot wipe an earlier gap.
+      const detail=(await flagDetailsReady())
+        ?{verified_score:score,...(mismatch?{claimed_score:run.score+claimed}:{})}
+        :{};
+      const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,...detail,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
       if(!updated){
         const latest=await store.getRun(run.id);
         if(latest?.status!=='rejected'&&(latest?.replays||[]).some(rep=>isDeepStrictEqual(rep,body.replay)))return ok(await finishView(latest,s.player.id));
@@ -341,14 +458,87 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       }
     },
 
-    // Everything an admin does with money, behind one route. A deployment is limited in how many functions it
-    // may have, and three of these would be three of them, so /api/money carries all three: GET is the view
-    // and POST says which action it is. The three below stay separate because that is how they are tested.
-    async money({token,body,query,method}){
-      if(String(method??'POST').toUpperCase()!=='POST')return this.purchases({token,query});
+    // Everything an admin does, behind one route. A deployment is limited in how many functions it may have,
+    // and one per action would be seven of them, so /api/admin carries them all: GET is the whole view and
+    // POST says which action it is. /api/money still reaches this, through a rewrite in arcade/vercel.json.
+    // The handlers below stay separate because that is how they are tested.
+    async admin({token,body,query,method}){
+      if(String(method??'POST').toUpperCase()!=='POST')return this.adminView({token,query});
       const action=String(body?.action??'');
       if(!action)return fail(400,'Unknown action.');
-      return action==='adjust'?this.coins({token,body}):this.purchase({token,body});
+      const out=['clear-flag','reject'].includes(action)?await this.review({token,body})
+        :['invite-create','invite-max-uses'].includes(action)?await this.invites({token,body})
+        :action==='adjust'?await this.coins({token,body})
+        :await this.purchase({token,body});
+      // Every action answers with the whole page again, worked out after the change, so no panel is left
+      // showing what was true before it. What the action itself reported stays on top.
+      if(out.status!==200)return out;
+      const s=await adminIn(token);
+      return s.error?out:ok({...await adminViewBody(query,s),...out.body});
+    },
+    // Kept so anything still calling /api/money reaches the same place.
+    async money(context){return this.admin(context);},
+
+    // Admin: the whole admin page in one read — the money, the runs worth a second look, the invite codes,
+    // and the last of the admin log.
+    async adminView({token,query}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      return ok(await adminViewBody(query,s));
+    },
+
+    // Admin: clear a flag (the run keeps counting) or reject a run (it stops counting anywhere). Both are
+    // conditional on the run not already being in that state, so a second click changes and logs nothing.
+    async review({token,body}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const action=String(body?.action??'');
+      if(!['clear-flag','reject'].includes(action))return fail(400,'Unknown action.');
+      const id=String(body?.id??'');
+      if(!id)return fail(400,'Which run?');
+      const note=cleanNote(body?.note);
+      if(action==='reject'&&!note)return fail(400,'Write a short note saying why it was rejected.');
+      if(!(await adminLogReady()))return fail(503,new AdminLogNotReady().message);
+      try{
+        // Whether this run sits in a month that has already been published, which the log records and the
+        // page then reports. Read before the change, so a rejection cannot hide where it landed.
+        const existing=await store.getRun(id);
+        const afterFinalise=action==='reject'&&Boolean(existing)&&await isFinalised(existing.day);
+        const result=await store.reviewRun(id,{action:action==='reject'?'reject':'clear',
+          note:note??'',adminEmail:String(s.user.email||'').toLowerCase(),afterFinalise});
+        if(!result?.found)return fail(404,'That run is not there.');
+        // The archived podium is deliberately left alone: somebody has already been told they won. The page
+        // says the month needs re-finalising and waits for an admin to decide.
+        const needsRefinalise=result.changed&&afterFinalise
+          ?{month:String(result.run?.day??'').slice(0,7),game:result.run?.game??null}:null;
+        return ok({action,result:{...result,needsRefinalise}});
+      }catch(error){
+        if(error instanceof AdminLogNotReady)return fail(503,error.message);
+        throw error;
+      }
+    },
+
+    // Admin: make a new invite code, or change how many times an existing one may be used.
+    async invites({token,body}){
+      const s=await adminIn(token);if(s.error)return s.error;
+      const action=String(body?.action??'');
+      if(!['invite-create','invite-max-uses'].includes(action))return fail(400,'Unknown action.');
+      const code=cleanCode(body?.code);
+      if(!code)return fail(400,'Enter a code. Letters, numbers and dashes.');
+      const maxUses=cleanMaxUses(body?.maxUses);
+      if(maxUses===null)return fail(400,'How many times may it be used? A whole number from 1 to 10000.');
+      if(!(await adminLogReady()))return fail(503,new AdminLogNotReady().message);
+      const who=String(s.user.email||'').toLowerCase();
+      try{
+        if(action==='invite-create'){
+          const result=await store.createInvite({code,maxUses,note:cleanPrize(body?.note??''),adminEmail:who});
+          return ok({action,result});
+        }
+        const result=await store.setInviteMaxUses(code,maxUses,who);
+        if(!result?.found)return fail(404,'There is no code with that name.');
+        return ok({action,result});
+      }catch(error){
+        if(error instanceof AdminLogNotReady)return fail(503,error.message);
+        throw error;
+      }
     },
 
     // Admin: what is waiting for payment, everyone's balance, and the last of the ledger.

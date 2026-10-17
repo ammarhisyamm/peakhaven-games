@@ -29,6 +29,8 @@ create table if not exists public.runs (
   score int not null default 0,
   status text not null default 'open' check (status in ('open','closed','rejected')),
   flagged boolean not null default false,     -- claimed score didn't match the replay: worth a look
+  claimed_score int,                          -- what the browser claimed, when it disagreed; null on an honest run
+  verified_score int,                         -- what the replay actually produced, written on every finish
   reject_reason text,
   replays jsonb not null default '[]'::jsonb,
   started_at timestamptz not null default now(),
@@ -193,6 +195,13 @@ drop policy if exists coin_ledger_own_read on public.coin_ledger;
 create policy coin_ledger_own_read on public.coin_ledger for select to authenticated using (player_id = auth.uid());
 drop policy if exists players_own_read on public.players;
 create policy players_own_read on public.players for select to authenticated using (id = auth.uid());
+-- The balance is cached on players, and a browser key still holds Postgres' default write grants on that
+-- table: today nothing comes of it, because row-level security has no policy that exposes a row to write, but
+-- that is the only thing standing in the way. A read policy added later for some other reason would be enough
+-- to hand a player their own coins column. So the write grants go, and the service role keeps doing the
+-- writing, which is already the only way /api changes a player.
+revoke insert, update, delete, truncate, references, trigger on public.players from public, anon, authenticated;
+grant select on public.players to authenticated;
 
 -- Marks a purchase paid and grants its coins, once. Safe to call again: a second call changes nothing and
 -- reports granted = false, because the unique index above lets only one grant row exist per purchase.
@@ -367,3 +376,20 @@ grant execute on function public.start_run(uuid, text, text, bigint, int, uuid, 
 --   A player's coins:     select name, coins from public.players order by coins desc;
 --   One player's ledger:  select created_at, delta, reason, note, admin_email from public.coin_ledger where player_id = '...' order by created_at;
 --   Refunded runs:        select * from public.runs where reject_reason like 'Refunded purchase %';
+
+-- Reviewing runs and handing out invite codes. Everything an admin does to a run or an invite code is written
+-- here with their email, so a disqualification or a new code can always be traced back to a person. Existing
+-- projects get this from admin-log.sql.
+create table if not exists public.admin_log (
+  id uuid primary key default gen_random_uuid(),
+  admin_email text not null,
+  action text not null check (action in ('run_clear_flag','run_reject','invite_create','invite_max_uses')),
+  run_id uuid references public.runs(id) on delete set null,
+  invite_code text references public.invites(code) on delete set null,
+  note text not null default '',
+  details jsonb not null default '{}'::jsonb,   -- what changed: the score and game for a run, the uses for a code
+  created_at timestamptz not null default now()
+);
+create index if not exists admin_log_recent on public.admin_log (created_at desc, id desc);
+alter table public.admin_log enable row level security;
+revoke all on public.admin_log from public, anon, authenticated;
