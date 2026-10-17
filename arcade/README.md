@@ -182,6 +182,35 @@ is verified the same way and nothing on any leaderboard says it was paid for.
   coin even if a policy is added to that table later.
 - Tests: `tests/paid-tries.test.js`, and `tools/verify-sql.mjs` for the SQL itself.
 
+### Table grants
+
+Supabase's default privileges hand every new table in `public` to `anon` and `authenticated` as it is
+created, so each table arrived holding insert, update, delete, truncate, references and trigger, and row-level
+security was the only thing in the way. Nothing came of it — every policy is `for select` — but a read policy
+added later for some other reason would have been enough to open the table it was added to, which is exactly
+what happened once on `players`. `month_results` and `month_prizes` are the plainest case: RLS is on and
+there is not one policy.
+
+- **Existing projects need the migration**: run `supabase/tighten-grants.sql` once in the Supabase SQL
+  editor. It is idempotent. It sweeps every table in `public` and revokes **everything** from `anon`,
+  `authenticated` and `PUBLIC` — the reads as well as the writes — then changes the default privileges so a
+  table added later does not arrive holding anything either.
+- **What survives is `authenticated` select on `players`, `purchases` and `coin_ledger`**, the three
+  tables a policy is written against, because a policy that cannot see its table does nothing. A signed-in
+  player still reads their own player row, their own purchases and their own ledger, and nothing else.
+  `anon` keeps nothing at all and is refused every table outright.
+- Nothing in the browser reads a table directly, which is what makes that safe. The only Supabase client it
+  builds is in `ui/account.js`, and it calls four things, all authentication: `getSession`,
+  `onAuthStateChange`, `signInWithOtp`, `signOut`. Every game, board, wallet and admin read goes through
+  `/api` with the service role.
+- Order against `paid-tries.sql` does not matter: that file grants `select` to `authenticated` on the same
+  three tables and nothing to `anon`, so the two converge whichever way round they run.
+- Afterwards the service role is the only thing that can write anything, which is how `/api` has always
+  worked.
+- Proof: `node tools/verify-grants.mjs` stands up a throwaway Postgres with Supabase's roles and default
+  privileges, applies the whole stack in both orders, and checks the grants, the policy-backed reads and every
+  service-role path. 48 checks.
+
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
 placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
 then play an extra try.
