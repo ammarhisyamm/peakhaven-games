@@ -130,6 +130,20 @@ select json_build_object(
      from pg_default_acl where defaclnamespace = 'public'::regnamespace order by 1, 2) x)
 ) as fingerprint`;
 
+// Any function in public that a browser key could call. PUBLIC is grantee oid 0, and pg_get_userbyid(0)
+// does not return 'public', so comparing on the name would miss the very case this exists to catch.
+// Extension-owned functions are left out: on Supabase pgcrypto lives in the extensions schema, and in this
+// stand-in it lands in public, which is the harness's doing rather than the project's.
+const OPEN_FUNCTIONS = `select p.proname,
+    case when e.grantee = 0 then 'PUBLIC' else pg_get_userbyid(e.grantee) end as grantee
+  from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) e
+  where p.pronamespace = 'public'::regnamespace
+    and p.prokind = 'f'
+    and e.privilege_type = 'EXECUTE'
+    and (e.grantee = 0 or pg_get_userbyid(e.grantee) in ('anon', 'authenticated'))
+    and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+  order by 1, 2`;
+
 const GRANTS = `select table_name, grantee, privilege_type from information_schema.role_table_grants
   where table_schema = 'public' and grantee = any($1) order by table_name, grantee, privilege_type`;
 
@@ -334,6 +348,74 @@ try {
   await db.query('drop table public.something_new');
 
   // ---------------------------------------------------------------- the other order
+  section('What the default privileges can and cannot do for a later function');
+  // Sequences and functions behave differently here, and the difference matters.
+  //
+  // A new sequence is owner-only by default, so taking the anon and authenticated default grants away is
+  // the whole job: nothing else grants them.
+  //
+  // A new function is not. Postgres grants EXECUTE on it to PUBLIC itself, from acldefault(), and ALTER
+  // DEFAULT PRIVILEGES cannot take that away: a REVOKE that would leave the default equal to the built-in
+  // one stores nothing at all. Measured here on 15.18 across every form of the command. Every role is a
+  // member of PUBLIC, so a function added later is callable by a browser key until its own migration
+  // revokes it. The protection for functions is that explicit revoke, and the section after this one is
+  // what enforces it.
+  const DOLLAR = String.fromCharCode(36);
+  await db.query('create sequence public.something_counting');
+  await db.query('create function public.something_later(n int) returns int language sql immutable as ' + DOLLAR + 'fn' + DOLLAR + ' select n * 2 ' + DOLLAR + 'fn' + DOLLAR + '');
+
+  for (const role of ['anon', 'authenticated']) {
+    await asRole(db, role, player);
+    check(`${role} cannot use a sequence added later`,
+      (await refused(db.query("select nextval('public.something_counting')"))) === '42501');
+    await asOwner(db);
+  }
+  const seqDefaults = (await db.query(`select defaclacl::text as acl from pg_default_acl
+    where defaclnamespace = 'public'::regnamespace and defaclobjtype = 'S'`)).rows.map(r => r.acl).join(' ');
+  check('and the sequence defaults name no browser role at all',
+    !/\banon\b|\bauthenticated\b/.test(seqDefaults), seqDefaults || '(no row)');
+
+  // The measured truth about functions, asserted rather than assumed, so this stops being true out loud
+  // the day Postgres changes it.
+  await asRole(db, 'anon', player);
+  const anonCanCall = (await refused(db.query('select public.something_later(21)'))) === null;
+  await asOwner(db);
+  check('a function added later is still callable by anon until its migration revokes PUBLIC',
+    anonCanCall, 'which is why the explicit revoke is the thing that protects it');
+  // And the query that enforces this, proved against a function that really is open, so a green run of the
+  // next section cannot be green because the query is looking in the wrong place.
+  const flagged = (await db.query(OPEN_FUNCTIONS)).rows.map(r => `${r.proname}:${r.grantee}`);
+  check('the enforcement query flags a function that is open to PUBLIC',
+    flagged.some(f => f.startsWith('something_later:')), flagged.join(' ') || '(nothing flagged)');
+
+  await db.query('revoke all on function public.something_later(int) from public, anon, authenticated');
+  for (const role of ['anon', 'authenticated']) {
+    await asRole(db, role, player);
+    check(`${role} cannot execute it once its migration revokes PUBLIC`,
+      (await refused(db.query('select public.something_later(21)'))) === '42501');
+    await asOwner(db);
+  }
+  // service_role keeps its own default grant, so a later migration need not remember to grant it.
+  await asRole(db, 'service_role');
+  check('the service role can still execute it, with no grant written for it',
+    Number((await db.query('select public.something_later(21) as n')).rows[0].n) === 42);
+  check('and can still use a sequence added later',
+    Number((await db.query("select nextval('public.something_counting') as n")).rows[0].n) === 1);
+  await asOwner(db);
+  await db.query('drop function public.something_later(int)');
+  await db.query('drop sequence public.something_counting');
+
+  section('Every function in public has PUBLIC revoked — the check that keeps it that way');
+  // The real guarantee. If a migration ever adds a function and forgets its revoke, this fails.
+  const loose = (await db.query(OPEN_FUNCTIONS)).rows;
+  check('no function in public is executable by a browser key or by PUBLIC', loose.length === 0,
+    loose.length ? JSON.stringify(loose) : '');
+  const ours = (await db.query(`select distinct p.proname from pg_proc p
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('grant_purchase','cancel_purchase','adjust_coins','refund_purchase','start_run','use_invite')
+    order by 1`)).rows.map(r => r.proname);
+  check('and the functions the server calls are all there to have been checked', ours.length === 6, ours.join(','));
+
   section('The other order: tighten first, then paid-tries.sql on top');
   const reversed = await build(server.url, 'ph_reversed',
     ['schema.sql', 'month-end.sql', 'tighten-grants.sql', 'paid-tries.sql']);

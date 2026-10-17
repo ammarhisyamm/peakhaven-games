@@ -77,9 +77,59 @@ begin
   end loop;
 end $$;
 
+-- 4. The same for sequences and routines, with one honest caveat about functions.
+--
+--    A sequence added later is owner-only unless something grants it, so taking the anon and authenticated
+--    default grants away is the whole job, and the line below does it.
+--
+--    A function is different, and this is worth knowing before trusting this file further than it goes.
+--    Postgres grants EXECUTE on every new function to PUBLIC from acldefault(), and ALTER DEFAULT
+--    PRIVILEGES cannot take that away: a REVOKE that would leave the default equal to the built-in one
+--    stores nothing at all. Measured on PostgreSQL 15.18 across every form of the command (ON FUNCTIONS
+--    and ON ROUTINES, with and without FOR ROLE, before and after a grant), the new function still came
+--    out with =X/owner and anon could still call it, because every role is a member of PUBLIC.
+--
+--    So what the routines line below actually buys is the removal of the explicit anon and authenticated
+--    default grants. That is worth having, but it is not the whole guarantee. The guarantee for functions
+--    is the explicit revoke each migration writes next to the function it creates:
+--
+--        revoke all on function public.whatever(...) from public, anon, authenticated;
+--        grant execute on function public.whatever(...) to service_role;
+--
+--    schema.sql and paid-tries.sql already do that for all six of ours, and tools/verify-grants.mjs fails
+--    if any function in public is ever left executable by PUBLIC or by a browser key, which is what keeps
+--    it true.
+--
+--    service_role is deliberately left out of this. Supabase's defaults grant it routines and sequences, and
+--    leaving that alone means a later migration does not have to remember to grant execute to the service
+--    role for /api to call its own function. The browser roles lose the default; the server keeps it.
+do $$
+declare
+  r record;
+  grantees text;
+begin
+  select string_agg(quote_ident(rolname), ', ') into grantees
+    from pg_roles where rolname in ('anon', 'authenticated');
+  grantees := concat_ws(', ', 'public', grantees);
+  for r in
+    select distinct pg_get_userbyid(defaclrole) as role
+      from pg_default_acl
+     where defaclnamespace = 'public'::regnamespace and defaclobjtype in ('f', 'S')
+    union
+    select current_user::text
+  loop
+    execute format('alter default privileges for role %I in schema public revoke all on routines from %s',
+      r.role, grantees);
+    execute format('alter default privileges for role %I in schema public revoke all on sequences from %s',
+      r.role, grantees);
+  end loop;
+end $$;
+
 --   What a browser key holds:  select table_name, grantee, privilege_type from information_schema.role_table_grants
 --                               where table_schema = 'public' and grantee in ('anon','authenticated','PUBLIC')
 --                               order by 1, 2, 3;   -- expect select on players, purchases and coin_ledger, for
 --                                                   -- authenticated only, and nothing else at all
---   Defaults for new tables:   select pg_get_userbyid(defaclrole), defaclacl from pg_default_acl
---                               where defaclnamespace = 'public'::regnamespace and defaclobjtype = 'r';
+--   Defaults for new objects:  select pg_get_userbyid(defaclrole), defaclobjtype, defaclacl from pg_default_acl
+--                               where defaclnamespace = 'public'::regnamespace order by 1, 2;
+--                               -- 'r' tables, 'f' routines, 'S' sequences; no anon, authenticated or
+--                               -- bare-PUBLIC entry should appear in any of them
