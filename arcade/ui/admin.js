@@ -19,16 +19,16 @@ function say(message,kind=''){note=message;noteKind=kind;render();}
 // Purchases, balances and the ledger, loaded alongside the month's results and reloaded after every action,
 // because each action answers with the new state of all three.
 async function loadCoins(){
-  const r=await account.api('purchases');
+  const r=await account.api('money');
   coins=r.ok?r:null;
   if(!r.ok&&r.status!==403)note=note||r.error||'Extra tries could not load.';
 }
 
 // One admin action on the money: mark paid, cancel, refund, or an adjustment by hand. Each answers with the
 // refreshed view, so the page always shows what the database now says rather than what was clicked.
-async function act(endpoint,body){
+async function act(body){
   busy=true;render();
-  const r=await account.api(endpoint,{body});
+  const r=await account.api('money',{body});
   busy=false;
   if(!r.ok)return say(r.error||'That did not go through.','bad');
   coins=r;

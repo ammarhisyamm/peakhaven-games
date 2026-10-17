@@ -341,6 +341,16 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       }
     },
 
+    // Everything an admin does with money, behind one route. A deployment is limited in how many functions it
+    // may have, and three of these would be three of them, so /api/money carries all three: GET is the view
+    // and POST says which action it is. The three below stay separate because that is how they are tested.
+    async money({token,body,query,method}){
+      if(String(method??'POST').toUpperCase()!=='POST')return this.purchases({token,query});
+      const action=String(body?.action??'');
+      if(!action)return fail(400,'Unknown action.');
+      return action==='adjust'?this.coins({token,body}):this.purchase({token,body});
+    },
+
     // Admin: what is waiting for payment, everyone's balance, and the last of the ledger.
     async purchases({token}){
       const s=await adminIn(token);if(s.error)return s.error;

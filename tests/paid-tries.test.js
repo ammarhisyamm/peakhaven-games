@@ -434,6 +434,29 @@ test('Only an admin can see or move money',async()=>{
   assert.equal((await w.api.purchase({token:admin.token,body:{id:'00000000-0000-4000-8000-000000000000',action:'paid'}})).status,404);
 });
 
+test('The three admin money calls share one route',async()=>{
+  // A deployment is limited in how many functions it may have, so /api/money carries all three: GET is the
+  // view, POST says which action it is.
+  const w=world(),admin=await w.join(ADMIN,'Boss'),ann=await w.join('ann@x.com','Ann');
+  await w.buy(ann,5);
+  const view=await w.api.money({token:admin.token,method:'GET',query:{}});
+  assert.equal(view.status,200);
+  assert.equal(view.body.pending.length,1);
+  const id=view.body.pending[0].id;
+  assert.equal((await w.api.money({token:ann.token,method:'GET',query:{}})).status,403,'the route is still admin only');
+  const paid=await w.api.money({token:admin.token,method:'POST',body:{action:'paid',id}});
+  assert.equal(paid.status,200);
+  assert.equal(paid.body.result.granted,true);
+  assert.equal(paid.body.result.balance,5);
+  const adjust=await w.api.money({token:admin.token,method:'POST',body:{action:'adjust',player:ann.id,delta:-2,note:'one route'}});
+  assert.equal(adjust.status,200);
+  assert.equal(adjust.body.result.balance,3);
+  const refunded=await w.api.money({token:admin.token,method:'POST',body:{action:'refund',id}});
+  assert.equal(refunded.body.result.refunded,true);
+  assert.equal((await w.api.money({token:admin.token,method:'POST',body:{}})).status,400,'a POST has to say which action');
+  assert.equal((await w.api.money({token:admin.token,body:{action:'nonsense',id}})).status,400);
+});
+
 test('The shop stays hidden until there is somewhere for the money to go',async()=>{
   const w=world({pay:NO_PAY}),admin=await w.join(ADMIN,'Boss'),ann=await w.join('ann@x.com','Ann');
   const me=(await w.api.me({token:ann.token})).body;

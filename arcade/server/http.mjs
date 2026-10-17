@@ -12,21 +12,23 @@ function setup(){
   handlers=createHandlers({store,auth,secret:env.secret,admins:env.admins,payments:createPaymentProvider()});
   return handlers;
 }
+// One or more methods per route. /api/money answers both: GET is the admin view, POST is an action on it.
 const METHODS={join:'POST',me:'GET',profile:'POST',start:'POST',finish:'POST',leaderboard:'GET',results:'GET',finalise:'POST',
-  // Paid extra tries: buy is the player asking for a reference to pay; the other three are admin only.
-  buy:'POST',purchases:'GET',purchase:'POST',coins:'POST'};
+  // Paid extra tries: buy is the player asking for a reference to pay, money is admin only.
+  buy:'POST',money:['GET','POST']};
+const allows=(name,method)=>[METHODS[name]].flat().includes(method);
 
 export function route(name){
   return async function handler(req,res){
     res.setHeader('Cache-Control','no-store');
-    if(req.method!==METHODS[name])return res.status(405).json({error:'Method not allowed'});
+    if(!allows(name,req.method))return res.status(405).json({error:'Method not allowed'});
     const api=setup();
     if(!api)return res.status(503).json({error:'Accounts are not set up on this deployment yet.'});
     const header=String(req.headers.authorization||''),token=header.startsWith('Bearer ')?header.slice(7):null;
     let body=req.body;if(typeof body==='string'){try{body=JSON.parse(body);}catch{body=null;}}
     const origin=`https://${req.headers['x-forwarded-host']||req.headers.host}/`;
     try{
-      const out=await api[name]({token,body:body??{},query:req.query??{},origin});
+      const out=await api[name]({token,body:body??{},query:req.query??{},origin,method:req.method});
       return res.status(out.status).json(out.body);
     }catch(error){
       console.error(`[api/${name}]`,error);

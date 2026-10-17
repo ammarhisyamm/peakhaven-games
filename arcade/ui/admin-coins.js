@@ -100,14 +100,14 @@ export function coinsPanels(view,busy=false){
 // Wires the buttons the markup above just drew. `act` runs one admin call and is given back the new view.
 export function bindCoins(root,{act}){
   root.querySelectorAll('[data-purchase]').forEach(button=>{
-    button.onclick=()=>act('purchase',{id:button.dataset.purchase,action:button.dataset.action});
+    button.onclick=()=>act({id:button.dataset.purchase,action:button.dataset.action});
   });
   const apply=root.querySelector('#coin-adjust');
   if(apply)apply.onclick=()=>{
     const player=root.querySelector('#coin-player')?.value;
     const delta=Number(root.querySelector('#coin-delta')?.value);
     const note=root.querySelector('#coin-note')?.value??'';
-    act('coins',{player,delta,note});
+    act({action:'adjust',player,delta,note});
   };
 }
 
