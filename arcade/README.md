@@ -197,6 +197,12 @@ run claiming half as much again is a different conversation from one that is out
   winner modals stay exactly as they were, and the admin page raises a banner naming the game and the month,
   saying who would move up, and waiting for a deliberate **Finalise again**. A month nobody has finalised
   needs none of that, since every unfinalised month is worked out live anyway.
+- Whether a finalised month has gone stale is decided from **stored outcomes only** — a run's status and the
+  score it was archived at — and never by putting runs back through today's scoring or ranking code. A podium
+  row is stale when the player it names no longer has a counting run in that month and game reaching the
+  score it was archived at. So tie-breaks, the points table and the size of a podium can all change later
+  without marking one past month stale. Every finalised month is checked, with no window: it costs two reads
+  however many there are.
 - **Invite codes**: the same page lists every code with its uses, its limit and its note, creates a code, and
   changes how many times an existing one may be used. Creating a code that already exists leaves it exactly
   as it is, so a second click cannot widen or reword a code that is already out there.

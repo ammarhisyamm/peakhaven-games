@@ -52,6 +52,7 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     // Finished months, archived once an admin finalises them.
     async monthResults(month){return (results.get(month)??[]).map(copy);},
     async saveMonthResults(month,rows){results.set(month,rows.map(r=>({...r,month,finalised_at:now().toISOString()})));return (results.get(month)??[]).map(copy);},
+    async allMonthResults(){return [...results.values()].flat().map(copy);},
     async finalisedMonths(){return [...results.keys()].filter(m=>results.get(m)?.length).sort();},
     async prizes(){return Object.fromEntries(prizes);},
     async setPrize(game,text){prizes.set(game,text);return text;},

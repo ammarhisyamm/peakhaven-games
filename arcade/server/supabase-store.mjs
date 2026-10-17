@@ -81,6 +81,7 @@ export function createSupabaseBackend(env=supabaseEnv()){
       if(rows.length)needsTable(await admin.from('month_results').insert(rows.map(r=>({month,game:r.game,rank:r.rank,player_id:r.player_id,score:r.score,winner:r.winner}))));
       return this.monthResults(month);
     },
+    async allMonthResults(){return optional(await admin.from('month_results').select('month,game,rank,player_id,score,winner').order('month').order('game').order('rank'),[]).map(r=>({...r,score:Number(r.score)||0}));},
     async finalisedMonths(){return [...new Set(optional(await admin.from('month_results').select('month').order('month'),[]).map(r=>r.month))];},
     async prizes(){return Object.fromEntries(optional(await admin.from('month_prizes').select('game,text'),[]).map(r=>[r.game,r.text??'']));},
     async setPrize(game,text){needsTable(await admin.from('month_prizes').upsert({game,text,updated_at:new Date().toISOString()},{onConflict:'game'}));return text;},

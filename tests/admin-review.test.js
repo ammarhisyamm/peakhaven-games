@@ -212,6 +212,52 @@ test('Rejecting a run in a finalised month leaves the published podium exactly a
   assert.deepEqual((await w.view(token,{month:'2026-09'})).body.review.stale,[],'and the banner goes');
 });
 
+test('Changing how runs are ranked does not mark a single past month stale',async()=>{
+  const w=world();
+  const token=await w.adminToken();
+  const ann=await w.join('ann@peak.test','Ann');
+  const bo=await w.join('bo@peak.test','Bo');
+  const annRun=w.score(ann,'ridge',900,{day:'2026-09-10'});
+  w.score(bo,'ridge',800,{day:'2026-09-11'});
+
+  // An archive written under rules that are not today's: Bo first on 800 and Ann second on 900, and a fourth
+  // place kept, as a different tie-break and a different podium size would have produced. Both scores still
+  // count, so nothing here has stopped standing and the month is not stale — which is the whole point. If
+  // staleness were decided by re-deriving the podium with today's code, this month would light up at once.
+  await w.store.saveMonthResults('2026-09',[
+    {game:'ridge',player_id:bo.id,score:800,rank:1,winner:true},
+    {game:'ridge',player_id:ann.id,score:900,rank:2,winner:false},
+    {game:'ridge',player_id:bo.id,score:800,rank:4,winner:false},
+  ]);
+  assert.deepEqual((await w.view(token,{month:'2026-09'})).body.review.stale,[],
+    'a podium ordered by other rules is left alone');
+
+  // Only a score that has stopped counting makes it stale.
+  const rejected=await w.act(token,{action:'reject',id:annRun,note:'Score does not match the replay'});
+  const stale=rejected.body.review.stale;
+  assert.equal(stale.length,1,'rejecting a run that the archive names does');
+  assert.deepEqual(stale[0].dropped,[{name:'Ann',rank:2}],'and it names the row that stopped standing');
+});
+
+test('A finalised month from years ago is still checked',async()=>{
+  const w=world();
+  const token=await w.adminToken();
+  const player=await w.join('player@peak.test','Player');
+  const old=w.score(player,'ridge',500,{day:'2023-01-10'});
+  await w.store.saveMonthResults('2023-01',[{game:'ridge',player_id:player.id,score:500,rank:1,winner:true}]);
+  assert.deepEqual((await w.view(token)).body.review.stale,[],'nothing wrong with it yet');
+
+  // No window: a refund or a rejection landing on a long-closed month is still reported, because prizes for
+  // it were sent by hand and somebody has to know.
+  const rejected=await w.act(token,{action:'reject',id:old,note:'Refunded, so it stops counting'});
+  const stale=rejected.body.review.stale;
+  assert.equal(stale.length,1);
+  assert.equal(stale[0].month,'2023-01');
+  assert.equal(stale[0].archivedWinner,'Player');
+  assert.equal(stale[0].liveWinner,null,'nobody is left to win it');
+  assert.equal(w.store.adminEntries.at(-1).details.after_finalise,true,'and the log says it was after finalising');
+});
+
 test('A rejection in a month nobody has finalised raises no banner',async()=>{
   const w=world();
   const token=await w.adminToken();

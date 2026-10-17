@@ -2,7 +2,7 @@ import {isDeepStrictEqual} from 'node:util';
 // The competition API, written against two small interfaces so it can be tested without a network:
 //   auth:  userFromToken(token), createUser(email), sendLink(email, redirectTo)
 //   store: see supabase-store.mjs (memory-store.mjs in the tests implements the same calls)
-import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,cleanMonth,cleanPrize,monthlyStandings,yearlyStandings,gameStandings,podiumMonths,previousMonth,monthResults} from './competition.mjs';
+import {COMPETITION,dayKey,monthKey,yearKey,monthRange,yearRange,seedFor,cleanName,cleanEmail,cleanCode,cleanMonth,cleanPrize,monthlyStandings,yearlyStandings,gameStandings,podiumMonths,previousMonth,monthPodium,monthResults} from './competition.mjs';
 import {AdminLogNotReady,MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
@@ -131,38 +131,60 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     return (await store.finalisedMonths()).includes(month);
   }
 
-  // A finalised month whose archived podium no longer matches the runs.
+  // A finalised month whose published podium no longer stands.
   //
   // Rejecting a score after a month has been finalised deliberately leaves the public podium exactly as it
   // was: somebody has already been told they won, and that is not a thing to undo behind an admin's back. So
   // the month is reported here instead, with who would move up, and the admin decides by clicking Finalise
-  // again. Only the most recent months are compared, which is every month anyone is still reviewing.
-  const STALE_MONTHS=12;
-  const podiumKey=rows=>rows.slice().sort((a,b)=>a.rank-b.rank)
-    .map(r=>`${r.rank}:${r.player_id}:${Number(r.score)||0}:${r.winner?1:0}`).join('|');
+  // again.
+  //
+  // The test is made of stored outcomes only — a run's status and the score it was archived at — and never
+  // puts a run back through today's scoring or ranking code. A podium row is stale when the player it names
+  // no longer has a counting run in that month and game reaching the score it was archived at: something
+  // that counted has stopped counting, which is a rejection or a refund and nothing else. Tie-breaks, the
+  // points table and how many places a podium holds can all change later without marking one past month
+  // stale, which is exactly what would happen if this re-derived each podium and compared it.
+  //
+  // Every finalised month is checked, with no window: two reads however many there are, because month_results
+  // is nine rows a month and the runs come back in one span.
   async function staleFinalised(){
-    const months=(await store.finalisedMonths()).slice(-STALE_MONTHS);
-    const out=[];
-    for(const month of months){
-      const archived=await store.monthResults(month);
-      if(!archived.length)continue;
-      const range=monthRange(month);
-      const live=monthResults(await store.scoredRuns(range.from,range.to),month);
-      for(const game of COMPETITION.games){
-        const was=archived.filter(r=>r.game===game),now=live.filter(r=>r.game===game);
-        if(podiumKey(was)===podiumKey(now))continue;
-        const ranked=new Map(was.map(r=>[r.player_id,r.rank]));
-        const ids=[...new Set([...was,...now].map(r=>r.player_id))];
-        const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
-        const name=id=>people.get(id)?.name??'Player';
-        const winner=rows=>{const w=rows.find(r=>r.winner);return w?name(w.player_id):null;};
-        out.push({month,monthLabel:monthLabel(month),game,gameLabel:gameLabel(game),
-          archivedWinner:winner(was),liveWinner:winner(now),
-          movesUp:now.filter(r=>!ranked.has(r.player_id)||r.rank<ranked.get(r.player_id))
-            .map(r=>({name:name(r.player_id),from:ranked.get(r.player_id)??null,to:r.rank}))});
-      }
+    const archived=await store.allMonthResults();
+    if(!archived.length)return [];
+    const months=[...new Set(archived.map(r=>r.month))].sort();
+    const runs=await store.scoredRuns(`${months[0]}-01`,`${months.at(-1)}-31`);
+    // The best score each player still has counting, per month and game. scoredRuns already leaves out
+    // rejected runs and anything that never scored.
+    const best=new Map();
+    for(const r of runs){
+      const key=`${String(r.day??'').slice(0,7)}|${r.game}|${r.player_id}`;
+      best.set(key,Math.max(best.get(key)??0,Number(r.score)||0));
     }
-    return out;
+    const stands=row=>(best.get(`${row.month}|${row.game}|${row.player_id}`)??0)>=(Number(row.score)||0);
+    const groups=new Map();
+    for(const row of archived){
+      const key=`${row.month}|${row.game}`;
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(row);
+    }
+    const out=[];
+    for(const [key,was] of groups){
+      if(was.every(stands))continue;
+      const [month,game]=key.split('|');
+      // Only now, for a month already known to be stale, is a podium worked out — and only to say who would
+      // move up if an admin re-finalised. Nothing here feeds the decision above.
+      const now=monthPodium(runs.filter(r=>String(r.day??'').slice(0,7)===month),game);
+      const ranked=new Map(was.map(r=>[r.player_id,r.rank]));
+      const ids=[...new Set([...was,...now].map(r=>r.player_id))];
+      const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
+      const name=id=>people.get(id)?.name??'Player';
+      const winner=rows=>{const w=rows.find(r=>r.winner);return w?name(w.player_id):null;};
+      out.push({month,monthLabel:monthLabel(month),game,gameLabel:gameLabel(game),
+        archivedWinner:winner(was),liveWinner:winner(now),
+        dropped:was.filter(r=>!stands(r)).map(r=>({name:name(r.player_id),rank:r.rank})),
+        movesUp:now.filter(r=>!ranked.has(r.player_id)||r.rank<ranked.get(r.player_id))
+          .map(r=>({name:name(r.player_id),from:ranked.get(r.player_id)??null,to:r.rank}))});
+    }
+    return out.sort((a,b)=>a.month.localeCompare(b.month)||a.game.localeCompare(b.game));
   }
 
   // The whole admin page in one object: the money, the runs to review, the invite codes and the admin log.
