@@ -96,6 +96,8 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   // Whether arcade/supabase/admin-log.sql has run. The lists read tables that have always been there, so the
   // page still shows everything without it; only the actions need it, and they say so instead of acting.
   const adminLogReady=async()=>Boolean(await store.adminLogReady?.());
+  // Whether flag-details.sql has run. Without it a flagged run shows the fixed sentence, as it always did.
+  const flagDetailsReady=async()=>Boolean(await store.flagDetailsReady?.());
   // A whole number of uses for an invite code. The schema will not take zero or less.
   const cleanMaxUses=value=>{
     const n=Number(value);
@@ -116,19 +118,51 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       name:people.get(r.player_id)?.name??'Player',email:emails.get(r.player_id)??null,
       flagged:Boolean(r.flagged),status:r.status,counts:r.status!=='rejected',
       reason:r.status==='rejected'?(r.reject_reason||'Rejected.'):FLAG_REASON,
+      claimedScore:r.claimed_score==null?null:Number(r.claimed_score),
+      verifiedScore:r.verified_score==null?null:Number(r.verified_score),
       updatedAt:r.updated_at??null}));
   }
 
-  // A rejection takes a score off the boards. If that month has already been finalised, its archived podium
-  // is written again from the runs as they now stand, which is what "finalise again" does by hand.
-  async function recomputeMonth(day){
+  // Whether a month has been finalised, which is what makes a rejection in it something to report rather
+  // than something to act on.
+  async function isFinalised(day){
     const month=String(day??'').slice(0,7);
-    if(!cleanMonth(month))return null;
-    const finalised=await store.finalisedMonths();
-    if(!finalised.includes(month))return null;
-    const range=monthRange(month);
-    await store.saveMonthResults(month,monthResults(await store.scoredRuns(range.from,range.to),month));
-    return month;
+    if(!cleanMonth(month))return false;
+    return (await store.finalisedMonths()).includes(month);
+  }
+
+  // A finalised month whose archived podium no longer matches the runs.
+  //
+  // Rejecting a score after a month has been finalised deliberately leaves the public podium exactly as it
+  // was: somebody has already been told they won, and that is not a thing to undo behind an admin's back. So
+  // the month is reported here instead, with who would move up, and the admin decides by clicking Finalise
+  // again. Only the most recent months are compared, which is every month anyone is still reviewing.
+  const STALE_MONTHS=12;
+  const podiumKey=rows=>rows.slice().sort((a,b)=>a.rank-b.rank)
+    .map(r=>`${r.rank}:${r.player_id}:${Number(r.score)||0}:${r.winner?1:0}`).join('|');
+  async function staleFinalised(){
+    const months=(await store.finalisedMonths()).slice(-STALE_MONTHS);
+    const out=[];
+    for(const month of months){
+      const archived=await store.monthResults(month);
+      if(!archived.length)continue;
+      const range=monthRange(month);
+      const live=monthResults(await store.scoredRuns(range.from,range.to),month);
+      for(const game of COMPETITION.games){
+        const was=archived.filter(r=>r.game===game),now=live.filter(r=>r.game===game);
+        if(podiumKey(was)===podiumKey(now))continue;
+        const ranked=new Map(was.map(r=>[r.player_id,r.rank]));
+        const ids=[...new Set([...was,...now].map(r=>r.player_id))];
+        const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
+        const name=id=>people.get(id)?.name??'Player';
+        const winner=rows=>{const w=rows.find(r=>r.winner);return w?name(w.player_id):null;};
+        out.push({month,monthLabel:monthLabel(month),game,gameLabel:gameLabel(game),
+          archivedWinner:winner(was),liveWinner:winner(now),
+          movesUp:now.filter(r=>!ranked.has(r.player_id)||r.rank<ranked.get(r.player_id))
+            .map(r=>({name:name(r.player_id),from:ranked.get(r.player_id)??null,to:r.rank}))});
+      }
+    }
+    return out;
   }
 
   // The whole admin page in one object: the money, the runs to review, the invite codes and the admin log.
@@ -140,6 +174,8 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     return {...await coinsView(),
       you:String(session?.user?.email||'').toLowerCase(),
       review:{ready,month,game,state,games:COMPETITION.games.map(g=>({game:g,label:gameLabel(g)})),
+        details:await flagDetailsReady(),
+        stale:await staleFinalised(),
         runs:await reviewRows({month,game,state})},
       invites:{ready,list:await store.listInvites()},
       actions:ready?await store.adminActions({limit:20}):[]};
@@ -289,8 +325,15 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       }
       const done=run.game!=='sequence'||!result.won,score=run.score+result.score;
       const claimed=Number(body?.claimed);
-      const flagged=run.flagged||(Number.isFinite(claimed)&&claimed!==result.score);
-      const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
+      const mismatch=Number.isFinite(claimed)&&claimed!==result.score;
+      const flagged=run.flagged||mismatch;
+      // What the browser claimed against what the replay produced, both as the run's running total so they
+      // compare with each other and with the score on the board. Only written once flag-details.sql has run;
+      // claimed_score only when a claim disagreed, so an honest later segment cannot wipe an earlier gap.
+      const detail=(await flagDetailsReady())
+        ?{verified_score:score,...(mismatch?{claimed_score:run.score+claimed}:{})}
+        :{};
+      const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,...detail,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
       if(!updated){
         const latest=await store.getRun(run.id);
         if(latest?.status!=='rejected'&&(latest?.replays||[]).some(rep=>isDeepStrictEqual(rep,body.replay)))return ok(await finishView(latest,s.player.id));
@@ -433,13 +476,18 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       if(action==='reject'&&!note)return fail(400,'Write a short note saying why it was rejected.');
       if(!(await adminLogReady()))return fail(503,new AdminLogNotReady().message);
       try{
+        // Whether this run sits in a month that has already been published, which the log records and the
+        // page then reports. Read before the change, so a rejection cannot hide where it landed.
+        const existing=await store.getRun(id);
+        const afterFinalise=action==='reject'&&Boolean(existing)&&await isFinalised(existing.day);
         const result=await store.reviewRun(id,{action:action==='reject'?'reject':'clear',
-          note:note??'',adminEmail:String(s.user.email||'').toLowerCase()});
+          note:note??'',adminEmail:String(s.user.email||'').toLowerCase(),afterFinalise});
         if(!result?.found)return fail(404,'That run is not there.');
-        // A rejection takes a score off the boards, so a month that has already been finalised is written
-        // again from the runs as they now stand. Nothing happens for a month nobody has finalised.
-        const recomputed=result.changed?await recomputeMonth(result.run?.day):null;
-        return ok({action,result:{...result,recomputed}});
+        // The archived podium is deliberately left alone: somebody has already been told they won. The page
+        // says the month needs re-finalising and waits for an admin to decide.
+        const needsRefinalise=result.changed&&afterFinalise
+          ?{month:String(result.run?.day??'').slice(0,7),game:result.run?.game??null}:null;
+        return ok({action,result:{...result,needsRefinalise}});
       }catch(error){
         if(error instanceof AdminLogNotReady)return fail(503,error.message);
         throw error;

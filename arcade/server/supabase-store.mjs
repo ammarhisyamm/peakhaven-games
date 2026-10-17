@@ -1,6 +1,6 @@
 // Supabase versions of the store and auth interfaces used by handlers.mjs.
 import {createClient} from '@supabase/supabase-js';
-import {AdminLogNotReady,MonthEndNotReady,tableMissing} from './competition.mjs';
+import {AdminLogNotReady,MonthEndNotReady,columnMissing,tableMissing} from './competition.mjs';
 import {CoinsNotReady,coinsMissing} from './coins.mjs';
 
 export function supabaseEnv(env=process.env){
@@ -150,8 +150,17 @@ export function createSupabaseBackend(env=supabaseEnv()){
       if(error){if(tableMissing(error))return false;throw new Error(error.message);}
       return true;
     },
+    // Whether flag-details.sql has run. Without it the two columns are simply not written or read, and the
+    // admin page falls back to the fixed sentence it showed before.
+    async flagDetailsReady(){
+      const {error}=await admin.from('runs').select('claimed_score',{head:true,count:'exact'});
+      if(error){if(columnMissing(error))return false;throw new Error(error.message);}
+      return true;
+    },
     async runsToReview({from,to,game=null,state=null}){
-      let query=admin.from('runs').select(RUN_FIELDS).gte('day',from).lte('day',to);
+      // The two flag-detail columns can only be selected once their migration has run.
+      const fields=(await this.flagDetailsReady())?`${RUN_FIELDS},claimed_score,verified_score`:RUN_FIELDS;
+      let query=admin.from('runs').select(fields).gte('day',from).lte('day',to);
       if(game)query=query.eq('game',game);
       // Flagged or rejected, which PostgREST cannot express as two filters, so it goes as one or().
       if(state==='rejected')query=query.eq('status','rejected');
@@ -160,7 +169,7 @@ export function createSupabaseBackend(env=supabaseEnv()){
       return must(await query.order('updated_at',{ascending:false}).order('id',{ascending:false}).limit(200)).map(run);
     },
     // Both actions are a conditional update, so a second click changes nothing and writes no second log row.
-    async reviewRun(id,{action,note='',adminEmail=null}){
+    async reviewRun(id,{action,note='',adminEmail=null,afterFinalise=false}){
       if(!/^[0-9a-f-]{36}$/i.test(String(id)))return {found:false};
       const current=run(must(await admin.from('runs').select(RUN_FIELDS).eq('id',id).maybeSingle()));
       if(!current)return {found:false};
@@ -171,7 +180,7 @@ export function createSupabaseBackend(env=supabaseEnv()){
         const updated=await write({status:'rejected',reject_reason:note,flagged:false,updated_at:at,
           finished_at:current.finished_at??at},{status:current.status});
         if(!updated)return {found:true,changed:false,run:current};
-        await writeAdminLog({action:'run_reject',run_id:id,note,details:was,admin_email:adminEmail});
+        await writeAdminLog({action:'run_reject',run_id:id,note,details:{...was,after_finalise:Boolean(afterFinalise)},admin_email:adminEmail});
         return {found:true,changed:true,run:updated};
       }
       if(!current.flagged)return {found:true,changed:false,run:current};

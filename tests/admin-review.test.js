@@ -6,6 +6,11 @@
 // Uses the in-memory store and auth, so no network and no database are involved.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {installStubs,stubCanvas,stubCallbacks,createPlanner} from './ridge-planner.mjs';
+installStubs();
+const {RidgeEngine,RIDGE,hitsVial}=await import('../dist/tryout-games.js');
+const {SIM_STEP}=await import('../dist/rng.js');
+const {reasonLine}=await import('../arcade/ui/admin-review.js');
 const {createHandlers}=await import('../arcade/server/handlers.mjs');
 const {createMemoryStore,createMemoryAuth}=await import('../arcade/server/memory-store.mjs');
 const {AdminLogNotReady}=await import('../arcade/server/competition.mjs');
@@ -18,7 +23,7 @@ function world(start='2026-10-14T01:00:00Z'){
   const store=createMemoryStore({invites:{TEAM:20},now}),auth=createMemoryAuth();
   const api=createHandlers({store,auth,secret:SECRET,now,admins:[ADMIN]});
   let n=0;
-  return {store,auth,api,now,
+  return {store,auth,api,now,advance:s=>{t+=s*1000;},
     async join(email,name){
       const r=await api.join({body:{email,name,code:'TEAM'},origin:'https://example.test'});
       assert.equal(r.status,200,JSON.stringify(r.body));
@@ -34,6 +39,32 @@ function world(start='2026-10-14T01:00:00Z'){
     async adminToken(){await this.join(ADMIN,'Boss');return auth.tokenFor(ADMIN);},
     view(token,query){return api.admin({token,query,method:'GET'});},
     act(token,body){return api.admin({token,body,method:'POST'});}};
+}
+
+// A deployment that has not run arcade/supabase/flag-details.sql: the two columns do not exist, so a write
+// that named them would fail and a read never returns them.
+const withoutFlagDetails=store=>({...store,
+  async flagDetailsReady(){return false;},
+  async updateRunIf(id,segments,patch){
+    const {claimed_score,verified_score,...rest}=patch;
+    return store.updateRunIf(id,segments,rest);
+  },
+  async runsToReview(args){
+    return (await store.runsToReview(args)).map(({claimed_score,verified_score,...run})=>run);
+  }});
+
+// Plays a ridge run out with the bot, then hands back a finish that can claim whatever it likes.
+async function playRidge(api,player,runId,seed){
+  const out=stubCallbacks(),engine=new RidgeEngine(stubCanvas(),out.cb,{seed,motion:false}),bot=createPlanner(RIDGE,hitsVial);
+  engine.action();
+  while(!engine.dead&&!engine.ended&&engine.gatesPassed<4){
+    if(bot.decide(engine))engine.action();
+    for(let i=0;i<bot.every&&!engine.dead;i++)engine.step(SIM_STEP);
+  }
+  engine.finish();engine.destroy();
+  return {played:out.result,ticks:engine.ticks,
+    finish:claimed=>api.finish({token:player.token,body:{runId,replay:out.result.replay,
+      claimed:claimed??out.result.score}})};
 }
 
 // A deployment that has not run arcade/supabase/admin-log.sql.
@@ -144,7 +175,7 @@ test('An unknown run is reported rather than silently doing nothing',async()=>{
   assert.equal((await w.act(token,{action:'clear-flag'})).status,400,'and so is no run at all');
 });
 
-test('Rejecting a run in a finalised month writes that month\'s podium again',async()=>{
+test('Rejecting a run in a finalised month leaves the published podium exactly as it was',async()=>{
   const w=world();
   const token=await w.adminToken();
   const cheat=await w.join('cheat@peak.test','Cheat');
@@ -158,20 +189,100 @@ test('Rejecting a run in a finalised month writes that month\'s podium again',as
 
   const rejected=await w.act(token,{action:'reject',id:cheated,note:'Score does not match the replay'});
   assert.equal(rejected.status,200,JSON.stringify(rejected.body));
-  assert.equal(rejected.body.result.recomputed,'2026-09','the finalised month is worked out again');
+  assert.deepEqual(rejected.body.result.needsRefinalise,{month:'2026-09',game:'ridge'},'it says the month needs re-finalising');
 
+  // Nobody is quietly un-crowned: the archive, and so every board and winner modal, is untouched.
   const after=await w.api.results({token,query:{month:'2026-09'}});
-  assert.deepEqual(after.body.winners.map(r=>r.name),['Honest'],'the podium now reflects the rejection');
+  assert.deepEqual(after.body.winners.map(r=>r.name),['Cheat'],'the published podium is left alone');
+
+  // The admin page says so, and says who would move up.
+  const stale=rejected.body.review.stale;
+  assert.equal(stale.length,1);
+  assert.equal(stale[0].month,'2026-09');
+  assert.equal(stale[0].game,'ridge');
+  assert.equal(stale[0].archivedWinner,'Cheat');
+  assert.equal(stale[0].liveWinner,'Honest');
+  assert.deepEqual(stale[0].movesUp,[{name:'Honest',from:2,to:1}]);
+  // And the log records that it happened after the month was published.
+  assert.equal(w.store.adminEntries.at(-1).details.after_finalise,true);
+
+  // Only a deliberate "Finalise again" moves the podium, and then the banner clears.
+  const again=await w.api.finalise({token,body:{month:'2026-09'}});
+  assert.deepEqual(again.body.winners.map(r=>r.name),['Honest'],'re-finalising promotes the backup');
+  assert.deepEqual((await w.view(token,{month:'2026-09'})).body.review.stale,[],'and the banner goes');
 });
 
-test('A rejection in a month nobody has finalised rewrites nothing',async()=>{
+test('A rejection in a month nobody has finalised raises no banner',async()=>{
   const w=world();
   const token=await w.adminToken();
   const player=await w.join('player@peak.test','Player');
   const runId=w.score(player,'ridge',700,{day:'2026-09-10'});
   const rejected=await w.act(token,{action:'reject',id:runId,note:'Not a real score'});
-  assert.equal(rejected.body.result.recomputed,null);
+  assert.equal(rejected.body.result.needsRefinalise,null);
+  assert.deepEqual(rejected.body.review.stale,[]);
   assert.equal(w.store.results.size,0,'no month was archived by a rejection');
+  assert.equal(w.store.adminEntries.at(-1).details.after_finalise,false);
+});
+
+test('A flagged run keeps what was claimed against what the replay produced',async()=>{
+  const w=world();
+  const token=await w.adminToken();
+  const player=await w.join('player@peak.test','Player');
+  const started=await w.api.start({token:player.token,body:{game:'ridge'}});
+  assert.equal(started.status,200,JSON.stringify(started.body));
+  const run=await playRidge(w.api,player,started.body.runId,started.body.seed);
+  w.advance(run.ticks*SIM_STEP+2);
+
+  const finished=await run.finish(run.played.score+3000);
+  assert.equal(finished.status,200,JSON.stringify(finished.body));
+  assert.equal(finished.body.score,run.played.score,'the verified score is what counts');
+
+  const stored=w.store.runs.get(started.body.runId);
+  assert.equal(stored.flagged,true,'over-claiming flags the run');
+  assert.equal(stored.verified_score,run.played.score);
+  assert.equal(stored.claimed_score,run.played.score+3000);
+
+  const listed=(await w.view(token,{month:'2026-10'})).body.review.runs.find(r=>r.id===started.body.runId);
+  assert.ok(listed,'and it is waiting to be reviewed');
+  assert.equal(listed.verifiedScore,run.played.score);
+  assert.equal(listed.claimedScore,run.played.score+3000);
+  assert.match(reasonLine(listed),/^Claimed [\d,]+ · Verified [\d,]+$/,'the page shows both numbers');
+  assert.equal((await w.view(token)).body.review.details,true);
+});
+
+test('An honest run records what was verified and claims nothing',async()=>{
+  const w=world();
+  const player=await w.join('player@peak.test','Player');
+  const started=await w.api.start({token:player.token,body:{game:'ridge'}});
+  const run=await playRidge(w.api,player,started.body.runId,started.body.seed);
+  w.advance(run.ticks*SIM_STEP+2);
+  await run.finish();
+  const stored=w.store.runs.get(started.body.runId);
+  assert.equal(stored.flagged,false);
+  assert.equal(stored.verified_score,run.played.score,'the verified score is always recorded');
+  assert.equal(stored.claimed_score,null,'and nothing is claimed against an honest run');
+});
+
+test('Without flag-details.sql a run is still flagged and still reviewable',async()=>{
+  const w=world();
+  const api=createHandlers({store:withoutFlagDetails(w.store),auth:w.auth,secret:SECRET,now:w.now,admins:[ADMIN]});
+  await w.join(ADMIN,'Boss');
+  const token=w.auth.tokenFor(ADMIN);
+  const player=await w.join('player@peak.test','Player');
+  const started=await api.start({token:player.token,body:{game:'ridge'}});
+  const run=await playRidge(api,player,started.body.runId,started.body.seed);
+  w.advance(run.ticks*SIM_STEP+2);
+
+  const finished=await run.finish(run.played.score+3000);
+  assert.equal(finished.status,200,JSON.stringify(finished.body),'finishing still works without the columns');
+  assert.equal(w.store.runs.get(started.body.runId).flagged,true,'and the run is still flagged');
+
+  const view=await api.admin({token,query:{month:'2026-10'},method:'GET'});
+  assert.equal(view.body.review.details,false,'the page knows the migration has not run');
+  const listed=view.body.review.runs.find(r=>r.id===started.body.runId);
+  assert.equal(listed.claimedScore,null);
+  assert.equal(listed.verifiedScore,null);
+  assert.match(reasonLine(listed),/did not match/i,'so it shows the sentence it always showed');
 });
 
 test('The review list can be narrowed to one game, or to flagged or rejected',async()=>{

@@ -181,7 +181,9 @@ is verified the same way and nothing on any leaderboard says it was paid for.
 ### Reviewing runs, and invite codes
 
 A run is flagged when the score a browser sent does not match the score its replay produces (`verify.mjs`).
-A flagged run **keeps counting** until somebody decides otherwise, so nobody is disqualified by a glitch.
+A flagged run **keeps counting** until somebody decides otherwise, so nobody is disqualified by a glitch. Both
+numbers are kept with the run, so the page shows "Claimed 12,400 · Verified 9,850" rather than a sentence: a
+run claiming half as much again is a different conversation from one that is out by ten points.
 
 - `/admin.html` (admins only) lists, for a chosen month, every flagged and every rejected run: the player's
   name and email, the game, the score, the day, why it is there, and when it last changed. It can be narrowed
@@ -190,9 +192,11 @@ A flagged run **keeps counting** until somebody decides otherwise, so nobody is 
   and needs a note saying why, which is what the player's row then shows as its reason.
 - Both are conditional on the run not already being in that state, so clicking twice changes nothing and is
   logged once. Every action is written to `admin_log` with the admin's email.
-- Rejecting a score in a month that has **already been finalised** writes that month's podium again from the
-  runs as they now stand, which is what "Finalise again" does by hand. A month nobody has finalised is left
-  alone. The admin page reloads the podium when that happens and says so.
+- Rejecting a score in a month that has **already been finalised** does **not** touch the archived podium.
+  Somebody has already been told they won, so nothing is undone behind an admin's back: the boards and the
+  winner modals stay exactly as they were, and the admin page raises a banner naming the game and the month,
+  saying who would move up, and waiting for a deliberate **Finalise again**. A month nobody has finalised
+  needs none of that, since every unfinalised month is worked out live anyway.
 - **Invite codes**: the same page lists every code with its uses, its limit and its note, creates a code, and
   changes how many times an existing one may be used. Creating a code that already exists leaves it exactly
   as it is, so a second click cannot widen or reword a code that is already out there.
@@ -200,6 +204,12 @@ A flagged run **keeps counting** until somebody decides otherwise, so nobody is 
   is idempotent, and new projects get it from `schema.sql` already. Until it has run the page still lists
   everything, but the buttons are off and say so, because an action that cannot be logged is not worth doing;
   the actions answer 503 naming the file.
+- **Existing projects need a second migration**: run `supabase/flag-details.sql` once in the Supabase SQL
+  editor, for the `claimed_score` and `verified_score` columns on `runs`. Idempotent, and independent of
+  `admin-log.sql` — either order, or one without the other. Until it has run, runs are still flagged, still
+  listed and still reviewable, and the page shows the fixed sentence instead of the numbers.
+- Proof: `node tools/verify-admin-sql.mjs` applies both migrations to a throwaway Postgres on top of the
+  schema as it stands on `origin/main`, twice, in both orders and one without the other. 26 checks.
 - Tests: `tests/admin-review.test.js`.
 
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious

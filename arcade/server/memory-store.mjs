@@ -38,7 +38,8 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
       }
       const t=now().toISOString();
       for(const r of runs.values())if(r.player_id===playerId&&r.game===game&&r.status==='open'){r.status='closed';r.finished_at=t;}
-      const run={request_id:requestId,id:randomUUID(),player_id:playerId,game,day,seed,level:1,segments:0,score:0,status:'open',flagged:false,paid,replays:[],started_at:t,updated_at:t,finished_at:null,reject_reason:null};
+      const run={request_id:requestId,id:randomUUID(),player_id:playerId,game,day,seed,level:1,segments:0,score:0,status:'open',flagged:false,paid,replays:[],started_at:t,updated_at:t,finished_at:null,reject_reason:null,
+        claimed_score:null,verified_score:null};
       runs.set(run.id,run);
       // The coin and the run are one step here, as they are in one transaction in start_run.
       if(paid){players.get(playerId).coins=balance(playerId)-1;log({player_id:playerId,delta:-1,reason:'run',run_id:run.id,note:`Extra try: ${game}`});}
@@ -121,6 +122,7 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     // Reviewing runs and handing out invite codes. admin-log.sql adds the one table the actions below write
     // to; until it has run, adminLogReady() is false and every action is refused rather than made untraceably.
     async adminLogReady(){return true;},
+    async flagDetailsReady(){return true;},
     // Everything worth a second look in one month: the runs a verification flagged, and the ones already
     // rejected, newest change first.
     async runsToReview({from,to,game=null,state=null}){
@@ -133,14 +135,14 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     },
     // Clearing a flag leaves the run counting; rejecting it stops it counting anywhere. Both say whether they
     // actually changed anything, so clicking twice is harmless and only the first click is logged.
-    async reviewRun(id,{action,note='',adminEmail=null}){
+    async reviewRun(id,{action,note='',adminEmail=null,afterFinalise=false}){
       const run=runs.get(id);
       if(!run)return {found:false};
       const t=now().toISOString(),was={game:run.game,day:run.day,score:run.score};
       if(action==='reject'){
         if(run.status==='rejected')return {found:true,changed:false,run:copy(run)};
         Object.assign(run,{status:'rejected',reject_reason:note,flagged:false,updated_at:t,finished_at:run.finished_at??t});
-        writeAdmin({action:'run_reject',run_id:run.id,note,details:was,admin_email:adminEmail});
+        writeAdmin({action:'run_reject',run_id:run.id,note,details:{...was,after_finalise:Boolean(afterFinalise)},admin_email:adminEmail});
         return {found:true,changed:true,run:copy(run)};
       }
       if(!run.flagged)return {found:true,changed:false,run:copy(run)};

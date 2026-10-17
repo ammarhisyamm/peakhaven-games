@@ -29,6 +29,8 @@ create table if not exists public.runs (
   score int not null default 0,
   status text not null default 'open' check (status in ('open','closed','rejected')),
   flagged boolean not null default false,     -- claimed score didn't match the replay: worth a look
+  claimed_score int,                          -- what the browser claimed, when it disagreed; null on an honest run
+  verified_score int,                         -- what the replay actually produced, written on every finish
   reject_reason text,
   replays jsonb not null default '[]'::jsonb,
   started_at timestamptz not null default now(),

@@ -39,8 +39,8 @@ async function act(body){
   if(!r.ok)return say(r.error||'That did not go through.','bad');
   coins=r;
   const message=REVIEW_ACTIONS.includes(r.action)?reviewMessage(r.action,r.result):actionMessage(r.action,r.result);
-  // A rejection in a finalised month rewrites that month's podium, so the rest of the page is read again.
-  if(r.result?.recomputed){await load(month);return say(message,'good');}
+  // Nothing rewrites a finalised podium any more. The action answers with the whole view, so the banner
+  // saying the month needs re-finalising is already on the page by the time this message is shown.
   say(message,'good');
 }
 

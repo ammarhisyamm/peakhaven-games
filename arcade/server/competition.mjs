@@ -55,6 +55,10 @@ export class AdminLogNotReady extends Error{
 // PostgREST reports an absent table either with Postgres' own undefined_table code or, once it has cached the
 // schema, with its own code and a message about the schema cache.
 const MISSING_TABLE=/does not exist|could not find the table|schema cache/i;
+// A column Postgres has never heard of, which is how an un-run column migration shows up: PostgREST reports
+// its own code once the schema is cached, and Postgres' undefined_column before that.
+const MISSING_COLUMN=/column .* does not exist|could not find the .* column/i;
+export const columnMissing=error=>Boolean(error)&&(error.code==='42703'||error.code==='PGRST204'||MISSING_COLUMN.test(String(error.message??'')));
 export const tableMissing=error=>Boolean(error)&&(error.code==='42P01'||error.code==='PGRST205'||MISSING_TABLE.test(String(error.message??'')));
 
 export function pointsForRank(rank){return COMPETITION.points[rank-1]??COMPETITION.minPoints;}

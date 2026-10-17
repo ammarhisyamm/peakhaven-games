@@ -32,6 +32,25 @@ function filters(review,busy){
   </div>`;
 }
 
+// A flagged run says what was claimed against what the replay produced, once flag-details.sql has run. On a
+// deployment it has not reached, both are null and the fixed sentence is shown exactly as before.
+export function reasonLine(run){
+  if(run.status==='rejected')return escape(run.reason);
+  if(run.claimedScore==null||run.verifiedScore==null)return escape(run.reason);
+  return `Claimed ${fmt(run.claimedScore)} · Verified ${fmt(run.verifiedScore)}`;
+}
+
+// A month that was finalised before one of its runs was rejected. The podium everybody can see is left as it
+// was on purpose, so this says what changed and leaves the decision to an admin.
+export function staleBanner(review){
+  if(!review?.stale?.length)return '';
+  return review.stale.map(s=>{
+    const moves=s.movesUp.map(m=>`${escape(m.name)} would move up${m.from?` from ${place(m.from)}`:' onto the podium'} to ${place(m.to)}`).join('. ');
+    return `<p class="admin-note bad stale-month">A run in ${escape(s.gameLabel)} for ${escape(s.monthLabel)} was rejected after finalising, so its archived podium no longer matches the runs. The board still shows ${escape(s.archivedWinner??'nobody')}. ${moves?moves+'. ':''}Review it and click <b>Finalise again</b> for ${escape(s.monthLabel)}.</p>`;
+  }).join('');
+}
+const place=n=>n===1?'1st':n===2?'2nd':n===3?'3rd':`${n}th`;
+
 function runRows(review,busy){
   if(!review.runs.length)return '<p class="admin-hint">Nothing to review in this month.</p>';
   const off=busy||review.ready===false;
@@ -41,7 +60,7 @@ function runRows(review,busy){
     <span class="admin-score">${fmt(r.score)}</span>
     <span class="admin-day">${escape(r.day)}</span>
     <span class="admin-status ${r.status==='rejected'?'rejected':'flagged'}">${r.status==='rejected'?'Rejected · not counting':'Flagged · still counting'}</span>
-    <small class="admin-reason">${escape(r.reason)}</small>
+    <small class="admin-reason">${reasonLine(r)}</small>
     ${r.status==='rejected'?'':`<span class="admin-row-actions">
       <input type="text" class="review-note" data-note="${escape(r.id)}" maxlength="200" placeholder="Why, if rejecting"${off?' disabled':''}>
       ${r.flagged?`<button class="secondary" data-review="${escape(r.id)}" data-action="clear-flag"${off?' disabled':''}>Clear flag</button>`:''}
@@ -91,6 +110,7 @@ export function reviewPanels(view,busy=false){
   return `<section class="panel admin-review"><h2>Runs to review</h2>
       <p>A run is flagged when the score a browser sent does not match the score its replay produces. It keeps counting until somebody decides otherwise.</p>
       ${migrationNotice(view.review.ready)}
+      ${staleBanner(view.review)}
       ${filters(view.review,busy)}
       ${runRows(view.review,busy)}
     </section>
@@ -131,7 +151,8 @@ export function reviewMessage(action,result){
   if(action==='clear-flag')return result?.changed?'Flag cleared. The score keeps counting.':'That run was not flagged.';
   if(action==='reject'){
     if(!result?.changed)return 'That run was already rejected.';
-    return `Run rejected. It no longer counts.${result.recomputed?` ${result.recomputed} was finalised, so its podium has been written again.`:''}`;
+    if(!result.needsRefinalise)return 'Run rejected. It no longer counts.';
+    return `Run rejected. It no longer counts. ${result.needsRefinalise.month} was already finalised, so its podium is unchanged until you click Finalise again.`;
   }
   if(action==='invite-create')return result?.created
     ? `${result.code} created, good for ${fmt(result.max_uses)} use${result.max_uses===1?'':'s'}.`
