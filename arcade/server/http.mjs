@@ -1,6 +1,7 @@
 // Adapts handlers.mjs to Vercel's Node functions: api/<name>.js -> route('<name>').
 import {createHandlers} from './handlers.mjs';
 import {supabaseEnv,createSupabaseBackend} from './supabase-store.mjs';
+import {createPaymentProvider} from './payments.mjs';
 
 let handlers=null;
 function setup(){
@@ -8,10 +9,12 @@ function setup(){
   const env=supabaseEnv();
   if(!env.ready)return null;
   const {store,auth}=createSupabaseBackend(env);
-  handlers=createHandlers({store,auth,secret:env.secret,admins:env.admins});
+  handlers=createHandlers({store,auth,secret:env.secret,admins:env.admins,payments:createPaymentProvider()});
   return handlers;
 }
-const METHODS={join:'POST',me:'GET',profile:'POST',start:'POST',finish:'POST',leaderboard:'GET',results:'GET',finalise:'POST'};
+const METHODS={join:'POST',me:'GET',profile:'POST',start:'POST',finish:'POST',leaderboard:'GET',results:'GET',finalise:'POST',
+  // Paid extra tries: buy is the player asking for a reference to pay; the other three are admin only.
+  buy:'POST',purchases:'GET',purchase:'POST',coins:'POST'};
 
 export function route(name){
   return async function handler(req,res){
