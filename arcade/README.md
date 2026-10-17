@@ -101,7 +101,8 @@ it counts, so a changed client can't post a fake score.
 Environment variables (Vercel, Production and Preview): `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY` (added automatically by the Vercel Supabase integration), `RUN_SEED_SECRET`
 (any long random string; changing it changes every daily course) and `ARCADE_ADMIN_EMAILS` (comma separated;
-these accounts can open `/admin.html` and finalise monthly results).
+these accounts can open `/admin.html`, finalise monthly results and resolve purchases). Paid extra tries add
+`ARCADE_PAYMENT_PROVIDER` and the `ARCADE_PAY_*` details below.
 
 ## End of month
 
@@ -130,6 +131,57 @@ Second and third are archived so last month's podium can be shown, and win nothi
   runners-up, and a winner sees one modal listing every game they topped (once per month, per device).
 - Tests: `tests/month-end.test.js`.
 
+## Paid extra tries
+
+One coin buys one extra run of any ranked game, once that game's three free tries for the day are gone. Free
+tries are always spent first, coins never expire, there is no daily cap, and a paid run is an ordinary run: it
+is verified the same way and nothing on any leaderboard says it was paid for.
+
+- Packs and prices live in `server/coins.mjs`: 1 for A$2.99, 5 for A$9.99, 10 for A$17.99 (the popular one)
+  and 25 for A$29.99. A browser chooses a pack **by its coin count only**; the price is read on the server, so
+  nothing a request sends about money is believed.
+- `server/payments.mjs` is the payment step, one pluggable provider at a time (`ARCADE_PAYMENT_PROVIDER`,
+  default `manual`). **manual** is bank transfer / PayID: the player gets a reference (`PHA-XXXX`, drawn from
+  an alphabet with no 0/O, 1/I/L, 2/Z, 5/S, 8/B or 6/G so it cannot be mistyped), pays it, and an admin marks
+  it paid. **stripe** is a documented stub and the package is deliberately not a dependency yet; the file says
+  exactly what building it involves, and nothing else would have to change.
+- Payment details come from the environment, never the repo: `ARCADE_PAY_ACCOUNT_NAME` and either
+  `ARCADE_PAY_BSB` + `ARCADE_PAY_ACCOUNT_NUMBER` or `ARCADE_PAY_PAYID`, plus an optional one-line
+  `ARCADE_PAY_NOTE`. **Until there is enough to actually pay, the shop is hidden entirely**, so merging this
+  can never show a shop that does not work. Coins already granted can still be spent.
+- `purchases` holds one request per reference with its status (pending, paid, cancelled, refunded).
+  `coin_ledger` holds every coin in and out, and the balance on `players.coins` is a cache of it.
+  `runs.paid` says which runs a coin paid for, and the three free tries are counted on `not paid`.
+- Four database functions do everything that moves a coin, so each is one transaction and each is safe to call
+  twice: `grant_purchase` (idempotent, so a second "Mark paid" grants nothing), `cancel_purchase`,
+  `adjust_coins` (never below zero) and `refund_purchase`. `start_run` gained a seventh argument: once the
+  free tries are gone it spends one coin and creates the run in the same locked step, so two taps with one coin
+  left give exactly one run.
+- A refund takes back whatever of that purchase's coins are **unspent**, and the runs its spent coins paid for
+  are marked `rejected` with `Refunded purchase PHA-XXXX`, which is what keeps them off every board and out
+  of lifetime points. Coins are spent oldest first, so which runs those are is worked out by walking the ledger
+  with a queue of granted coins: `refundPlan` in `server/coins.mjs` and `refund_purchase` in the migration
+  do the same walk, and the tests exercise the JavaScript one.
+- **Existing projects need the migration**: run `supabase/paid-tries.sql` once in the Supabase SQL editor. It
+  is idempotent, and new projects get all of it from `schema.sql` already. Until it has run, the arcade
+  carries on without it — the leaderboard, `/api/me` and the games behave normally, nobody has coins, the shop
+  stays hidden, and the admin page says to run the file. Buying or moving a coin answers 503 naming it.
+- Row Level Security: a player may read their own purchases, their own ledger and their own row (where the
+  balance is cached). Every write goes through the service role and the functions above, and the `anon` and
+  `authenticated` grants on the two new tables are revoked down to `select`.
+- `/admin.html` (admins only) also runs the money: purchases waiting for payment with the player's name,
+  email, pack, amount and age; **Mark paid** (which grants the coins), **Cancel**, **Refund**, and coins given
+  or taken by hand with a required note. Every one of those is logged with the admin's email.
+- Players see the balance on Play and on My Bottle, "Waiting for payment" with the reference until it is
+  resolved, "No free plays left · uses 1 of your N coins" on the game card, and a one-time "+N coins added"
+  message the next time they visit after a payment is matched. With no accounts (a static preview) the shop
+  stays the on-device demo in `dist/play-credits.js`.
+- Tests: `tests/paid-tries.test.js`.
+
+Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
+placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
+then play an extra try.
+
 To reach the admin page locally: `ARCADE_ADMIN_EMAILS=you@example.com npm run dev` and join with that email,
 or join as `admin@dev.test`, which is the default.
 
@@ -142,6 +194,8 @@ Running the competition (Supabase SQL editor):
 insert into public.invites (code, max_uses, note) values ('PEAK-7Q2X', 1, 'for Sam');      -- new invite
 select * from public.runs where flagged or status = 'rejected' order by updated_at desc;     -- review
 select * from public.month_results where month = '2026-09' order by game, rank;              -- last month
+select reference, coins, amount_cents, created_at from public.purchases where status = 'pending';  -- to match
+select name, coins from public.players order by coins desc;                                  -- balances
 ```
 
 ## Temporary guest prototype
