@@ -72,6 +72,13 @@ drop policy if exists coin_ledger_own_read on public.coin_ledger;
 create policy coin_ledger_own_read on public.coin_ledger for select to authenticated using (player_id = auth.uid());
 drop policy if exists players_own_read on public.players;
 create policy players_own_read on public.players for select to authenticated using (id = auth.uid());
+-- The balance is cached on players, and a browser key still holds Postgres' default write grants on that
+-- table: today nothing comes of it, because row-level security has no policy that exposes a row to write, but
+-- that is the only thing standing in the way. A read policy added later for some other reason would be enough
+-- to hand a player their own coins column. So the write grants go, and the service role keeps doing the
+-- writing, which is already the only way /api changes a player.
+revoke insert, update, delete, truncate, references, trigger on public.players from public, anon, authenticated;
+grant select on public.players to authenticated;
 
 -- Marks a purchase paid and grants its coins, once. Safe to call again: a second call changes nothing and
 -- reports granted = false, because the unique index above lets only one grant row exist per purchase.

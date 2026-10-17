@@ -176,7 +176,11 @@ is verified the same way and nothing on any leaderboard says it was paid for.
   resolved, "No free plays left · uses 1 of your N coins" on the game card, and a one-time "+N coins added"
   message the next time they visit after a payment is matched. With no accounts (a static preview) the shop
   stays the on-device demo in `dist/play-credits.js`.
-- Tests: `tests/paid-tries.test.js`.
+- Row Level Security: a player may read their own purchases, their own ledger and their own row (where the
+  balance is cached). Every write goes through the service role, and `anon` and `authenticated` are revoked
+  down to `select` on the two new tables **and on `players`**, so nothing but a service-role call can move a
+  coin even if a policy is added to that table later.
+- Tests: `tests/paid-tries.test.js`, and `tools/verify-sql.mjs` for the SQL itself.
 
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
 placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
@@ -197,6 +201,35 @@ select * from public.month_results where month = '2026-09' order by game, rank; 
 select reference, coins, amount_cents, created_at from public.purchases where status = 'pending';  -- to match
 select name, coins from public.players order by coins desc;                                  -- balances
 ```
+
+## Checking a migration before it is run
+
+`tools/verify-sql.mjs` runs a migration against a real, throwaway Postgres and then exercises what it adds.
+It never touches a live database: by default it starts its own server in a temporary directory and throws it
+away afterwards.
+
+```
+npm i --no-save pg embedded-postgres@15
+node tools/verify-sql.mjs
+```
+
+It builds a stand-in for the live project first — Supabase's `anon`, `authenticated` and `service_role` roles,
+its default privileges on the `public` schema (which is why a new table starts out writable by a browser key,
+and why a migration has to revoke that), an `auth.users` table and an `auth.uid()` that reads a session
+setting — then the production schema **as it is on `origin/main`**, and only then the migration under test.
+
+What it then checks, for `supabase/paid-tries.sql`: that it applies to the live schema and applies a second
+time with no change to the schema at all (compared by a fingerprint of every column, constraint, index, policy,
+function body and grant); the shape of what it added; every function for real, including a double grant, a
+refund's oldest-first attribution and an adjustment that cannot go below zero; a genuine race, with two
+connections calling `start_run` for a player with one coin, repeated 50 times; that neither browser role can
+execute any of the functions; that a signed-in player reads only their own rows and can write nothing; and that
+the deployment works in **both** orders — the old code against a migrated database, and the new code against
+one the migration has not reached.
+
+Useful switches: `PGURL` to use a database you already have (it is dropped and rebuilt), `VERIFY_SQL_ROUNDS`
+for the race, `VERIFY_SQL_KEEP=1` to leave the server up afterwards, and `VERIFY_SQL_MODULES` to point at
+where `pg` and `embedded-postgres` are installed.
 
 ## Temporary guest prototype
 
