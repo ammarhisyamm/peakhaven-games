@@ -198,6 +198,18 @@ select reference, coins, amount_cents, created_at from public.purchases where st
 select name, coins from public.players order by coins desc;                                  -- balances
 ```
 
+## Support address
+
+`support@peakhaven.com.au` lives in one constant, `SUPPORT_EMAIL` in `ui/support.js`, and everything that
+shows it or links to it reads it from there: the "No plays left today" help panel, the bottom of the join and
+sign-in screens, and every sign-in error, which all end with "Still stuck? Email …". It is shown as selectable
+text with a `mailto:` link and a Copy button beside it.
+
+The wording lives in `support.js` too — `withSupport()`, `signInError()` and `linkErrorMessage()` — which
+is what lets the words a player actually reads be tested without a browser. `withSupport()` adds the line
+once and only once, so a wrapper and a caller cannot both append it. A test walks `ui/` and fails if the
+address appears anywhere but that module, so changing it stays a one-line change.
+
 ## Temporary guest prototype
 
 The invite/sign-in screen also offers **Continue as guest** with a player icon.
