@@ -6,6 +6,7 @@ import {initAccount} from './account.js';
 import {withGuestMode} from './guest-mode.js';
 import {BOTTLE_SKINS,bottleUnlocked,pointsForGame} from './bottle-unlocks.js';
 import {PRIZE_FALLBACK,winnerModal} from './month-prizes.js';
+import {supportLine,bindSupport,withSupport,linkErrorMessage} from './support.js';
 const $=s=>document.querySelector(s),main=$('#main'),modal=$('#modal'),gameModal=$('#game-modal'),frame=$('#game-frame');
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const paths={guest:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',gamepad:'<path d="M7 7h10c4 0 6 11 3 12-2 1-4-3-5-3H9c-1 0-3 4-5 3C1 18 3 7 7 7Z"/><path d="M7 10v4m-2-2h4m7-1h.01m2 3h.01"/>',bars:'<path d="M5 20V11m7 9V4m7 16V8"/>',cart:'<path d="M3 3h2l3 12h10l3-9H6M9 20h.01M18 20h.01"/>',arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',chevron:'<path d="m9 5 7 7-7 7"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',check:'<path d="m5 12 4 4L19 6"/>',lock:'<rect x="6" y="10" width="12" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>',edit:'<path d="m15 4 5 5L9 20H4v-5zM13 6l5 5"/>',document:'<path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',crown:'<path d="M4 18h16L18 7l-4 4-2-6-2 6-4-4z"/>'};
@@ -62,7 +63,8 @@ function availableNow(id){return account.enabled?playsLeft(id)+coinsNow():availa
 function openExtraPlays(){
  if(account.enabled){
   if(!shopOpen()){
-   showModal(`<h2 id="modal-title">No plays left today</h2><p>You get 3 free plays of each game every day. They refresh at midnight, Melbourne time.</p><button class="primary" id="extra-done">Got it ${icon('check')}</button>`);
+   showModal(`<h2 id="modal-title">No plays left today</h2><p>You get 3 free plays of each game every day. They refresh at midnight, Melbourne time.</p>${supportLine('modal-support')}<button class="primary" id="extra-done">Got it ${icon('check')}</button>`);
+   bindSupport(modal,toast);
    $('#extra-done').onclick=()=>modal.close();
    return;
   }
@@ -157,8 +159,9 @@ function renderRanks(){
 function renderJoin(){
  const joining=joinTab==='join';
  const fields=joining?[['join-email','Email','email','email'],['join-code','Invite code','text','off'],['join-name','Player name','text','nickname']]:[['join-email','Email','email','email']];
- shell('Welcome','Invite only. Play daily. Climb the ranks.',`<section class="panel join-panel" aria-labelledby="join-title"><h2 id="join-title">${joining?'Join PH Arcade':'Sign in'}</h2><div class="tabs join-tabs" role="tablist" aria-label="Join or sign in">${[['join','I have an invite'],['signin','Sign in']].map(([id,label])=>`<button type="button" role="tab" aria-selected="${joinTab===id}" data-join-tab="${id}">${label}</button>`).join('')}</div><form id="join-form" novalidate>${fields.map(([id,label,type,ac])=>`<div class="name-field"><label for="${id}">${label}</label><div class="name-input"><input id="${id}" name="${id}" type="${type}" autocomplete="${ac}" ${id==='join-code'?'autocapitalize="characters" spellcheck="false"':''} maxlength="${id==='join-name'?24:254}" required></div></div>`).join('')}<p class="join-note${joinError?' error':''}" id="join-note" role="status">${escape(joinNote)}</p><button class="primary" id="join-submit" type="submit">${joining?'Send my sign-in link':'Email me a sign-in link'} ${icon('arrow')}</button></form><div class="guest-entry"><button class="secondary guest-continue" id="continue-as-guest" type="button">${icon('guest')}Continue as guest ${icon('arrow')}</button><p class="join-small">Progress stays on this device.</p></div><p class="join-small">We email you a link to sign in. No password needed. Open the link on the device you want to play on.</p></section>`);
+ shell('Welcome','Invite only. Play daily. Climb the ranks.',`<section class="panel join-panel" aria-labelledby="join-title"><h2 id="join-title">${joining?'Join PH Arcade':'Sign in'}</h2><div class="tabs join-tabs" role="tablist" aria-label="Join or sign in">${[['join','I have an invite'],['signin','Sign in']].map(([id,label])=>`<button type="button" role="tab" aria-selected="${joinTab===id}" data-join-tab="${id}">${label}</button>`).join('')}</div><form id="join-form" novalidate>${fields.map(([id,label,type,ac])=>`<div class="name-field"><label for="${id}">${label}</label><div class="name-input"><input id="${id}" name="${id}" type="${type}" autocomplete="${ac}" ${id==='join-code'?'autocapitalize="characters" spellcheck="false"':''} maxlength="${id==='join-name'?24:254}" required></div></div>`).join('')}<p class="join-note${joinError?' error':''}" id="join-note" role="status">${escape(joinNote)}</p><button class="primary" id="join-submit" type="submit">${joining?'Send my sign-in link':'Email me a sign-in link'} ${icon('arrow')}</button></form><div class="guest-entry"><button class="secondary guest-continue" id="continue-as-guest" type="button">${icon('guest')}Continue as guest ${icon('arrow')}</button><p class="join-small">Progress stays on this device.</p></div><p class="join-small">We email you a link to sign in. No password needed. Open the link on the device you want to play on.</p>${supportLine('join-support')}</section>`);
  $('#continue-as-guest').onclick=()=>{window.phRankedRun=null;account.continueAsGuest();};
+ bindSupport(main,toast);
  const note=(text,error=false)=>{joinNote=text;joinError=error;const el=$('#join-note');el.textContent=text;el.classList.toggle('error',error);};
  main.querySelectorAll('[data-join-tab]').forEach(b=>b.onclick=()=>{joinTab=b.dataset.joinTab;joinNote='';joinError=false;renderJoin();});
  $('#join-form').onsubmit=async e=>{e.preventDefault();const email=$('#join-email').value.trim(),code=$('#join-code')?.value.trim(),name=$('#join-name')?.value.trim();
@@ -168,7 +171,7 @@ function renderJoin(){
   const button=$('#join-submit');button.disabled=true;note('Sending…');
   const r=joining?await account.join(email,code,name):await account.signIn(email);
   if(!button.isConnected)return;button.disabled=false;
-  if(!r.ok)return note(r.error,true);
+  if(!r.ok)return note(withSupport(r.error),true);
   if(account.signedIn())return;
   note(r.existing?'You already have an account, so we sent a sign-in link instead. Check your email.':'Check your email for your sign-in link.');};
 }
@@ -246,7 +249,7 @@ main.addEventListener('click',e=>{if(e.target.closest('[data-rules]'))openRules(
 $('.skip-link').onclick=e=>{e.preventDefault();main.focus();main.scrollIntoView();};
 $('#menu-button').onclick=()=>{showModal(`<h2 id="modal-title">Peak Haven Arcade</h2><nav class="modal-links" aria-label="Menu">${navItems.map(([id,name])=>`<a href="#${id}">${name} ${icon('arrow')}</a>`).join('')}</nav><p style="margin-top:18px">Play. Earn. Win. Your progress stays on this device.</p>`);$('#menu-button').setAttribute('aria-expanded','true');modal.querySelectorAll('a').forEach(a=>a.onclick=()=>modal.close());};modal.addEventListener('close',()=>$('#menu-button').setAttribute('aria-expanded','false'));$('#bag-button').onclick=()=>{location.hash='prizes';};window.addEventListener('hashchange',route);
 if(account.enabled&&account.signedIn())await refreshMe();
-if(account.linkError){joinNote=/expired|invalid/i.test(account.linkError)?'That sign-in link has expired. Ask for a new one below.':account.linkError;joinError=true;joinTab='signin';}
+if(account.linkError){joinNote=linkErrorMessage(account.linkError);joinError=true;joinTab='signin';}
 account.onChange(async()=>{accountRevision++;server=emptyServer();boards={};joinNote='';joinError=false;await refreshMe();route();});
 route();
 

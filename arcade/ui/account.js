@@ -2,6 +2,7 @@ import {requestJSON} from './network.js';
 // Accounts for the competition. Sign-in uses Supabase email links; every competition call goes through /api with
 // the signed-in session's token. Without /api/config (a plain static preview) the arcade runs in demo mode.
 // Supabase's browser bundle is copied in by build.mjs from the pinned npm package.
+import {signInError,withSupport} from './support.js';
 function loadSupabase(){return window.supabase?Promise.resolve(window.supabase):new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='vendor/supabase.js';const timer=setTimeout(()=>{s.remove();reject(new Error('Sign-in could not load'));},15000);s.onload=()=>{clearTimeout(timer);resolve(window.supabase);};s.onerror=()=>{clearTimeout(timer);reject(new Error('Sign-in could not load'));};document.head.append(s);});}
 
 export async function initAccount(){
@@ -41,9 +42,9 @@ export async function initAccount(){
   }
   async function signIn(email){
     if(cfg.dev){const r=await api('dev-login',{body:{email}});if(r.ok)setDevToken(r.devToken);return r;}
-    let error;try{({error}=await supabase.auth.signInWithOtp({email:String(email).trim().toLowerCase(),options:{shouldCreateUser:false,emailRedirectTo:`${location.origin}${location.pathname}`}}));}catch{return {ok:false,error:'Sign-in could not connect. Please try again.'};}
+    let error;try{({error}=await supabase.auth.signInWithOtp({email:String(email).trim().toLowerCase(),options:{shouldCreateUser:false,emailRedirectTo:`${location.origin}${location.pathname}`}}));}catch{return {ok:false,error:withSupport('Sign-in could not connect. Please try again.')};}
     if(!error)return {ok:true,sent:true};
-    return {ok:false,error:/signups not allowed|not found|otp_disabled/i.test(error.message)?'No account uses that email yet. Join with your invite code.':/rate|seconds/i.test(error.message)?'Please wait a minute before asking for another link.':error.message};
+    return {ok:false,error:signInError(error.message)};
   }
   function setDevToken(value){devToken=value;try{value?localStorage.setItem('ph-dev-token',value):localStorage.removeItem('ph-dev-token');}catch{}notify();}
   async function signOut(tell=true){if(cfg.dev)setDevToken(null);else{await supabase.auth.signOut().catch(()=>{});session=null;if(tell)notify();else notify();}}
