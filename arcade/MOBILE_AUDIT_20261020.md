@@ -231,3 +231,70 @@ rather than an error.
 **CHOICEs for Billy:** 2, 8, 9, 11, 12, 13, 14, 15, 19.
 
 **Verified clean, do not re-open:** 3, 10, 16, 17, 20, 22, 23.
+
+---
+
+# Pass 2 — 20 October 2026
+
+Billy's answers to the CHOICE list, and what each turned into. Re-measured at 320x568, 360x640,
+390x844, 430x932 and 844x390 afterwards: every page clean — no horizontal scroll, nothing clipped,
+nothing under 12px, no touch target under 44px.
+
+**First load: 1062KB -> 253KB.**
+
+| Finding | Answer | Outcome |
+| --- | --- | --- |
+| 2 landscape | no layout; notice instead | "Turn your phone upright", game paused, run untouched |
+| 8 touch targets | raise all eight | done, via hit-area pseudo-elements so nothing moved |
+| 9 board cells | leave at 38px | unchanged |
+| 11 keyboard | scroll-margin | done |
+| 12 invite code | autocapitalize + server case | **both were already correct** — see below |
+| 13 text sizes | 12px / 14px floors | 96 declarations raised; knock-on fixes below |
+| 14 font | subset to woff2 | 856KB -> 37KB (95.7%), full TTF kept as fallback |
+| 15 images | re-encode to WebP | 7606KB -> 2523KB across 13 files, originals kept |
+| 19 manifest | add it | added; **iOS deliberately not switched to standalone** — see below |
+
+## Corrections to pass 1
+
+**Finding 12 was half wrong, and the error was mine.** I wrote that the invite-code field had "no
+`inputmode` or `autocapitalize`". The `inputmode` half is true. The `autocapitalize` half was not: the
+field has carried `autocapitalize="characters" spellcheck="false"` since the original arcade commit,
+and it is in `origin/main`. I measured `autocomplete` and `inputmode` in the audit sweep and asserted
+`autocapitalize` without checking it. Nothing was needed here.
+
+Server-side case matching was also already correct: `cleanCode` upper-cases before any lookup, and
+every stored code is created through the same helper, so a code typed in lower case has always
+matched. Both halves are now pinned by a test rather than left to be rediscovered.
+
+## What the text floors knocked over
+
+Raising 96 declarations to 12px/14px broke two layouts, which is exactly why the re-check was worth
+doing:
+
+- The prize cards sit two-up and are **132px wide at 320px**. At the new floor "MONTHLY WINNER" needs
+  129px on one line and was being clipped, and the text column pushed 11px past the viewport. The
+  prize row is now one card per row on phones, and the letter-spaced caps wrap instead of clipping.
+- `.your-rank small` was cut off at 320px; it wraps now.
+
+The one font size the mechanical pass could not see was `.daily-game-copy>p span`, which is `.84em`
+rather than a pixel value. It is `max(12px,.84em)` now.
+
+## Sign-in and the installed app
+
+Sign-in is a Supabase magic link (`signInWithOtp` with `emailRedirectTo`). **On iOS, a link opened
+from Mail goes to Safari, not to an installed standalone app, and the two do not share a session**, so
+an installed player would never get signed in. The manifest therefore ships with `display:standalone`
+for Android — where Chrome captures in-scope links into the installed app — and iOS is deliberately
+left in Safari: there is no `apple-mobile-web-app-capable`. Switching it on is one line once sign-in
+can complete inside the app. Options are in the PR.
+
+## Build and tooling
+
+The font subsetting, the icons and the WebP encoding are `tools/*.mjs` scripts that are run by hand
+and whose output is committed. They are not part of `npm run build` on purpose: Vercel runs
+`node build.mjs` on every deploy, on a machine with no uv, no fonttools and no Pillow, so a build step
+that needed them would be a deploy that can fail on a toolchain problem. `tests/mobile-pass-2.test.js`
+fails if any generated file goes missing or stops matching its source, so a stale asset is caught in
+CI rather than shipped.
+
+![WebP against the original](audit-assets/webp-comparison.jpg)
