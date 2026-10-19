@@ -25,21 +25,26 @@ function replayClock(rep,inputs){
 
 export async function replayRidge(rep){
   installStubs();
-  if(rep?.game!=='ridge'||(rep.v!==4&&rep.v!==5)||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
+  if(rep?.game!=='ridge'||![4,5,6].includes(rep.v)||rep.step!==SIM_STEP)throw new Error('Not a Ridge Run replay for this build');
   replayClock(rep,rep.taps);replayClock(rep,rep.resumes??[]);
+  if(rep.v===6){replayClock(rep,rep.revives??[]);if((rep.revives??[]).length>1)throw new Error('Only one revive per run');}
+  else if(rep.revives?.length)throw new Error('This course has no revive');
   const {RidgeEngine}=await import('../dist/tryout-games.js');
   // The course runs in fixed world units, so the screen size doesn't matter here.
-  const e=new RidgeEngine(stubCanvas([480,720]),collector().cb,{seed:rep.seed,motion:false,version:rep.v});
-  const taps=[...rep.taps],resumes=[...(rep.resumes||[])],stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
+  const cb=collector().cb;if(rep.v===6)cb.revive=noop;
+  const e=new RidgeEngine(stubCanvas([480,720]),cb,{seed:rep.seed,motion:false,version:rep.v});
+  const taps=[...rep.taps],resumes=[...(rep.resumes||[])],revives=[...(rep.revives||[])];let rejected=0;const stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
   for(let i=1;i<taps.length;i++)if(taps[i]<taps[i-1])throw new Error('Taps out of order');
   while(!e.ended){
+    while(revives.length&&revives[0]===e.ticks){revives.shift();if(!e.revive())rejected++;}
     while(resumes.length&&resumes[0]===e.ticks){resumes.shift();e.pause(true);e.pause(false);}
-    while(taps.length&&taps[0]===e.ticks){taps.shift();e.action();}
+    while(taps.length&&taps[0]===e.ticks){taps.shift();const before=e.inputs.length;e.action();if(rep.v===6&&e.inputs.length===before)rejected++;}
     if(e.ticks>=stop)break;
     e.step(SIM_STEP);
   }
+  if(rep.v===6&&!e.ended)e.finish();
   e.destroy();
-  return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length+resumes.length};
+  return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length+resumes.length+revives.length+rejected};
 }
 
 export async function replayBond(rep){

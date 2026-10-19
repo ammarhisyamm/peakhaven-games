@@ -137,7 +137,7 @@ test('Three plays per game per Melbourne day, then none until tomorrow',async()=
 test('A Ridge Run score counts only after the server replays it',async()=>{
   const w=world(),t=await w.join('a@x.com','Ann');
   const s=await w.api.start({token:t,body:{game:'ridge'}});
-  assert.equal(s.body.seed,seedFor(SECRET,'ridge',dayKey(w.now())),'the run gets today\'s shared course');
+  assert.equal(s.body.seed,seedFor(SECRET,'ridge-v6',dayKey(w.now())),'the run gets today\'s shared course');
   const run=ridgeReplay(s.body.seed);assert.ok(run.score>0);
   w.advance(run.seconds+2);
   const f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay,claimed:run.score}});

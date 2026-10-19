@@ -245,7 +245,10 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
    if(run.seed===seedFor(secret,'sequence-v2',run.day,1))return 2;
    return 1;
   };
+  const ridgeVersion=run=>run.seed===seedFor(secret,'ridge-v6',run.day,1)?6:5;
+  const runVersion=run=>run.game==='ridge'?ridgeVersion(run):sequenceVersion(run);
   const courseGame=run=>{
+   if(run.game==='ridge'&&ridgeVersion(run)===6)return 'ridge-v6';
    if(run.game!=='sequence')return run.game;
    const version=sequenceVersion(run);
    return version===1?'sequence':`sequence-v${version}`;
@@ -316,13 +319,13 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       const game=body?.game;if(!COMPETITION.games.includes(game))return fail(400,'That game is not in the competition.');
       const requestId=body?.requestId??null;
       if(requestId!==null&&(typeof requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)))return fail(400,'Invalid start request. Please reopen the game.');
-      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v3':game,day,1);
+      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v3':game==='ridge'?'ridge-v6':game,day,1);
       // Free tries first, then a coin if there is one. The store spends the coin and creates the run in one
       // step, so two taps with one coin left can only make one run.
       const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId,allowPaid:await coinsReady()});
       if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id),shop:await shopReady()});
       if(run.game!==game||run.status!=='open'||run.segments>0)return fail(409,'This run has already been played. Please start a new one.');
-      return ok({runId:run.id,game,seed:run.seed,level:1,rulesVersion:sequenceVersion(run),paid:Boolean(run.paid),plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id)});
+      return ok({runId:run.id,game,seed:run.seed,level:1,rulesVersion:runVersion(run),paid:Boolean(run.paid),plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id)});
     },
 
     // Receives one finished game (or, in Sequence, one finished level), replays it, and adds the verified score.
@@ -339,7 +342,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       if(run.game!=='sequence'&&run.segments>0)return fail(409,'This run is already finished.');
       const at=now(),elapsedSeconds=(at-Date.parse(run.updated_at))/1000;
       let result;
-      try{result=await verifySegment({game:run.game,replay:body?.replay,seed:seedFor(secret,courseGame(run),run.day,level),level,elapsedSeconds,rulesVersion:sequenceVersion(run)});}
+      try{result=await verifySegment({game:run.game,replay:body?.replay,seed:seedFor(secret,courseGame(run),run.day,level),level,elapsedSeconds,rulesVersion:runVersion(run)});}
       catch(error){
         if(!(error instanceof RejectedRun))throw error;
         await store.updateRunIf(run.id,run.segments,{status:'rejected',reject_reason:error.message,updated_at:at.toISOString(),finished_at:at.toISOString()});

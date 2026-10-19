@@ -34,7 +34,7 @@ test('every game and the menus have a sound for every event they use, and every 
 test('a failed download falls back to the synth and is retried next time',async()=>{
  let fail=true;const realFetch=globalThis.fetch;globalThis.fetch=async()=>fail?{ok:false}:{ok:true,arrayBuffer:async()=>new ArrayBuffer(4)};
  const audio=new GameAudio(()=>true);audio.prepare();await flush();
- assert.equal(audio.play('ridge','flap'),false,'the caller plays its synthesised fallback');
+ assert.equal(audio.play('ridge','flap'),true,'the same AudioContext supplies the fallback');
  fail=false;await flush();audio.prepare();await flush();
  const before=starts.length;assert.equal(audio.play('ridge','flap'),true);await flush();assert.equal(starts.length,before+1);
  globalThis.fetch=realFetch;
