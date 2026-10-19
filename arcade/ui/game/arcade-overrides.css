@@ -164,6 +164,11 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 /* Keep the hand readable without letting a tall piece move the board. */
 .in-game .scene-blocks .shape-preview{--tray-cell:clamp(13px,calc((min(100vw,480px) - 92px)/17),21px);grid-template-columns:repeat(var(--cols),var(--tray-cell));grid-template-rows:repeat(var(--rows),var(--tray-cell))}
 .in-game .scene-blocks .shape-preview i{width:var(--tray-cell);height:var(--tray-cell)}
+/* ...but the piece being dragged is not a tray piece: it is a preview of what will land, so it takes
+   the board cell the engine measured. This rule has to sit after the tray rule above, which would
+   otherwise pin the dragged copy to the small tray scale. */
+.in-game .scene-blocks .shape-preview.block-drag-preview{--tray-cell:var(--cell);grid-template-columns:repeat(var(--cols),var(--cell));grid-template-rows:repeat(var(--rows),var(--cell))}
+.in-game .scene-blocks .shape-preview.block-drag-preview i{width:var(--cell);height:var(--cell)}
 @media(max-height:700px){
  .sequence-goal-list{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
  .sequence-goal-list:has(>.sequence-goal:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
