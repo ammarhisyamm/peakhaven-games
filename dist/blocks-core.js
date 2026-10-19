@@ -89,13 +89,16 @@ export function blocksAssist(g,{bomb=false,ended=false}={}){
   return {mode:'stuck',title:'No space left! Use a tool',text:names?`Tap ${names} below to make room.`:'No tools left.',suggest};
 }
 // Where a dragged piece is drawn and which square it would land on. Pure geometry, kept out of the
-// drag handler so the feel is covered by tests with no browser. `lift` is how far the BOTTOM of the
-// piece floats above the pointer, measured in board cells, so a tall piece rides as high as a short
-// one instead of further; the piece is centred horizontally on the pointer.
-export const BLOCK_LIFT=Object.freeze({touch:1.8,mouse:.8});
-export function dragLanding({x,y,cols,rows,lift=0,cell,step,left:boardLeft,top:boardTop}){
+// drag handler so the feel is covered by tests with no browser. The piece is always centred
+// horizontally on the pointer; vertically, `grip` says how far down the piece the pointer sits
+// (1 = its bottom edge, .5 = its middle) and `lift` then floats it that many board cells higher.
+// A finger needs the whole piece above it to see it at all; a cursor hides nothing, so it holds the
+// piece in the middle, where what you point at is what you are moving.
+export const BLOCK_LIFT=Object.freeze({touch:1.8,mouse:0});
+export const BLOCK_GRIP=Object.freeze({touch:1,mouse:.5});
+export function dragLanding({x,y,cols,rows,lift=0,grip=1,cell,step,left:boardLeft,top:boardTop}){
   const width=cols*step-(step-cell),height=rows*step-(step-cell);
-  const left=x-width/2,top=y-lift*cell-height;
+  const left=x-width/2,top=y-lift*cell-height*grip;
   // Math.round hands back -0 just above the top-left corner; adding zero keeps the index a plain 0.
   const square=n=>Math.round(n)+0;
   return {left,top,width,height,r:square((top-boardTop)/step),c:square((left-boardLeft)/step)};

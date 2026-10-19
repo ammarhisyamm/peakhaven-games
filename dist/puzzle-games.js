@@ -1,4 +1,4 @@
-import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit,dragLanding,BLOCK_LIFT} from './blocks-core.js';
+import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit,dragLanding,BLOCK_LIFT,BLOCK_GRIP} from './blocks-core.js';
 import {makeSeed} from './rng.js';
 import {SHAPES,emptyGrid,tileLayout,tileRows,fits,placements,placeBlock,makeTray,bombGrid,dealTiles,freeTile,matchTiles,tileHint} from './puzzle-rules.js';
 const symbols=['Blue vial','Pink vial','Gold vial','Purple vial','Green vial','Blue crystal','Pink crystal','Gold crystal','Green crystal'];
@@ -64,12 +64,12 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
   points.animate(motion?[{transform:'translate(-50%,-30%) scale(.6)',opacity:0},{transform:'translate(-50%,-80%) scale(1.15)',opacity:1,offset:.2},{transform:'translate(-50%,-150%) scale(1)',opacity:1,offset:.7},{transform:'translate(-50%,-210%) scale(1)',opacity:0}]:[{transform:'translate(-50%,-50%)',opacity:1},{transform:'translate(-50%,-50%)',opacity:0}],{duration:1100,easing:'ease-out',fill:'both'}).onfinish=()=>points.remove();
  }
  // Dragging works like Lattice in the tryout arcade: the piece lifts at full board size the moment it is
- // touched and snaps to the nearest cells. On touch it floats centred about 1.75 cells above the finger so
+ // touched and snaps to the nearest cells. On touch it floats centred 1.8 cells above the finger so
  // the thumb never hides it; with a mouse or pen it sits centred on the pointer. The landing spot and any lines it would clear light up; an invalid drop goes back to the tray.
  // A tap without moving still selects the piece, and keyboard play is unchanged.
- // Block Blast's drag: the piece you hold is the piece that lands, at board size, floating clear of
- // the pointer so your hand never covers it. A finger needs the whole piece clear of it; a cursor only
- // needs to not sit on top of the piece, so BLOCK_LIFT lifts the two by different amounts.
+ // Block Blast's drag: the piece you hold is the piece that lands, at board size. A finger covers the
+ // board, so on touch the piece floats clear above it; a cursor covers nothing, so it sits in the middle
+ // of the piece. BLOCK_GRIP and BLOCK_LIFT hold that difference.
  const TAP_SLOP=6,RETURN_MS=160;
  let drag=null,dragArt=null,suppressClick=false,dragFrame=0;
  const buzz=ms=>{try{navigator.vibrate?.(ms);}catch{}};
@@ -91,7 +91,7 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
  function paintDrag(){dragFrame=0;if(!drag||!dragArt)return;
   const p=state.tray[drag.index];if(!p)return;
   const cols=Math.max(...p.shape.map(s=>s[0]))+1,rows=Math.max(...p.shape.map(s=>s[1]))+1;
-  const {left,top,r,c}=dragLanding({x:drag.clientX,y:drag.clientY,cols,rows,lift:drag.lift,...drag.metrics});
+  const {left,top,r,c}=dragLanding({x:drag.clientX,y:drag.clientY,cols,rows,lift:drag.lift,grip:drag.grip,...drag.metrics});
   dragArt.style.translate=`${Math.round(left)}px ${Math.round(top)}px`;
   const valid=fits(state.grid,p.shape,r,c);
   if(r!==drag.r||c!==drag.c||valid!==drag.valid){
@@ -115,7 +115,8 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
    .finished.catch(()=>{}).then(()=>{art.remove();tray.querySelector('.lifted')?.classList.remove('lifted');});}
  const dragDown=e=>{const slot=e.target.closest('[data-shape]');if(drag||bombPointer||locked()||e.isPrimary===false||(e.button!==undefined&&e.button!==0)||!slot||!state.tray[slot.dataset.shape])return;
   drag={pointerId:e.pointerId,index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false,
-   lift:e.pointerType==='touch'?BLOCK_LIFT.touch:BLOCK_LIFT.mouse,metrics:boardMetrics(),r:null,c:null,valid:null};
+   lift:e.pointerType==='touch'?BLOCK_LIFT.touch:BLOCK_LIFT.mouse,grip:e.pointerType==='touch'?BLOCK_GRIP.touch:BLOCK_GRIP.mouse,
+   metrics:boardMetrics(),r:null,c:null,valid:null};
   tray.setPointerCapture?.(e.pointerId);
   state.selected=drag.index;bomb=false;hintCells=[];liftPiece();follow(e);paintDrag();cb.sound('select');};
  const dragMove=e=>{if(!drag||e.pointerId!==drag.pointerId||locked())return;if(!drag.moving&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>=TAP_SLOP)drag.moving=true;follow(e);};
