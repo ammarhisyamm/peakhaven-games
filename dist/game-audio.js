@@ -16,17 +16,19 @@ const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{select:'b
 export function cueFor(game,event){const name=overrides[game]?.[event]??event,cue=cues[name];return cue?{...cue,rate:(cue.rate||1)*(cue.own?1:pitch[game]||1)}:null;}
 const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12]};
 export class GameAudio{
- constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;this.resuming=null;}
+ constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;}
  wake(){
   const ctx=this.context;if(!ctx||ctx.state==='running')return Promise.resolve();
-  if(!this.resuming){try{this.resuming=Promise.resolve(ctx.resume()).catch(()=>{}).finally(()=>{this.resuming=null;});}catch{return Promise.resolve();}}
-  return this.resuming;
+  // A resume requested before user activation can remain pending. Always make a
+  // fresh attempt in the current gesture; reusing that old promise traps Safari.
+  try{return Promise.resolve(ctx.resume()).catch(()=>{});}catch{return Promise.resolve();}
  }
+
  prepare(){
   if(!this.enabled())return;
   try{
    if(!this.context||this.context.state==='closed'){
-    this.generation++;this.context=new(window.AudioContext||window.webkitAudioContext)();this.buffers.clear();this.decoded.clear();this.resuming=null;
+    this.generation++;this.context=new(window.AudioContext||window.webkitAudioContext)();this.buffers.clear();this.decoded.clear();
    }
    this.wake();const ctx=this.context;
    for(const file of files)if(!this.buffers.has(file)){

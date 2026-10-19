@@ -36,3 +36,10 @@ test('a closed context can be recreated without losing the saved sound preferenc
 test('Undo and Shuffle use different samples, not merely different volumes',()=>{
  assert.notEqual(cueFor('blocks','undo').file,cueFor('blocks','shuffle').file);
 });
+
+test('a resume blocked before the first gesture cannot trap later gesture activation',async()=>{
+ const h=harness();let userGesture=false;
+ const Original=window.AudioContext;window.AudioContext=class extends Original{resume(){if(!userGesture)return new Promise(()=>{});this.state='running';return Promise.resolve();}};
+ const audio=new GameAudio(()=>true);audio.context=new window.AudioContext();audio.context.state='suspended';audio.prepare();await flush();assert.equal(h.starts.length,0);
+ userGesture=true;audio.play('blocks','drop');await flush();assert.equal(h.starts.length,1);assert.equal(h.starts[0].type,'sample');
+});

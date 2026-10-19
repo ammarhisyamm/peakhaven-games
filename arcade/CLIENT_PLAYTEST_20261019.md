@@ -5,7 +5,7 @@ Applies to production Peak Blocks, Sequence and Ridge Run, on top of main f28be2
 ## Peak Blocks
 
 - Retains the existing pick/place/clear recordings and valid-placement/line-clear preview and Hint mechanics.
-- Audio now waits for a suspended/interrupted mobile AudioContext to resume, recovers after a closed context and uses a same-context synth if a sample fails or takes over 90ms. Muting, leaving and hiding the page invalidate pending cues; decoded samples remain cached. Undo uses the descending whoosh; Shuffle uses a separate swish sample.
+- Audio now waits for a suspended/interrupted mobile AudioContext to resume, retries activation in each new user gesture, recovers after a closed context and uses a same-context synth if a sample fails or takes over 90ms. Muting, leaving and hiding the page invalidate pending cues; decoded samples remain cached. Undo uses the descending whoosh; Shuffle uses a separate swish sample.
 - A blocked hand gets a persistent, large `No pieces fit` notice beside the tool dock, with the usable rescue tools outlined. Their brief attention animation runs three times and is static with reduced motion. Hint is not falsely advertised as a way to clear an already blocked board.
 - Bomb can be dragged like a piece or selected then applied with a tap/keyboard. The full 3×3 footprint and its centre are visible; the active tool and a persistent instruction identify bomb mode. Touch lifts the preview above the finger. Invalid drops, cancellation, blur and pause do not spend a use; pause cancels targeting.
 - Shuffle animates all three new pieces for 240ms with a short stagger. This is visual only and does not change deal randomness or replays.
@@ -32,7 +32,7 @@ Applies to production Peak Blocks, Sequence and Ridge Run, on top of main f28be2
 
 ## Validation
 
-- `npm test`: **277 passed, 0 failed**, covering rules, replays, accounts, payments, admin, Sequence and regressions.
+- `npm test`: **278 passed, 0 failed**, covering rules, replays, accounts, payments, admin, Sequence and regressions.
 - New audio tests exercise delayed resume, interruption, failed/slow downloads, muted queues and closed contexts.
 - New Ridge tests exercise milestone boundaries, bounded difficulty, single revive/second crash, replay parity, forged revives and legacy downgrade rejection. Reachability is carried through 350 gates for 24 seeds (all six difficulty steps).
 - `tools/client-feedback-ui.cjs`: **Chromium and WebKit passed**, with real blocked-hand recovery, nine-cell bomb drop with exact clearing, invalid/cancelled mouse and touch gestures, shuffle motion, pause, instructions and a real ranked iframe revive → server-verified result.
