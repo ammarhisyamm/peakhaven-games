@@ -89,3 +89,14 @@ export function sequenceCascade(board,rng=Math.random,palette=SEQUENCE_TYPES,sco
   }
   return {board:next,gained,chain};
 }
+
+// How big the Sequence board can be, given what the top bar and the bottom guide actually measured.
+// The board is square, so it can only be as large as the narrower of the two: the width it is allowed,
+// and the height left between them. `slack` and `limitedBy` say which of the two is holding it back, so
+// the layout can be checked without a screenshot.
+export const BOARD_GUTTER=12,BOARD_MAX=620,BOARD_MIN=70;
+export function boardFit({width,height,top,bottom,gutter=BOARD_GUTTER,max=BOARD_MAX}){
+  const room=Math.max(0,height-top-bottom),across=Math.max(0,width-gutter*2);
+  const size=Math.max(BOARD_MIN,Math.min(across,room,max));
+  return {size,room,across,slack:Math.max(0,room-size),limitedBy:size>=max?"max":across<=room?"width":"height"};
+}
