@@ -87,7 +87,7 @@ test('The app icons are square, so iOS has nothing to stretch',()=>{
 });
 
 test('The manifest is installable and points at icons that exist',()=>{
-  const m=JSON.parse(read('arcade/ui/manifest.webmanifest'));
+  const m=JSON.parse(read('arcade/ui/manifest-app.webmanifest'));
   assert.ok(m.name&&m.short_name,'an installed app needs a name');
   assert.equal(m.display,'standalone');
   assert.ok(m.theme_color&&m.background_color);
@@ -101,6 +101,57 @@ test('The manifest is installable and points at icons that exist',()=>{
   // Safari where the link works.
   assert.doesNotMatch(read('arcade/ui/index.html'),/apple-mobile-web-app-capable/,
     'do not switch iOS to standalone while sign-in is a magic link');
+});
+
+test('iOS is never served a standalone manifest',async()=>{
+  const {isApple,wantsStandaloneManifest,STANDALONE_MANIFEST}=await import('../arcade/ui/standalone.js');
+  // Safari has honoured the manifest's own display field for Home Screen installs since iOS 11.3,
+  // and apple-mobile-web-app-capable has been optional since the same version. So shipping
+  // display:standalone to an iPhone is enough on its own to create a Home Screen app that cannot
+  // complete a magic-link sign-in. The meta tag being absent proves nothing.
+  const APPLE=[
+    ['iPhone 15, iOS 17',{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',maxTouchPoints:5,platform:'iPhone'}],
+    ['iPhone, iOS 11.3',{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1 Mobile/15E148 Safari/604.1',maxTouchPoints:5,platform:'iPhone'}],
+    ['iPad, iPadOS 17 desktop mode',{userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',maxTouchPoints:5,platform:'MacIntel'}],
+    ['iPad, classic UA',{userAgent:'Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',maxTouchPoints:5,platform:'iPad'}],
+    ['Chrome on iOS, which is Safari underneath',{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/122.0 Mobile/15E148 Safari/604.1',maxTouchPoints:5,platform:'iPhone'}],
+  ];
+  for(const [name,env] of APPLE){
+    assert.equal(isApple(env),true,`${name} should be recognised as Apple`);
+    assert.equal(wantsStandaloneManifest(env),false,`${name} must keep the browser manifest`);
+  }
+  const OTHER=[
+    ['Android Chrome',{userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',maxTouchPoints:5,platform:'Linux armv8l'}],
+    ['desktop Chrome',{userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',maxTouchPoints:0,platform:'Win32'}],
+    ['desktop Safari on a real Mac',{userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',maxTouchPoints:0,platform:'MacIntel'}],
+  ];
+  for(const [name,env] of OTHER)
+    assert.equal(wantsStandaloneManifest(env),true,`${name} may have the standalone manifest`);
+
+  // The default served to everyone is the safe one: if the swap never runs, nobody is stranded.
+  assert.equal(JSON.parse(read('arcade/ui/manifest.webmanifest')).display,'browser',
+    'the manifest in the HTML must be the browser one');
+  assert.equal(JSON.parse(read('arcade/ui/manifest-app.webmanifest')).display,'standalone');
+  assert.match(read('arcade/ui/index.html'),/rel="manifest" href="manifest.webmanifest"/,
+    'the HTML must link the browser manifest, not the standalone one');
+  assert.ok(!read('arcade/ui/index.html').includes(STANDALONE_MANIFEST),
+    'the standalone manifest must never be reachable without the JS gate');
+});
+
+test('An unrecognised browser keeps the safe manifest',async()=>{
+  const {wantsStandaloneManifest,applyStandaloneManifest}=await import('../arcade/ui/standalone.js');
+  // Unknown is not a licence, but it is also not Apple, so it may install. What must never happen is
+  // the swap running with no document or navigator to read.
+  assert.equal(applyStandaloneManifest(null,null),false);
+  assert.equal(applyStandaloneManifest({querySelector:()=>null},{userAgent:'Android',maxTouchPoints:5}),false,
+    'no manifest link means nothing to upgrade');
+  let href='manifest.webmanifest';
+  const link={get href(){return href;},set href(v){href=v;}};
+  const doc={querySelector:()=>link};
+  applyStandaloneManifest(doc,{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Safari/604.1',maxTouchPoints:5,platform:'iPhone'});
+  assert.equal(href,'manifest.webmanifest','an iPhone must be left alone');
+  applyStandaloneManifest(doc,{userAgent:'Mozilla/5.0 (Linux; Android 14) Chrome/122 Mobile Safari/537.36',maxTouchPoints:5,platform:'Linux armv8l'});
+  assert.equal(href,'manifest-app.webmanifest','Android gets the upgrade');
 });
 
 test('Every heavy image has a WebP, and nothing still points at the original',()=>{

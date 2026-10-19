@@ -283,10 +283,26 @@ rather than a pixel value. It is `max(12px,.84em)` now.
 
 Sign-in is a Supabase magic link (`signInWithOtp` with `emailRedirectTo`). **On iOS, a link opened
 from Mail goes to Safari, not to an installed standalone app, and the two do not share a session**, so
-an installed player would never get signed in. The manifest therefore ships with `display:standalone`
-for Android — where Chrome captures in-scope links into the installed app — and iOS is deliberately
-left in Safari: there is no `apple-mobile-web-app-capable`. Switching it on is one line once sign-in
-can complete inside the app. Options are in the PR.
+an installed player would never get signed in.
+
+**Correction, caught by Billy on review.** My first attempt at this relied on omitting
+`apple-mobile-web-app-capable` to keep iOS in Safari. That is wrong. Safari has honoured the
+manifest's own `display` field for Home Screen installs **since iOS 11.3**, and the meta tag has been
+optional since the same version. Shipping `display:"standalone"` was therefore enough on its own to
+create exactly the broken state it was meant to avoid: an iPhone user who adds the arcade to their
+Home Screen would get a standalone app they could never sign into.
+
+What ships now: `manifest.webmanifest` declares `display:"browser"` and is what the HTML links, so
+that is what every browser is served. `arcade/ui/standalone.js` swaps the link to
+`manifest-app.webmanifest` (`display:"standalone"`) only for browsers that are not Apple. The order
+matters — if the script never runs, everyone keeps the harmless manifest rather than everyone getting
+the broken one. Two tests cover it, including iOS 11.3, iPadOS in desktop mode and Chrome-on-iOS.
+
+**One thing this does not fix.** Since **iOS 26**, every site added to the Home Screen opens as a web
+app by default, with or without a manifest. On that version the magic link breaks sign-in for an
+installed player no matter what the manifest says, so the manifest gate only covers iOS 11.3 to 25.
+Making the arcade genuinely installable on current iOS needs the emailed 6-digit code; the options are
+in the PR.
 
 ## Build and tooling
 

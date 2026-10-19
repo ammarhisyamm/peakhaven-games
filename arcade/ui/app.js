@@ -1,4 +1,5 @@
 import {startRequestStore} from './start-request.js';
+import {applyStandaloneManifest} from './standalone.js';
 import {walletView,playOffer} from './wallet-view.js';
 import {pendingResultStore} from './pending-result.js';
 import {freePlaysLeft,availablePlays,consumePlay,playWallet} from './game/play-credits.js';
@@ -281,3 +282,6 @@ route();
 let refreshing=false;
 async function refreshAfterReturn(){if(document.hidden||refreshing||gameModal.open||modal.open||!account.enabled||!account.signedIn())return;refreshing=true;try{await refreshMe();if(!gameModal.open&&!modal.open)route();}finally{refreshing=false;}}
 document.addEventListener('visibilitychange',refreshAfterReturn);
+// Upgrade the manifest for browsers that can safely be installed. iOS keeps the browser manifest it
+// was served, because a standalone Home Screen app there cannot complete a magic-link sign-in.
+applyStandaloneManifest();
