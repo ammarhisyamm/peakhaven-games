@@ -97,3 +97,21 @@ body.game-open #app{position:fixed;inset:0;width:min(100%,480px);height:100dvh;m
 .blast-points{position:absolute;transform:translate(-50%,-50%);font:900 26px/1 Anybody,Inter,sans-serif;color:#fff;-webkit-text-stroke:1px #0070af;paint-order:stroke fill;text-shadow:0 3px 0 #0063a1,0 0 14px #40ecffaa;white-space:nowrap}
 .blast-points.big{font-size:34px}
 .blast-points.combo{color:#fff3aa;-webkit-text-stroke-color:#86501b;text-shadow:0 3px 0 #906321,0 0 16px #ffcf49}
+
+/* Peak Blocks blocks are plain shapes: no emblem or tile artwork, so every block reads the same at a
+   glance and the six colours do all the telling-apart. The hues are the ones the tinted sprite showed
+   (sampled from it); saturation is lifted because a flat tile has no painted highlight to carry it.
+   Scoped to .scene-blocks so the Mahjong tiles, which share these class names, are untouched. */
+.scene-blocks .block-1,.scene-blocks .block-2,.scene-blocks .block-3,.scene-blocks .block-4,.scene-blocks .block-7,.scene-blocks .block-8,.scene-blocks .block-9{
+ background-image:none;background-color:transparent;filter:none;
+ background:linear-gradient(170deg,var(--top),var(--base) 55%,var(--edge));
+ border-radius:20%;box-shadow:inset 0 1px 0 #ffffff5c,inset 0 -1px 0 #0000003d,inset 0 0 0 1px #0a1c3a33}
+.scene-blocks .block-1{--top:#77a6f8;--base:#397cef;--edge:#0749bb}
+.scene-blocks .block-2{--top:#47cbf0;--base:#18aed8;--edge:#086781}
+.scene-blocks .block-3{--top:#f2ad5f;--base:#e78b23;--edge:#99560a}
+.scene-blocks .block-4{--top:#c3d2ea;--base:#94aacd;--edge:#5d7399}
+.scene-blocks .block-7{--top:#5ada44;--base:#3dae29;--edge:#1d5f11}
+.scene-blocks .block-8{--top:#c894f5;--base:#a657ea;--edge:#740fcc}
+.scene-blocks .block-9{--top:#f3807c;--base:#e74640;--edge:#b4130e}
+/* A block about to be cleared brightens; it no longer needs a per-colour hue-rotate to undo. */
+.scene-blocks .block-cell.filled.clear-preview,.scene-blocks .block-cell.filled.clear-preview.block-7,.scene-blocks .block-cell.filled.clear-preview.block-8,.scene-blocks .block-cell.filled.clear-preview.block-9{filter:brightness(1.4) drop-shadow(0 0 6px #6ff6ff)}
