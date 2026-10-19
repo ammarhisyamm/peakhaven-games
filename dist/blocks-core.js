@@ -78,12 +78,13 @@ export function blocksHint(g){
   g.tools.hint--;s.selected=best.i;g.log.push(['h']);return best;
 }
 // What the assist banner says, and which tool buttons should call for attention. Kept pure and out of
-// the UI so the wording and the suggested set are covered by tests with no DOM. `suggest` lists every
-// tool the player can still press: Hint spends no use on a blocked board, so offering it costs nothing.
+// the UI so the wording and the suggested set are covered by tests with no DOM. `suggest` lists only
+// the tools that can actually make room. Hint is left out on purpose: with nothing able to fit there is
+// no placement for it to point at, so glowing it would send the player at the one button that cannot help.
 export function blocksAssist(g,{bomb=false,ended=false}={}){
   if(bomb)return {mode:'bomb',title:'Bomb ready · clears 3 × 3',text:'Drag it onto the board, or tap a square. Tap Bomb again to cancel.',suggest:[]};
   if(ended||g.ended||anyFit(g))return {mode:null,title:'',text:'',suggest:[]};
-  const suggest=['bomb','undo','shuffle','hint'].filter(k=>g.tools[k]>0&&(k!=='undo'||g.history.length>0));
+  const suggest=['bomb','undo','shuffle'].filter(k=>g.tools[k]>0&&(k!=='undo'||g.history.length>0));
   const names=suggest.map(k=>k[0].toUpperCase()+k.slice(1)).join(', ').replace(/, ([^,]+)$/,' or $1');
   return {mode:'stuck',title:'No space left! Use a tool',text:names?`Tap ${names} below to make room.`:'No tools left.',suggest};
 }

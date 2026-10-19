@@ -600,13 +600,25 @@ test('a blocked hand asks for a tool in plain words and names the ones that are 
  const advice=blocksAssist(g,{});
  assert.equal(advice.mode,'stuck');
  assert.equal(advice.title,'No space left! Use a tool');
- assert.deepEqual(advice.suggest,['bomb','shuffle','hint'],'Undo is left out with nothing to undo');
- assert.match(advice.text,/Bomb, Shuffle or Hint/);
+ assert.deepEqual(advice.suggest,['bomb','shuffle'],'Undo is left out with nothing to undo');
+ assert.match(advice.text,/Bomb or Shuffle/);
  g.history.push(structuredClone(g.state));
- assert.deepEqual(blocksAssist(g,{}).suggest,['bomb','undo','shuffle','hint'],'Undo joins once there is a move to take back');
- g.tools.bomb=0;g.tools.hint=0;
+ assert.deepEqual(blocksAssist(g,{}).suggest,['bomb','undo','shuffle'],'Undo joins once there is a move to take back');
+ g.tools.bomb=0;
  assert.deepEqual(blocksAssist(g,{}).suggest,['undo','shuffle']);
  assert.match(blocksAssist(g,{}).text,/Undo or Shuffle/);
+});
+test('Hint never glows on a blocked board, however many uses are left',()=>{
+ // With nothing able to fit, Hint has no placement to point at, so sending the player there would
+ // spend their attention on the one tool that cannot make room.
+ const g=stuckGame();
+ g.tools.hint=3;g.history.push(structuredClone(g.state));
+ assert.ok(!blocksAssist(g,{}).suggest.includes('hint'));
+ assert.doesNotMatch(blocksAssist(g,{}).text,/Hint/);
+ assert.equal(blocksHint(g),null,'and it would indeed have nothing to say');
+ g.tools.bomb=0;g.tools.shuffle=0;g.tools.undo=0;
+ assert.deepEqual(blocksAssist(g,{}).suggest,[],'not even as the last tool standing');
+ assert.equal(blocksAssist(g,{}).text,'No tools left.');
 });
 test('nothing is suggested while a piece still fits, after the run ends, or while the bomb is armed',()=>{
  const playable=createBlocks(7);
@@ -624,5 +636,5 @@ test('a blocked hand keeps asking: the advice is the same until the player actua
  const g=stuckGame(),first=blocksAssist(g,{});
  for(let i=0;i<5;i++)assert.deepEqual(blocksAssist(g,{}),first,'it does not time out on its own');
  assert.equal(blocksShuffle(g),true);
- assert.notEqual(blocksAssist(g,{}).suggest.length,4);
+ assert.notDeepEqual(blocksAssist(g,{}),first,'acting changes it: either the hand fits now, or a use is gone');
 });
