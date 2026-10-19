@@ -1,6 +1,9 @@
 // Shared samples keep the existing PH sound. Every known cue also has a same-context
 // fallback: a late/failed download or an interrupted mobile AudioContext cannot swallow it.
-const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear','blk-pick','blk-place','blk-clear','blk-big','blk-invalid','blk-over'];
+const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear','blk-pick','blk-place','blk-clear','blk-big','blk-invalid','blk-over','blk-undo','blk-shuffle'];
+// A context that is interrupted or suspended may take a moment to come back. Wait that long for it,
+// then give up: a cue older than STALE no longer reads as an answer to the tap that asked for it.
+const WAKE_WAIT=1200,STALE=500;
 const cues={
  select:{file:'tap',gain:.5,jitter:.04},toggle:{file:'tap',gain:.5,rate:1.2},hint:{file:'tap',gain:.5,rate:1.35},
  tool:{file:'whoosh',gain:.45},undo:{file:'whoosh',gain:.45,rate:.8},shuffle:{file:'swish',gain:.55,rate:1.15},launch:{file:'whoosh',gain:.45,jitter:.05},flap:{file:'whoosh',gain:.4,rate:1.4,jitter:.06},
@@ -10,25 +13,42 @@ const cues={
  swish:{file:'swish',gain:.2},rim:{file:'rim',gain:.5},miss:{file:'fail',gain:.8},
  blkPick:{file:'blk-pick',gain:.55,jitter:.03,own:true},blkPlace:{file:'blk-place',gain:.5,jitter:.04,own:true},blkClear:{file:'blk-clear',gain:.7,own:true},
  blkBig:{file:'blk-big',gain:.8,own:true},blkSparkle:{file:'blk-pick',gain:.35,own:true},blkInvalid:{file:'blk-invalid',gain:.65,own:true},blkOver:{file:'blk-over',gain:.7,own:true},
+ blkUndo:{file:'blk-undo',gain:.55,own:true},blkShuffle:{file:'blk-shuffle',gain:.55,own:true},
 };
 const pitch={mahjong:1.12,merge:.88,sequence:1.08,blocks:.95};
-const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver'}};
+const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle'}};
 export function cueFor(game,event){const name=overrides[game]?.[event]??event,cue=cues[name];return cue?{...cue,rate:(cue.rate||1)*(cue.own?1:pitch[game]||1)}:null;}
 const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12]};
 export class GameAudio{
- constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;}
+ constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;this.waiting=null;}
  wake(){
   const ctx=this.context;if(!ctx||ctx.state==='running')return Promise.resolve();
   // A resume requested before user activation can remain pending. Always make a
   // fresh attempt in the current gesture; reusing that old promise traps Safari.
-  try{return Promise.resolve(ctx.resume()).catch(()=>{});}catch{return Promise.resolve();}
+  let resumed;try{resumed=Promise.resolve(ctx.resume()).catch(()=>{});}catch{resumed=Promise.resolve();}
+  return resumed.then(()=>this.running(ctx));
+ }
+ // resume() settling is not the same as the context being usable: an interrupted iOS context
+ // (a call, Siri, the ringer switch) settles it straight away and only reaches 'running' on a
+ // later statechange. Starting a source before then does nothing at all, so wait for the state
+ // itself. One wait is shared by every cue queued behind it, so rapid taps add no listeners.
+ running(ctx){
+  if(ctx.state==='running'||!ctx.addEventListener)return Promise.resolve();
+  if(this.waiting?.ctx===ctx)return this.waiting.promise;
+  const entry={ctx};
+  entry.promise=new Promise(resolve=>{
+   const done=()=>{clearTimeout(timer);ctx.removeEventListener('statechange',listen);if(this.waiting===entry)this.waiting=null;resolve();};
+   const listen=()=>{if(ctx.state==='running')done();};
+   ctx.addEventListener('statechange',listen);const timer=setTimeout(done,WAKE_WAIT);
+  });
+  this.waiting=entry;return entry.promise;
  }
 
  prepare(){
   if(!this.enabled())return;
   try{
    if(!this.context||this.context.state==='closed'){
-    this.generation++;this.context=new(window.AudioContext||window.webkitAudioContext)();this.buffers.clear();this.decoded.clear();
+    this.generation++;this.context=new(window.AudioContext||window.webkitAudioContext)();this.buffers.clear();this.decoded.clear();this.waiting=null;
    }
    this.wake();const ctx=this.context;
    for(const file of files)if(!this.buffers.has(file)){
@@ -55,13 +75,15 @@ export class GameAudio{
   const cue=cueFor(game,event);if(!cue)return false;if(!this.enabled())return true;
   this.prepare();const ctx=this.context;if(!ctx)return false;
   const generation=this.generation,rate=cue.rate*(opts.rate||1)*(1+(Math.random()*2-1)*(cue.jitter||0)),delay=Math.max(0,opts.delay||0);
-  const ready=this.decoded.get(cue.file),pending=this.buffers.get(cue.file);
+  const ready=this.decoded.get(cue.file),pending=this.buffers.get(cue.file),queuedAt=Date.now();
   const deliver=async()=>{
    await this.wake();let timer;
    // A slow first download should sound now, not several seconds after the player's action.
    const buffer=ready??await Promise.race([pending??Promise.resolve(null),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),90);})]);
    clearTimeout(timer);
-   if(generation!==this.generation||!this.enabled()||ctx!==this.context||ctx.state!=='running')return;
+   if(generation!==this.generation||!this.enabled()||ctx!==this.context)return;
+   // The context never came back, or took so long that this cue would land after the moment it belongs to.
+   if(ctx.state!=='running'||Date.now()-queuedAt>STALE)return;
    if(!buffer){this.fallback(ctx,event,rate,delay);return;}
    const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=buffer;source.playbackRate.value=rate;gain.gain.value=cue.gain;source.connect(gain);gain.connect(ctx.destination);this.track(source,gain);source.start(ctx.currentTime+delay);
   };
