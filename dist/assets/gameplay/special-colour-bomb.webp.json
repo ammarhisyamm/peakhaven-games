@@ -1,0 +1,11 @@
+{
+  "generator": "built-in image_gen",
+  "prompt": "Use case: stylized-concept. Asset type: transparent game sprite for Sequence colour bomb. A single spherical faceted prismatic crystal orb with a bright white core, six large distinct coloured facets sapphire, cyan, gold, purple, green and pink, encircled by one thin polished silver ring. Premium jewel 3D render, frontal orthographic square composition, bold simple silhouette readable at 28px, restrained glow, high contrast. Isolated centred on genuine transparent alpha background, tight square framing 6 percent margin. No face, no text, no stars outside orb, no floor or backdrop.",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-86e5056c-2109-4a07-95da-634fc3f6ec61.png",
+  "export": {
+    "width": 256,
+    "height": 256,
+    "hasAlpha": true,
+    "format": "webp"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "generator": "built-in image_gen",
+  "prompt": "Use case: stylized-concept. Asset type: landscape 16:9 game cover for Peak Haven Arcade Ridge Run. Premium polished 3D arcade key art of a small luminous faceted cyan crystal orb flying through a clear gap between upright/inverted transparent electric-blue glass vials with silver chrome mouth rims as obstacles. Orb is clearly spherical crystal, NOT a bottle or character; its flight trail curves from lower left toward centre. Minimal calm blue atmosphere with distant alpine mountain silhouettes and subtle violet gradient along far right hinting next region. Large readable shapes, plenty of space around orb, centre subject within middle 70 percent for responsive crops, glossy jewel lighting with restrained glow. No text, letters, HUD, buttons, faces or watermark.",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-4f3b043b-2692-4cc4-bd5b-026d2eb954e8.png",
+  "export": {
+    "width": 1280,
+    "height": 720,
+    "hasAlpha": true,
+    "format": "webp"
+  }
+}

@@ -1,7 +1,7 @@
 import {SEQUENCE_RULES_VERSION,sequenceLevel,createSequenceProgress,sequenceGoals,sequenceComplete,sequenceBrief,applySequenceWave,progressionExchange,progressionMove,settleProgression,createProgressionBoard} from './sequence-progression.js';
 import {createSequenceBoard,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES,boardFit} from './sequence-rules.js';
 import {SEQUENCE_V3_VERSION,v3Level,createV3Progress,createV3Board,v3Goals,v3AllGoals,v3Complete,v3Brief,v3Exchange,v3SwapKind,v3Move,v3Moves,planV3Wave,applyV3Wave,settleV3,v3BonusPick,v3RemainingSpecials,kindOf,colourOf,isSpecial,PLAIN,STRIPE_V,STRIPE_H,WRAP,BOMB} from './sequence-v3.js';
-import {drawSprite,drawBottleObstacle,crystalSprites,vialSprites} from './gameplay-art.js';
+import {drawSprite,drawSequenceCrystal,drawBottleObstacle,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {reachStart,reachThroughGate,REACH} from './ridge-reach.js';
 import {RIDGE_LATEST,ridgeCheckpoint} from './ridge-progression.js';
@@ -531,8 +531,7 @@ export class SequenceEngine extends MiniEngine{
    let size=g.cell*.86;const held=this.pressed===i||(this.phase==='swap'&&this.swap&&i===this.swap.from);if(held){size*=1.1;c.save();c.shadowColor='#ffe77a';c.shadowBlur=18;c.fillStyle='#ffe77a33';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();c.restore();}
    if(this.clearing?.has(i)){const p=1-clamp(this.pending/SEQ_CLEAR,0,1),s=1-p*p;size*=s;c.globalAlpha=s;}
    const kind=this.rulesVersion===3?kindOf(v):PLAIN,colour=this.rulesVersion===3?colourOf(v):v;
-   drawSprite(c,crystalSprites[kind===BOMB?6:colour],x,y,size,size);
-   if(kind!==PLAIN)this.drawSpecial(kind,colour,x,y,size);
+   if(!drawSequenceCrystal(c,kind,colour,x,y,size))this.drawSpecial(kind,colour,x,y,size);
    c.globalAlpha=1;if(this.rulesVersion>=2)this.drawObstacle(i,g);
    if(this.selection===i||(this.keyboard&&this.cursor===i)){c.strokeStyle=this.selection===i?'#ffe77a':'#e6ffff';c.lineWidth=3;rounded(c,g.x+col*g.cell+3,g.y+row*g.cell+3,g.cell-6,g.cell-6,9);c.stroke();}
   }

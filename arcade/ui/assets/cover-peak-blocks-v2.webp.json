@@ -1,0 +1,11 @@
+{
+  "generator": "built-in image_gen",
+  "prompt": "Use case: stylized-concept. Asset type: landscape 16:9 game cover for Peak Haven Arcade's Peak Blocks. Create polished premium 3D crystal puzzle key art: a slightly angled navy 8 by 8 recessed square board, sapphire and cyan glass square blocks arranged in recognizable L, bar and square pieces, a completed luminous cyan row dissolving into restrained sparkles. Three waiting block pieces in foreground. Quiet deep alpine blue backdrop with distant soft icy mountain silhouettes. Focused readable composition, large tactile beveled crystal blocks, clean chrome/cyan highlights, minimal bloom. Centre the board within middle 75 percent for responsive crops. No character, no bottle, no text, no letters, no HUD, no buttons, no watermark. This is game cover art rather than a screenshot.",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-951405e9-5465-4870-bce8-c69cbec38951.png",
+  "export": {
+    "width": 1280,
+    "height": 720,
+    "hasAlpha": true,
+    "format": "webp"
+  }
+}
