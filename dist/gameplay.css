@@ -66,7 +66,9 @@ body.game-open #app{position:fixed;inset:0;width:min(100%,480px);height:100dvh;m
 
 .tutorial-object .game-icon{display:block;width:116px;height:116px;object-fit:contain;margin:auto}
 .in-game .block-tray{touch-action:none}
-.block-drag-preview{position:fixed;z-index:8;pointer-events:none;grid-template-columns:repeat(var(--cols),var(--cell));grid-template-rows:repeat(var(--rows),var(--cell));filter:drop-shadow(0 5px 8px #001b4a88)}
+/* Positioned with the independent `translate` property, not left/top, so moving it never costs a
+   layout. `transform` is left free for the pick-up scale, which composes with translate. */
+.block-drag-preview{position:fixed;left:0;top:0;z-index:8;pointer-events:none;will-change:translate,transform;grid-template-columns:repeat(var(--cols),var(--cell));grid-template-rows:repeat(var(--rows),var(--cell));filter:drop-shadow(0 5px 8px #001b4a88)}
 .block-drag-preview i{width:var(--cell);height:var(--cell)}
 @media(max-height:540px){.in-game .game-loading{gap:8px;padding:16px 24px;grid-template-columns:1fr 1.3fr;grid-template-rows:auto 1fr}.in-game .loading-brand{width:min(100%,140px)}.in-game .game-loading>.mascot{grid-column:1;grid-row:2;max-height:190px}.in-game .loading-copy{grid-column:2;grid-row:1/3;align-self:center;padding:22px 18px 14px}.in-game .loading-copy h1{font-size:17px}}
 /* Peak Blocks drag: the lifted piece matches the board's cell size and gaps, pops up when picked, and dims

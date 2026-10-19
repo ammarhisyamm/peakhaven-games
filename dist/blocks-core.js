@@ -88,6 +88,18 @@ export function blocksAssist(g,{bomb=false,ended=false}={}){
   const names=suggest.map(k=>k[0].toUpperCase()+k.slice(1)).join(', ').replace(/, ([^,]+)$/,' or $1');
   return {mode:'stuck',title:'No space left! Use a tool',text:names?`Tap ${names} below to make room.`:'No tools left.',suggest};
 }
+// Where a dragged piece is drawn and which square it would land on. Pure geometry, kept out of the
+// drag handler so the feel is covered by tests with no browser. `lift` is how far the BOTTOM of the
+// piece floats above the pointer, measured in board cells, so a tall piece rides as high as a short
+// one instead of further; the piece is centred horizontally on the pointer.
+export const BLOCK_LIFT=Object.freeze({touch:1.8,mouse:.8});
+export function dragLanding({x,y,cols,rows,lift=0,cell,step,left:boardLeft,top:boardTop}){
+  const width=cols*step-(step-cell),height=rows*step-(step-cell);
+  const left=x-width/2,top=y-lift*cell-height;
+  // Math.round hands back -0 just above the top-left corner; adding zero keeps the index a plain 0.
+  const square=n=>Math.round(n)+0;
+  return {left,top,width,height,r:square((top-boardTop)/step),c:square((left-boardLeft)/step)};
+}
 export function blocksResult(g){const s=g.state;return {score:s.score,lines:s.lines,moves:s.moves,bestCombo:s.bestChain||0,won:false,replay:{v:g.version,game:'blocks',seed:g.seed,log:g.log.map(x=>[...x])}};}
 
 // Server side: rebuild a run from its seed and log. Any illegal step means the log was tampered with.

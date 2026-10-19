@@ -1,4 +1,4 @@
-import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit} from './blocks-core.js';
+import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit,dragLanding,BLOCK_LIFT} from './blocks-core.js';
 import {makeSeed} from './rng.js';
 import {SHAPES,emptyGrid,tileLayout,tileRows,fits,placements,placeBlock,makeTray,bombGrid,dealTiles,freeTile,matchTiles,tileHint} from './puzzle-rules.js';
 const symbols=['Blue vial','Pink vial','Gold vial','Purple vial','Green vial','Blue crystal','Pink crystal','Gold crystal','Green crystal'];
@@ -67,28 +67,66 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
  // touched and snaps to the nearest cells. On touch it floats centred about 1.75 cells above the finger so
  // the thumb never hides it; with a mouse or pen it sits centred on the pointer. The landing spot and any lines it would clear light up; an invalid drop goes back to the tray.
  // A tap without moving still selects the piece, and keyboard play is unchanged.
- const LIFT_CELLS=1.75,TAP_SLOP=6;
- let drag=null,dragArt=null,suppressClick=false;
+ // Block Blast's drag: the piece you hold is the piece that lands, at board size, floating clear of
+ // the pointer so your hand never covers it. A finger needs the whole piece clear of it; a cursor only
+ // needs to not sit on top of the piece, so BLOCK_LIFT lifts the two by different amounts.
+ const TAP_SLOP=6,RETURN_MS=160;
+ let drag=null,dragArt=null,suppressClick=false,dragFrame=0;
  const buzz=ms=>{try{navigator.vibrate?.(ms);}catch{}};
  function boardMetrics(){const a=board.querySelector('[data-cell="0"]').getBoundingClientRect(),b=board.querySelector('[data-cell="1"]').getBoundingClientRect();return {cell:a.width,step:b.left-a.left,left:a.left,top:a.top};}
- function clearDrag(){const pointer=drag?.pointerId;drag=null;try{if(tray.hasPointerCapture?.(pointer))tray.releasePointerCapture(pointer);}catch{}dragArt?.remove();dragArt=null;tray.querySelector('.lifted')?.classList.remove('lifted');clearPreview();}
- function liftPiece(){const m=boardMetrics(),art=tray.querySelector(`[data-shape="${drag.index}"] .shape-preview`);if(!art)return;
-  dragArt=art.cloneNode(true);dragArt.classList.add('block-drag-preview');dragArt.style.setProperty('--cell',`${m.cell}px`);dragArt.style.setProperty('--gap',`${m.step-m.cell}px`);root.append(dragArt);
+ function clearDrag(){const pointer=drag?.pointerId;drag=null;if(dragFrame){cancelAnimationFrame(dragFrame);dragFrame=0;}
+  try{if(tray.hasPointerCapture?.(pointer))tray.releasePointerCapture(pointer);}catch{}dragArt?.remove();dragArt=null;tray.querySelector('.lifted')?.classList.remove('lifted');clearPreview();}
+ function liftPiece(){const art=tray.querySelector(`[data-shape="${drag.index}"] .shape-preview`);if(!art)return;
+  // The board is measured once per drag. Reading it on every pointermove forced a layout each time,
+  // which is what made a fast drag stutter on a phone.
+  const m=drag.metrics;
+  dragArt=art.cloneNode(true);dragArt.classList.add('block-drag-preview');
+  dragArt.style.setProperty('--cell',`${m.cell}px`);dragArt.style.setProperty('--gap',`${m.step-m.cell}px`);
+  root.append(dragArt);
   tray.querySelector(`[data-shape="${drag.index}"]`)?.classList.add('lifted');buzz(8);}
- function follow(e){if(!dragArt)return;const m=boardMetrics(),p=state.tray[drag.index];if(!p)return;
-  const cols=Math.max(...p.shape.map(s=>s[0]))+1,rows=Math.max(...p.shape.map(s=>s[1]))+1,w=cols*m.step-(m.step-m.cell),h=rows*m.step-(m.step-m.cell);
-  const left=e.clientX-w/2,top=e.clientY-drag.lift*m.step-h/2;
-  dragArt.style.left=`${left}px`;dragArt.style.top=`${top}px`;
-  drag.r=Math.round((top-m.top)/m.step);drag.c=Math.round((left-m.left)/m.step);
-  drag.valid=fits(state.grid,p.shape,drag.r,drag.c);dragArt.classList.toggle('invalid',!drag.valid);
-  if(drag.valid)preview(drag.r,drag.c);else board.querySelectorAll('.ghost,.clear-preview').forEach(b=>b.classList.remove('ghost','clear-preview'));}
+ // Pointer events can arrive several times a frame; the screen only changes once, so the write is
+ // coalesced into one rAF and the board preview is touched only when the landing square changes.
+ function follow(e){if(!drag)return;drag.clientX=e.clientX;drag.clientY=e.clientY;
+  if(!dragFrame)dragFrame=requestAnimationFrame(paintDrag);}
+ function paintDrag(){dragFrame=0;if(!drag||!dragArt)return;
+  const p=state.tray[drag.index];if(!p)return;
+  const cols=Math.max(...p.shape.map(s=>s[0]))+1,rows=Math.max(...p.shape.map(s=>s[1]))+1;
+  const {left,top,r,c}=dragLanding({x:drag.clientX,y:drag.clientY,cols,rows,lift:drag.lift,...drag.metrics});
+  dragArt.style.translate=`${Math.round(left)}px ${Math.round(top)}px`;
+  const valid=fits(state.grid,p.shape,r,c);
+  if(r!==drag.r||c!==drag.c||valid!==drag.valid){
+   drag.r=r;drag.c=c;drag.valid=valid;dragArt.classList.toggle('invalid',!valid);
+   if(valid)preview(r,c);else board.querySelectorAll('.ghost,.clear-preview').forEach(b=>b.classList.remove('ghost','clear-preview'));
+  }}
+ // A piece dropped somewhere it cannot go flies back to its slot instead of blinking out of existence.
+ function returnToTray(){const art=dragArt,index=drag?.index;
+  if(!art||!motion||index===undefined){clearDrag();return;}
+  const slot=tray.querySelector(`[data-shape="${index}"] .shape-preview`);
+  const from=art.getBoundingClientRect(),to=slot?.getBoundingClientRect();
+  dragArt=null;drag=null;if(dragFrame){cancelAnimationFrame(dragFrame);dragFrame=0;}
+  // A flick shorter than the pick-up scale would leave both animations on the piece at once, and the
+  // two scales would multiply. The lift has done its job by now, so it stands down.
+  art.style.animation='none';
+  clearPreview();
+  if(!to){art.remove();tray.querySelector('.lifted')?.classList.remove('lifted');return;}
+  art.animate([{translate:art.style.translate,scale:1,opacity:1},
+   {translate:`${Math.round(to.left)}px ${Math.round(to.top)}px`,scale:to.width/(from.width||1),opacity:.3}],
+   {duration:RETURN_MS,easing:'cubic-bezier(.3,0,.5,1)',fill:'forwards'})
+   .finished.catch(()=>{}).then(()=>{art.remove();tray.querySelector('.lifted')?.classList.remove('lifted');});}
  const dragDown=e=>{const slot=e.target.closest('[data-shape]');if(drag||bombPointer||locked()||e.isPrimary===false||(e.button!==undefined&&e.button!==0)||!slot||!state.tray[slot.dataset.shape])return;
-  drag={pointerId:e.pointerId,index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false,lift:e.pointerType==='touch'?LIFT_CELLS:0};tray.setPointerCapture?.(e.pointerId);
-  state.selected=drag.index;bomb=false;hintCells=[];liftPiece();follow(e);cb.sound('select');};
+  drag={pointerId:e.pointerId,index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false,
+   lift:e.pointerType==='touch'?BLOCK_LIFT.touch:BLOCK_LIFT.mouse,metrics:boardMetrics(),r:null,c:null,valid:null};
+  tray.setPointerCapture?.(e.pointerId);
+  state.selected=drag.index;bomb=false;hintCells=[];liftPiece();follow(e);paintDrag();cb.sound('select');};
  const dragMove=e=>{if(!drag||e.pointerId!==drag.pointerId||locked())return;if(!drag.moving&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>=TAP_SLOP)drag.moving=true;follow(e);};
- const dragUp=e=>{if(!drag||e.pointerId!==drag.pointerId)return;follow(e);const last=drag;clearDrag();if(!last.moving){render();return;} // a tap: the click handler selects it
+ const dragUp=e=>{if(!drag||e.pointerId!==drag.pointerId)return;
+  drag.clientX=e.clientX;drag.clientY=e.clientY;paintDrag();
+  const last=drag;
+  if(!last.moving){clearDrag();render();return;} // a tap: the click handler selects it
   suppressClick=true;setTimeout(()=>{suppressClick=false;},0);
-  if(locked())return;if(last.valid){buzz(12);place(last.r,last.c);}else{render();cb.sound('invalid');cb.message('That spot is taken. The piece is back in the tray.');}};
+  if(locked()){clearDrag();return;}
+  if(last.valid){clearDrag();buzz(12);place(last.r,last.c);}
+  else{returnToTray();render();cb.sound('invalid');cb.message('That spot is taken. The piece is back in the tray.');}};
  const dragCancel=e=>{if(!e||e.type==='blur'||e.pointerId===drag?.pointerId)clearDrag();};const dragClick=e=>{if(suppressClick){e.preventDefault();e.stopImmediatePropagation();suppressClick=false;}};
  for(const [name,handler] of [['pointerdown',dragDown],['pointermove',dragMove],['pointerup',dragUp],['pointercancel',dragCancel],['lostpointercapture',dragCancel]])tray.addEventListener(name,handler);tray.addEventListener('click',dragClick,true);window.addEventListener('blur',dragCancel);
  // Bomb supports the same lifted, single-pointer gesture as a piece, with its complete impact area visible.
