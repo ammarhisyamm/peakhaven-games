@@ -1,5 +1,5 @@
 import {SEQUENCE_RULES_VERSION,sequenceLevel,createSequenceProgress,sequenceGoals,sequenceComplete,sequenceBrief,applySequenceWave,progressionExchange,progressionMove,settleProgression,createProgressionBoard} from './sequence-progression.js';
-import {createSequenceBoard,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES} from './sequence-rules.js';
+import {createSequenceBoard,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES,boardFit} from './sequence-rules.js';
 import {SEQUENCE_V3_VERSION,v3Level,createV3Progress,createV3Board,v3Goals,v3AllGoals,v3Complete,v3Brief,v3Exchange,v3SwapKind,v3Move,v3Moves,planV3Wave,applyV3Wave,settleV3,v3BonusPick,v3RemainingSpecials,kindOf,colourOf,isSpecial,PLAIN,STRIPE_V,STRIPE_H,WRAP,BOMB} from './sequence-v3.js';
 import {drawSprite,drawBottleObstacle,crystalSprites,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
@@ -9,7 +9,7 @@ import {SIM_STEP,MAX_STEPS_PER_FRAME,makeSeed,createRandom} from './rng.js';
 
 const TAU=Math.PI*2;
 export const BOND_HIT=.17,BOND_KNEE=6,BOND_MAX_FIXED=5,BOND_FIXED_GAP=.55,BOND_CLOCK_MAX=4,BOND_CLOCK_MIN=2.5,BOND_CLOCK_FROM=5,BOND_CLOCK_TO=20;
-const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,SEQ_BONUS_RATE=.4,fallTime=d=>.12+.05*Math.abs(d);
+const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,SEQ_BONUS_RATE=.4,SEQ_CRACK=.42,fallTime=d=>.12+.05*Math.abs(d);
 // What a v3 combo is called when it goes off. The bigger the blast, the louder the word.
 const COMBO_LABELS={stripeStripe:'CROSS BLAST!',stripeWrap:'MEGA CROSS!',wrapWrap:'DOUBLE BLAST!',bombStripe:'COLOUR STRIPES!',bombWrap:'COLOUR BLAST!',bombBomb:'BOARD CLEAR!'};
 // Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
@@ -395,7 +395,7 @@ export class SequenceEngine extends MiniEngine{
   this.rulesVersion=options?.rulesVersion===1?1:options?.rulesVersion===2?2:SEQUENCE_V3_VERSION;const v3=this.rulesVersion===3;
   this.config=v3?v3Level(this.level):sequenceLevel(this.level);this.progress=v3?createV3Progress(this.config):createSequenceProgress(this.config);this.palette=v3?this.config.palette:sequencePalette(this.level);
   this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):v3?createV3Board(this.config,this.random,this.progress):createProgressionBoard(this.config,this.random,this.progress);
-  this.inputs=[];this.movesTotal=v3?this.config.moves:SEQUENCE_MOVES;this.moves=this.movesTotal;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.creating=null;this.fallDur=0;this.popups=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  this.inputs=[];this.movesTotal=v3?this.config.moves:SEQUENCE_MOVES;this.moves=this.movesTotal;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.creating=null;this.fallDur=0;this.popups=[];this.cracks=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
   // v3 only: what the current cascade is still owed. `again` is the wrapped crystals due a second blast,
   // `bonus` counts the end-of-level striped crystals still to fire, `blasts` are the effects being drawn.
   this.trigger=null;this.again=[];this.blasts=[];this.bonus=null;this.bonusDone=false;this.lastCombo=null;this.warned=false;
@@ -413,7 +413,9 @@ export class SequenceEngine extends MiniEngine{
  geometry(){
   let top=this.top+(this.rulesVersion>=2?38/this.scale:0),bottom=this.bottom+(this.rulesVersion>=2?36/this.scale:0);
   try{const r=this.canvas.getBoundingClientRect(),goals=document.querySelector('#sequence-goals'),guide=document.querySelector('.sequence-guide');if(goals&&!goals.hidden)top=(goals.getBoundingClientRect().bottom-r.top+14)/this.scale;if(guide)bottom=(r.bottom-guide.getBoundingClientRect().top+14)/this.scale;}catch{}
-  const size=Math.max(70,Math.min(this.w-36,this.h-top-bottom,560)),cell=size/7;return{x:(this.w-size)/2,y:top+Math.max(0,(this.h-top-bottom-size)/2),size,cell};
+  // boardFit lives with the rules so the sizing can be checked without a browser.
+  const fit=boardFit({width:this.w,height:this.h,top,bottom}),size=fit.size,cell=size/7;
+  return{x:(this.w-size)/2,y:top+Math.max(0,fit.slack/2),size,cell,slack:fit.slack,limitedBy:fit.limitedBy};
  }
 
  complete(){return this.rulesVersion===1?this.score>=this.target:this.rulesVersion===3?v3Complete(this.score,{...this.config,target:this.target},this.progress):sequenceComplete(this.score,{...this.config,target:this.target},this.progress);}
@@ -439,7 +441,7 @@ export class SequenceEngine extends MiniEngine{
  // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
  resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();let sx=0,sy=0;
   for(const i of matches){this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);sx+=i%7;sy+=Math.floor(i/7);}
-  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;if(this.rulesVersion===2){this.progress=applySequenceWave(this.config,this.progress,this.board,matches);this.reportGoals();}
+  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;if(this.rulesVersion===2){const was=this.progress;this.progress=applySequenceWave(this.config,this.progress,this.board,matches);this.noteBreaks(was,this.progress);this.reportGoals();}
   this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
   if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
@@ -453,7 +455,7 @@ export class SequenceEngine extends MiniEngine{
   const g=this.geometry(),cellAt=i=>[g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell];
   for(const i of plan.clear){const [x,y]=cellAt(i),colour=colourOf(this.board[i]);this.burst(x,y,colors[colour<0||colour>6?6:colour],5);}
   this.score+=plan.gained;this.chain++;this.clearing=plan.clear;this.creating=plan.create;this.again=plan.againAt;
-  this.progress=applyV3Wave(this.config,this.progress,this.board,plan.clear);this.reportGoals();
+  const wasV3=this.progress;this.progress=applyV3Wave(this.config,this.progress,this.board,plan.clear);this.noteBreaks(wasV3,this.progress);this.reportGoals();
   // Points popup over the middle of whatever went off.
   const spots=plan.clear.size?[...plan.clear]:[...plan.create.keys()];
   let sx=0,sy=0;for(const i of spots){sx+=i%7;sy+=Math.floor(i/7);}
@@ -501,6 +503,7 @@ export class SequenceEngine extends MiniEngine{
  }
  tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
   for(const b of this.blasts)b.t+=dt;this.blasts=this.blasts.filter(b=>b.t<.45);
+  for(const k of this.cracks)k.t+=dt;this.cracks=this.cracks.filter(k=>k.t<SEQ_CRACK);
   if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
  update(dt){
   this.tickEffects(dt);if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
@@ -593,18 +596,58 @@ export class SequenceEngine extends MiniEngine{
   }
   c.restore();
  }
+ // Ice and traps have to read from arm's length, so each one covers its crystal rather than sitting
+ // beside it: ice is a frosted pane carrying the number of hits it still needs, a trap is a barred
+ // cage with a padlock. A layer breaking throws a short burst of cracks so the hit is visible.
  drawObstacle(i,g){
-  const c=this.ctx,x=g.x+(i%7)*g.cell+3,y=g.y+Math.floor(i/7)*g.cell+3,w=g.cell-6,ice=this.progress.ice[i],locked=this.progress.locks[i];c.save();
+  const c=this.ctx,x=g.x+(i%7)*g.cell+3,y=g.y+Math.floor(i/7)*g.cell+3,w=g.cell-6;
+  const ice=this.progress.ice[i],locked=this.progress.locks[i],crack=this.cracks?.find(k=>k.i===i);
+  if(!ice&&!locked&&!crack)return;
+  c.save();
   if(ice){
-   c.fillStyle='#b4efff18';rounded(c,x,y,w,w,7);c.fill();
-   for(let n=0;n<ice;n++){const inset=n*3.5;c.strokeStyle=n?'#e6fbff':'#74eaff';c.lineWidth=2;rounded(c,x+inset,y+inset,w-inset*2,w-inset*2,Math.max(2,7-n));c.stroke();}
-   if(ice===1){c.strokeStyle='#d6faff';c.lineWidth=1.5;c.beginPath();c.moveTo(x+w*.16,y+w*.12);c.lineTo(x+w*.37,y+w*.34);c.lineTo(x+w*.27,y+w*.53);c.stroke();}
+   c.fillStyle='#bdeeff4a';rounded(c,x,y,w,w,7);c.fill();
+   c.save();rounded(c,x,y,w,w,7);c.clip();
+   c.strokeStyle='#ffffff5c';c.lineWidth=Math.max(1,w*.05);c.beginPath();
+   for(const [ax,ay,bx,by] of [[.06,.34,.44,.0],[.58,.0,.98,.42],[.0,.7,.36,1],[.6,1,1,.62]]){c.moveTo(x+w*ax,y+w*ay);c.lineTo(x+w*bx,y+w*by);}
+   c.stroke();c.restore();
+   c.strokeStyle='#eafdff';c.lineWidth=Math.max(2,w*.055);rounded(c,x+1,y+1,w-2,w-2,6);c.stroke();
+   const size=Math.round(w*.54);
+   c.font=`900 ${size}px Inter, sans-serif`;c.textAlign='center';c.textBaseline='middle';c.lineJoin='round';
+   c.lineWidth=Math.max(3,size*.26);c.strokeStyle='#05304f';c.strokeText(String(ice),x+w/2,y+w/2+size*.04);
+   c.fillStyle='#ffffff';c.fillText(String(ice),x+w/2,y+w/2+size*.04);
   }
   if(locked){
-   const r=Math.min(11,w*.27),cx=x+w-r*.65,cy=y+w-r*.65;c.fillStyle='#092c4f';c.strokeStyle='#ffdc86';c.lineWidth=2;c.beginPath();c.arc(cx,cy,r,0,TAU);c.fill();c.stroke();
-   c.beginPath();c.arc(cx,cy-2,r*.35,Math.PI,TAU);c.stroke();c.fillStyle='#ffdc86';rounded(c,cx-r*.5,cy-2,r,r*.78,2);c.fill();
+   c.fillStyle='#071f3678';rounded(c,x,y,w,w,7);c.fill();
+   c.strokeStyle='#ffc748';c.lineCap='round';c.lineWidth=Math.max(2,w*.075);
+   rounded(c,x+1,y+1,w-2,w-2,6);c.stroke();
+   c.beginPath();
+   for(const f of [.3,.5,.7]){c.moveTo(x+w*f,y+w*.06);c.lineTo(x+w*f,y+w*.94);}
+   c.moveTo(x+w*.06,y+w*.5);c.lineTo(x+w*.94,y+w*.5);
+   c.stroke();
+   const r=Math.max(6,w*.2),cx=x+w/2,cy=y+w*.56;
+   c.strokeStyle='#ffdc86';c.lineWidth=Math.max(2,w*.055);
+   c.beginPath();c.arc(cx,cy-r*.72,r*.5,Math.PI,TAU);c.stroke();
+   c.fillStyle='#ffdc86';rounded(c,cx-r*.74,cy-r*.32,r*1.48,r*1.18,Math.max(2,r*.26));c.fill();
+   c.fillStyle='#0d2238';c.beginPath();c.arc(cx,cy+r*.26,r*.18,0,TAU);c.fill();
+  }
+  if(crack){
+   const p=Math.min(1,crack.t/SEQ_CRACK),grow=this.motion?p:.55;
+   c.globalAlpha=Math.max(0,1-p);c.lineCap='round';
+   c.strokeStyle=crack.kind==='free'?'#ffe6a1':'#f2feff';c.lineWidth=Math.max(2,w*.075)*(1-grow*.45);
+   const cx=x+w/2,cy=y+w/2,reach=w*(.2+grow*.4);
+   c.beginPath();
+   for(let k=0;k<6;k++){const a=crack.a+k*Math.PI/3;c.moveTo(cx+Math.cos(a)*reach*.22,cy+Math.sin(a)*reach*.22);c.lineTo(cx+Math.cos(a)*reach,cy+Math.sin(a)*reach);}
+   c.stroke();
   }
   c.restore();
+ }
+ // A broken ice layer or a freed crystal gets its own burst, so the player can see what their match did.
+ noteBreaks(before,after){
+  if(!before||!after)return;
+  for(let i=0;i<after.ice.length;i++){
+   if(after.ice[i]<before.ice[i])this.cracks.push({i,t:0,kind:'ice',a:(i%6)*.27});
+   else if(before.locks[i]&&!after.locks[i])this.cracks.push({i,t:0,kind:'free',a:(i%6)*.27});
+  }
  }
 
  finish(){this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,objectives:this.rulesVersion===1?[]:this.rulesVersion===3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}

@@ -54,4 +54,8 @@ write("blk-invalid", mix([(0, tone(300, 220, .09, .03, shape="soft")), (.07, ton
 # Out of moves: three gentle falling notes.
 write("blk-over", mix([(0, tone(P[4], P[4] * .97, .35, .12, shape="tri")), (.16, tone(P[2], P[2] * .97, .35, .12, shape="tri", vol=.85)),
                        (.32, tone(P[0] * .75, P[0] * .73, .6, .2, shape="tri", vol=.8))], .95), .6)
+# Undo: two soft bubbles stepping back down the scale.
+write("blk-undo", mix([(0, tone(P[7], P[7] * .55, .09, .03, curve=8)), (.07, tone(P[4], P[4] * .55, .09, .03, curve=8))], .2), .6)
+# Shuffle: six quick notes tumbling over each other, with a little riffle of noise at the end.
+write("blk-shuffle", mix([(i * .03, tone(f, f, .04, .012, shape="tri", vol=.8)) for i, f in enumerate([P[4], P[7], P[3], P[8], P[5], P[9]])] + [(.2, noise(.03, .006, 3000, 10000, .3))], .32), .55)
 print("wrote Peak Blocks sounds to", os.path.abspath(OUT))

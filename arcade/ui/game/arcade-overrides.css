@@ -77,37 +77,38 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .in-game .scene-sequence{background:#122b48}
 .in-game .scene-sequence::before{opacity:.09;filter:blur(12px) saturate(.3)}
 .in-game .scene-ridge{background:#082647}
-.in-game .game-message{font-size:14px;line-height:1.45;padding:10px 14px;background:#062342f5;border:0;color:#f0f9ff;max-width:calc(100% - 32px)}
+/* Many players are older: the status line is set large, on a solid panel, at full contrast against it. */
+.in-game .game-message{font-size:17px;font-weight:650;line-height:1.4;padding:12px 18px;background:#02142bfa;border:1px solid #6fd0ff66;border-radius:14px;color:#ffffff;max-width:calc(100% - 24px)}
 .in-game .hud small{font-size:11px}
-.in-game .scene-blocks .play-panel{padding-top:104px;padding-bottom:88px;gap:14px}
-.in-game .scene-blocks .block-board{width:min(100%,calc(100dvh - 358px));box-shadow:0 5px 18px #00142a70}
+.in-game .scene-blocks .play-panel{padding-top:104px;padding-bottom:96px;gap:14px}
+.in-game .scene-blocks .block-board{width:min(100%,calc(100dvh - 366px));box-shadow:0 5px 18px #00142a70}
 .in-game .scene-blocks.has-block-assist .game-message{visibility:hidden}
-.in-game .scene-blocks .game-tools{width:100%;justify-content:space-between;gap:8px}
-.in-game .scene-blocks .tool-button{flex:1;min-width:0;height:60px;padding:6px 4px;flex-direction:column;gap:4px;border:1px solid #78bedb;background:#0b3358;border-radius:12px}
-.in-game .scene-blocks .tool-button>span{font-size:13px;line-height:1.2}
-.in-game .scene-blocks .tool-button>.icon{width:22px;height:22px}
-.in-game .scene-blocks .tool-button>b{width:23px;height:23px;font-size:12px;top:-7px;right:0}
-.in-game .scene-blocks .tool-button.active{background:#76521d;border:2px solid #ffdc86;color:#fff7d8}
-.block-assist{position:absolute;left:var(--game-gutter);right:var(--game-gutter);bottom:max(12px,env(safe-area-inset-bottom));z-index:6;max-width:none;padding:10px 12px;background:#f3dca1;color:#152c42;border-radius:10px;display:grid;gap:3px;text-align:center;font:500 14px/1.4 Inter,sans-serif}
+.in-game .scene-blocks .game-tools{width:100%;height:auto;justify-content:space-between;gap:8px}
+/* Bigger tool buttons, each with its name spelled out under the icon. */
+.in-game .scene-blocks .tool-button{flex:1;min-width:0;height:68px;padding:8px 4px;flex-direction:column;gap:5px;border:2px solid #8fd3ee;background:#0d3d68;border-radius:14px;color:#fff}
+.in-game .scene-blocks .tool-button>span{font-size:15px;font-weight:750;line-height:1.1}
+.in-game .scene-blocks .tool-button>.icon{width:26px;height:26px;stroke-width:2.4}
+.in-game .scene-blocks .tool-button>b{width:26px;height:26px;font-size:13px;top:-9px;right:-2px}
+.in-game .scene-blocks .tool-button.active{background:#8a5f1d;border:3px solid #ffdc86;color:#fff7d8;box-shadow:0 0 0 3px #ffdc8644}
+/* A blocked hand, and bomb mode, each get a banner that is hard to miss from arm's length. */
+/* Takes the status line's slot below the tool dock, never over it: the banner's whole job is to send
+   the player to those buttons, so it must never cover them. On a short phone the headline carries it
+   alone and the glowing buttons say which tools. */
+.block-assist{position:absolute;left:var(--game-gutter);right:var(--game-gutter);bottom:max(12px,env(safe-area-inset-bottom));z-index:6;max-width:none;padding:13px 14px;background:#ffe8ae;color:#102339;border:3px solid #ffb020;border-radius:14px;display:grid;gap:4px;text-align:center;font:600 15px/1.4 Inter,sans-serif;box-shadow:0 8px 22px #00142a73}
 .block-assist[hidden]{display:none}
-.in-game .block-assist strong{font-size:16px;font-weight:800;color:#152c42}
-.bomb-mode .block-assist{background:#dff8ff}
-@keyframes tool-attention{0%,100%{background-color:#0b3358}50%{background-color:#416161}}
-.in-game .scene-blocks .tool-suggested{border:2px solid #ffdc86;animation:tool-attention 1.2s ease-in-out 3}
-.in-game .block-cell.bomb-target{outline:2px solid #ffdf89;outline-offset:-2px;background-color:#ba873f99}
-.in-game .block-cell.bomb-centre::after{content:"";position:absolute;inset:25%;border:2px solid #fff;border-radius:50%;background:#654719cc}
-.bomb-drag-preview{position:fixed;z-index:30;pointer-events:none;width:48px;height:48px;display:grid;place-items:center;transform:translate(-50%,-50%);border-radius:50%;background:#f9dc8c;color:#193554;border:2px solid #fff;box-shadow:0 6px 16px #00152e66}
-.bomb-drag-preview svg{width:28px;height:28px;stroke:currentColor;stroke-width:2;fill:none}
+.in-game .block-assist strong{font-size:21px;font-weight:850;line-height:1.2;color:#0d1f33}
+.bomb-mode .block-assist{background:#d6f4ff;border-color:#2bb7ff}
+/* The glow keeps going until the player acts: any action re-renders and the class comes off. */
+@keyframes tool-attention{0%,100%{background-color:#0d3d68;box-shadow:0 0 0 0 #ffdc8600}50%{background-color:#4a6a2f;box-shadow:0 0 0 5px #ffdc8655}}
+.in-game .scene-blocks .tool-suggested{border:3px solid #ffdc86;animation:tool-attention 1.2s ease-in-out infinite}
+.in-game .block-cell.bomb-target{outline:3px solid #ffd45e;outline-offset:-3px;background-color:#e0952ecc}
+.in-game .block-cell.bomb-centre::after{content:"";position:absolute;inset:22%;border:2px solid #fff;border-radius:50%;background:#4a3003e0}
+.bomb-drag-preview{position:fixed;z-index:30;pointer-events:none;min-width:56px;height:56px;padding:0 8px;display:grid;place-items:center;gap:0;transform:translate(-50%,-50%);border-radius:16px;background:#ffd45e;color:#162b47;border:3px solid #fff;box-shadow:0 6px 18px #00152e7a}
+.bomb-drag-preview svg{width:26px;height:26px;stroke:currentColor;stroke-width:2.4;fill:none}
+.bomb-drag-preview>span{font:800 11px/1 Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase}
 .bomb-drag-preview.invalid{opacity:.65}
 .in-game .scene-blocks [data-tool=bomb]{touch-action:none}
-/* Every block uses the official PH emblem. Reuse the blue crystal's original detail and change its tint. */
-.scene-blocks .block-1,.scene-blocks .block-2,.scene-blocks .block-3,.scene-blocks .block-4,.scene-blocks .block-7,.scene-blocks .block-8,.scene-blocks .block-9{background-position:0% center}
-.scene-blocks .block-2{filter:hue-rotate(-35deg)}
-.scene-blocks .block-3{filter:hue-rotate(185deg)}
-.scene-blocks .block-4{filter:saturate(.18) brightness(1.7)}
-.scene-blocks .block-7{filter:hue-rotate(-105deg)}
-.scene-blocks .block-8{filter:hue-rotate(48deg)}
-.scene-blocks .block-9{filter:hue-rotate(145deg)}
+/* Blocks are plain shapes now; the palette lives with the rest of the gameplay art in dist/gameplay.css. */
 
 /* A clear reading order: score/moves/level, goals, board, then obstacle instructions. */
 .in-game .sequence-goals{top:94px;display:block;padding:0;background:none;pointer-events:auto}
@@ -149,10 +150,13 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .ridge-rescue .secondary{background:#e0f2fc;color:#123350;border:1px solid #8cbdd5;box-shadow:none}
 .ridge-rescuing .game-back{visibility:hidden}
 @media(max-width:370px){.in-game .hud small{font-size:11px}.sequence-goal{gap:7px;padding:9px}.sequence-goal strong{font-size:16px}.sequence-goals .goal-symbol{width:24px;height:28px}.sequence-goals .goal-name{font-size:12px}.sequence-guide{padding:10px}.sequence-guide p{font-size:14px;line-height:1.4}.in-game .scene-blocks .tool-button>span{font-size:13px}.ridge-route>div{font-size:11px}.ridge-route strong{font-size:14px}}
-@media(max-height:700px){.in-game .scene-blocks .play-panel{padding-top:90px;padding-bottom:72px;gap:10px}.in-game .scene-blocks .block-board{width:min(100%,calc(100dvh - 330px))}.in-game .scene-blocks .block-tray .shape-slot{height:72px;min-height:72px;max-height:72px}.sequence-goal-heading{margin-bottom:4px}.sequence-goals{top:84px}.sequence-goal{padding-block:7px}.sequence-goal strong{font-size:16px}.sequence-guide{bottom:12px;padding:9px;gap:8px}.sequence-guide p{font-size:13px}.in-game .scene-blocks .game-message{font-size:13px;padding:8px 10px;bottom:10px}}
-@media(max-height:540px){.in-game .scene-blocks .play-panel{padding-top:82px;padding-bottom:56px}.in-game .scene-blocks .block-board{width:min(65%,calc(100dvh - 195px))}.in-game .scene-blocks .block-tray{width:90px;right:12px;top:92px;bottom:120px}.in-game .scene-blocks .block-tray .shape-slot{height:52px;min-height:44px;max-height:70px}.in-game .scene-blocks .game-tools{height:50px}.in-game .scene-blocks .tool-button{height:46px;flex-direction:row}.block-assist{padding:5px;font-size:12px;line-height:1.3}.block-assist strong{font-size:14px}.sequence-goals{top:78px}.sequence-goal-heading{display:none}.sequence-goal-list{gap:4px}.sequence-goal{padding:4px 8px}.sequence-goal strong{font-size:14px}.sequence-guide{padding:6px;bottom:8px}.sequence-guide p{font-size:12px}.ridge-route{top:80px}}
+@media(max-height:700px){.in-game .scene-blocks .play-panel{padding-top:90px;padding-bottom:80px;gap:10px}.in-game .scene-blocks .block-board{width:min(100%,calc(100dvh - 338px))}.in-game .scene-blocks .block-tray .shape-slot{height:72px;min-height:72px;max-height:72px}.sequence-goal-heading{margin-bottom:4px}.sequence-goals{top:84px}.sequence-goal{padding-block:7px}.sequence-goal strong{font-size:16px}.sequence-guide{bottom:12px;padding:9px;gap:8px}.sequence-guide p{font-size:13px}.in-game .scene-blocks .game-message{font-size:15px;padding:9px 12px;bottom:10px}.block-assist{padding:9px 10px;bottom:10px}.block-assist>span{display:none}.in-game .block-assist strong{font-size:19px}}
+@media(max-height:540px){.in-game .scene-blocks .play-panel{padding-top:82px;padding-bottom:56px}.in-game .scene-blocks .block-board{width:min(65%,calc(100dvh - 195px))}.in-game .scene-blocks .block-tray{width:90px;right:12px;top:92px;bottom:120px}.in-game .scene-blocks .block-tray .shape-slot{height:52px;min-height:44px;max-height:70px}.in-game .scene-blocks .game-tools{height:50px}.in-game .scene-blocks .tool-button{height:46px;flex-direction:row}.block-assist{padding:6px 8px;font-size:13px;line-height:1.3;}.block-assist strong{font-size:16px}.sequence-goals{top:78px}.sequence-goal-heading{display:none}.sequence-goal-list{gap:4px}.sequence-goal{padding:4px 8px}.sequence-goal strong{font-size:14px}.sequence-guide{padding:6px;bottom:8px}.sequence-guide p{font-size:12px}.ridge-route{top:80px}}
+/* Reduced motion gets the same "press me" weight as a steady highlight instead of a pulse. */
 @media(prefers-reduced-motion:reduce){.in-game .tool-suggested{animation:none}.block-drag-preview{animation:none}}
+@media(prefers-reduced-motion:reduce){.in-game .scene-blocks .tool-suggested{background:#4a6a2f;box-shadow:0 0 0 4px #ffdc8666}}
 [data-motion=false] .tool-suggested{animation:none}
+.in-game .scene-blocks[data-motion=false] .tool-suggested{background:#4a6a2f;box-shadow:0 0 0 4px #ffdc8666}
 
 .sequence-goal:last-child:nth-child(odd):not(:only-child){grid-column:1/-1}
 .in-game .impact-label.ridge{font-size:clamp(20px,5vw,28px);white-space:normal;max-width:calc(100% - 32px);line-height:1.25}
@@ -170,6 +174,86 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
  .sequence-goal strong{font-size:15px;margin-top:2px}
 }
 
+/* Sequence: the level-opening card, the one-time ice/trap explanation, and the "?" that reopens it. */
+.sequence-heading-actions{display:flex;align-items:center;gap:4px}
+.sequence-what{width:38px;height:38px;flex:none;padding:0;border:2px solid #7fd8f5;border-radius:50%;background:#0d3d68;color:#e8faff;font:800 18px/1 Inter,sans-serif}
+.sequence-what[hidden]{display:none}
+.sequence-level-card{position:absolute;inset:0;z-index:24;display:grid;place-items:center;padding:var(--game-gutter);background:#03152bb3;backdrop-filter:blur(2px)}
+.level-card-body{max-width:330px;width:100%;padding:22px 20px;border:3px solid #7fd8f5;border-radius:20px;background:linear-gradient(#0d3f6b,#072744);color:#fff;text-align:center;box-shadow:0 14px 40px #00101f8c;animation:level-card-in 260ms cubic-bezier(.2,1,.3,1)}
+.sequence-level-card[data-still] .level-card-body{animation:none}
+@media(prefers-reduced-motion:reduce){.level-card-body{animation:none}}
+@keyframes level-card-in{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
+.level-card-body>strong{display:block;font:900 32px/1.1 Inter,sans-serif;letter-spacing:.01em}
+.level-card-body ul{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:9px}
+.level-card-body li{display:flex;align-items:center;justify-content:flex-start;gap:11px;padding:9px 13px;border-radius:12px;background:#0b2f52;font:700 18px/1.25 Inter,sans-serif;text-align:left}
+.level-card-icon{flex:none;width:28px;height:28px;color:#8fe4fb;display:grid;place-items:center}
+.level-card-icon svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.level-card-icon img{width:28px;height:28px;object-fit:contain}
+.obstacle-intro{position:absolute;inset:0;z-index:26;display:grid;place-items:center;padding:var(--game-gutter);background:#03152bd9}
+.obstacle-intro-card{max-width:340px;width:100%;padding:20px;border:3px solid #7fd8f5;border-radius:20px;background:linear-gradient(#0d3f6b,#072744);color:#fff;box-shadow:0 14px 40px #00101f8c}
+.obstacle-intro-card h2{margin:0 0 14px;font:900 26px/1.15 Inter,sans-serif;text-align:center}
+.obstacle-row{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.obstacle-row p{margin:0;font:500 17px/1.4 Inter,sans-serif;color:#eaf8ff}
+.obstacle-row strong{font-weight:850;color:#fff}
+.obstacle-tile{position:relative;flex:none;width:62px;height:62px;border-radius:12px;background:#123965;display:grid;place-items:center;overflow:hidden}
+.obstacle-tile img{width:52px;height:52px;object-fit:contain}
+.obstacle-tile>i{position:absolute;inset:0;display:grid;place-items:center;font-style:normal}
+.obstacle-tile.is-ice>i{background:#bdeeff4a;box-shadow:inset 0 0 0 3px #eafdff;border-radius:12px;color:#fff;font:900 30px/1 Inter,sans-serif;text-shadow:0 0 4px #05304f,0 2px 3px #05304f}
+.obstacle-tile.is-lock>i{background:#071f36b8;box-shadow:inset 0 0 0 3px #ffc748;border-radius:12px;color:#ffdc86}
+.obstacle-tile.is-lock>i svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:2.2}
+.obstacle-intro-card .button{width:100%;margin-top:4px;min-height:52px;font-size:18px}
+/* The bottom guide carries all the in-play wording for Sequence, so it is set large and high-contrast. */
+.in-game .scene-sequence .sequence-guide{background:#04182ff2;border:1px solid #6fd0ff5c}
+.in-game .scene-sequence .sequence-guide p{font-size:16px;line-height:1.45;color:#f2fbff}
+.in-game .scene-sequence .sequence-guide .guide-symbol{width:30px;height:30px;color:#a5ecff}
+/* Bigger, higher-contrast goal chips with a tick when they are done. */
+.in-game .sequence-goal{background:#0d4066;padding:11px 13px}
+.in-game .sequence-goals .goal-name{font-size:14px;color:#e2f4fd}
+.in-game .sequence-goal strong{font-size:21px;color:#fff}
+.in-game .sequence-goal.is-complete{background:#1b6350;color:#d6ffe9}
+.in-game .sequence-goal.is-complete strong{color:#b6ffd9}
+.in-game .sequence-goal-heading>strong{font-size:19px}
+.scene-sequence:has(.obstacle-intro) .hint-caption,.scene-sequence:has(.obstacle-intro) .hint-hand,.scene-sequence:has(.sequence-level-card) .hint-caption,.scene-sequence:has(.sequence-level-card) .hint-hand{display:none}
+
+/* On a short phone the goal panel and the guide were taking 260px of a 640px screen and leaving the
+   board at 246px. The chips fold into one compact row and the guide into single lines, which hands
+   that height back to the board. The wording is not lost: the level card shows it at the start and the
+   "?" reopens it. */
+@media(max-height:780px){
+ .in-game .sequence-goal-heading{margin-bottom:5px}
+ .in-game .sequence-goal-heading>strong{font-size:0}
+ .in-game .sequence-goal-heading>strong::after{content:"Goals";font-size:16px}
+ .in-game .sequence-goal-list{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .in-game .sequence-goal-list:has(>.sequence-goal:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
+ .in-game .sequence-goal:last-child:nth-child(odd):not(:only-child){grid-column:auto}
+ .in-game .sequence-goal{flex-direction:column;text-align:center;gap:2px;padding:7px 4px}
+ .in-game .sequence-goals .goal-symbol{width:24px;height:24px}
+ .in-game .sequence-goals .goal-name{font-size:12px}
+ .in-game .sequence-goal strong{font-size:17px;margin-top:1px}
+ .in-game .sequence-what{width:34px;height:34px;font-size:17px}
+ .in-game .sequence-help{font-size:13px;padding-left:6px}
+ .in-game .scene-sequence .sequence-guide{gap:6px;padding:9px 10px}
+ .in-game .scene-sequence .sequence-guide p{font-size:14px;line-height:1.3}
+ .in-game .scene-sequence .sequence-guide .guide-symbol{width:24px;height:24px}
+ .level-card-body{padding:18px 16px}
+ .level-card-body>strong{font-size:28px}
+ .level-card-body li{font-size:17px;padding:8px 11px}
+ .obstacle-intro-card{padding:16px}
+ .obstacle-row p{font-size:16px}
+ .obstacle-tile{width:54px;height:54px}
+}
+
+/* Shorter still: the two guide lines sit side by side and the heading row loses its padding, which is
+   what finally lets the board reach the full width the screen allows on a 640px-tall phone. */
+@media(max-height:700px){
+ .in-game .scene-sequence .sequence-guide{grid-template-columns:1fr 1fr;gap:8px;padding:8px 9px;bottom:10px}
+ .in-game .scene-sequence .sequence-guide p{font-size:13px;line-height:1.28;align-items:flex-start;gap:7px}
+ .in-game .scene-sequence .sequence-guide .guide-symbol{width:20px;height:20px}
+ .in-game .scene-sequence .sequence-guide p:only-child{grid-column:1/-1}
+ .in-game .sequence-goal-heading{margin-bottom:4px;min-height:36px}
+ .in-game .sequence-help{min-height:36px;padding:4px 0 4px 6px}
+ .in-game .sequence-what{width:32px;height:32px;font-size:16px}
+}
 /* Ridge Run: the score, the gate count and the zone line are what a player checks mid-flight, so they
    are set larger and on their own backing rather than floating over the sky. */
 .in-game .scene-ridge .hud>div{min-height:70px}
