@@ -32,12 +32,22 @@ export function renderRidgeCheckpoint(root,checkpoint,gates){
  const progress=el.querySelector('progress');progress.value=gates-checkpoint.from;progress.setAttribute('aria-valuetext',`${gates-checkpoint.from} of 50 gates to the next colour`);
  el.dataset.stage=checkpoint.stage;
 }
-export function showRidgeRescue(root,engine){
+// The offer after the first crash. It counts down from five and ends the run on its own if nobody
+// answers, so a player who has put the phone down is not left staring at a frozen crash.
+export const RESCUE_SECONDS=5;
+export function showRidgeRescue(root,engine,{seconds=RESCUE_SECONDS}={}){
  if(root.querySelector('.ridge-rescue'))return;
  const previous=document.activeElement,el=document.createElement('section');el.className='ridge-rescue';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-labelledby','ridge-rescue-title');
- el.innerHTML='<div class="ridge-rescue-card"><h2 id="ridge-rescue-title">One more flight?</h2><p>Your score stays. Revive in a safe gap with a short shield.</p><strong>One free revive per run</strong><button type="button" class="button" data-revive>Revive &amp; keep flying</button><button type="button" class="button secondary" data-finish>Finish this run</button></div>';
+ el.innerHTML=`<div class="ridge-rescue-card"><h2 id="ridge-rescue-title">Revive?</h2><p>Your score stays. You start again in a safe gap with a short shield.</p><strong>One free revive per run</strong><button type="button" class="button" data-revive>Revive <span class="rescue-count" aria-hidden="true">${seconds}</span></button><button type="button" class="button secondary" data-finish>End run</button><p class="rescue-countdown" role="timer" aria-live="polite">Ending in ${seconds} seconds</p></div>`;
  root.classList.add('ridge-rescuing');root.append(el);
- const close=()=>{el.remove();root.classList.remove('ridge-rescuing');previous?.focus?.({preventScroll:true});};
+ let left=seconds,timer=0;
+ const close=()=>{clearInterval(timer);el.remove();root.classList.remove('ridge-rescuing');previous?.focus?.({preventScroll:true});};
+ timer=setInterval(()=>{
+  left--;
+  if(left<=0){close();engine.finish();return;}
+  el.querySelector('.rescue-count').textContent=left;
+  el.querySelector('.rescue-countdown').textContent=`Ending in ${left} ${left===1?'second':'seconds'}`;
+ },1000);
  el.querySelector('[data-revive]').onclick=()=>{if(engine.revive()){close();root.querySelector('canvas')?.focus({preventScroll:true});}};
  el.querySelector('[data-finish]').onclick=()=>{close();engine.finish();};
  el.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();engine.finish();}if(e.key==='Tab'){const buttons=[...el.querySelectorAll('button')],first=buttons[0],last=buttons.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};
