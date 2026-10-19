@@ -1,0 +1,11 @@
+{
+  "generator": "built-in image_gen",
+  "prompt": "Use case: stylized-concept. Asset type: transparent game sprite OVERLAY for Sequence wrapped special crystal. Draw ONLY a chunky beveled square silver-white and pale gold crystal harness frame with four small outward pointed corner facets. Front view orthographic, symmetric, rounded-square silhouette. EMPTY truly transparent open centre occupying 65 percent of the width, so a coloured crystal beneath remains visible. Clean premium 3D crystal material, bright ivory faces, subtle warm gold bevels, restrained cyan outer glow. Recognizable at 28px. No gem inside, no letters, no backdrop, no floor, no extra objects. Tight square framing, genuine transparent alpha background with 6 percent transparent margin.",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-c3a05568-63c3-4541-a423-bc40ec315a1a.png",
+  "export": {
+    "width": 256,
+    "height": 256,
+    "hasAlpha": true,
+    "format": "webp"
+  }
+}

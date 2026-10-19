@@ -1,5 +1,7 @@
+import {PLAIN,STRIPE_V,STRIPE_H,WRAP,BOMB} from './sequence-v3.js';
 const images=new Map();
 export const crystalSprites=['crystal-blue','crystal-cyan','crystal-gold','crystal-purple','crystal-green','crystal-pink','crystal-white'];
+export const sequenceSpecialSprites=['special-stripe','special-wrap','special-colour-bomb'];
 export const vialSprites=['vial-cyan','vial-pink','vial-green','vial-gold'];
 export function spriteImage(name){
   if(!images.has(name)&&typeof Image!=='undefined'){const image=new Image();image.src=`assets/gameplay/${name}.webp`;images.set(name,image);}
@@ -29,3 +31,14 @@ export function drawBottleObstacle(ctx,x,edge,height,width=70,inverted=false){
   ctx.restore();return true;
 }
 
+
+// Keep the original gem colour visible under the generated transparent harness.
+// Rotation follows the clear direction, including vertical-four → horizontal blast.
+export function drawSequenceCrystal(ctx,kind,colour,x,y,size){
+  if(kind===BOMB&&drawSprite(ctx,'special-colour-bomb',x,y,size,size))return true;
+  drawSprite(ctx,crystalSprites[kind===BOMB?6:colour],x,y,size,size);
+  if(kind===PLAIN)return true;
+  if(kind===STRIPE_V||kind===STRIPE_H)return drawSprite(ctx,'special-stripe',x,y,size,size,kind===STRIPE_H?Math.PI/2:0);
+  if(kind===WRAP)return drawSprite(ctx,'special-wrap',x,y,size,size);
+  return false; // Canvas special markers remain available if an asset cannot load.
+}

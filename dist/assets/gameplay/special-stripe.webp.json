@@ -1,0 +1,11 @@
+{
+  "generator": "built-in image_gen",
+  "prompt": "Use case: stylized-concept. Asset type: transparent game sprite OVERLAY for Sequence's four-match special crystal, not a full crystal. Draw ONLY a pair of parallel vertical luminous silver-white chrome crystal rails, each with a small pointed arrowhead at both ends, joined by two very fine translucent icy cross braces. Front view orthographic square composition, symmetric. Rails at 35 and 65 percent of width, spanning 85 percent height. Broad bright ivory-white faces, thin cyan bevels, restrained glow. Centre is EMPTY and transparent so a coloured gem underneath remains clearly visible. Distinct vertical direction at 28px size. Isolated on genuine transparent alpha background, no backdrop, no floor, no lettering, no full jewel, no extra objects. Tight square framing with 6 percent transparent margin.",
+  "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-016c1731-b7eb-428b-8cb8-793a4a0d7327.png",
+  "export": {
+    "width": 256,
+    "height": 256,
+    "hasAlpha": true,
+    "format": "webp"
+  }
+}

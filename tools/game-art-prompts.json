@@ -1,0 +1,50 @@
+[
+  {
+    "name": "blocks-cover",
+    "path": "arcade/ui/assets/cover-peak-blocks-v2.webp",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-951405e9-5465-4870-bce8-c69cbec38951.png",
+    "prompt": "Use case: stylized-concept. Asset type: landscape 16:9 game cover for Peak Haven Arcade's Peak Blocks. Create polished premium 3D crystal puzzle key art: a slightly angled navy 8 by 8 recessed square board, sapphire and cyan glass square blocks arranged in recognizable L, bar and square pieces, a completed luminous cyan row dissolving into restrained sparkles. Three waiting block pieces in foreground. Quiet deep alpine blue backdrop with distant soft icy mountain silhouettes. Focused readable composition, large tactile beveled crystal blocks, clean chrome/cyan highlights, minimal bloom. Centre the board within middle 75 percent for responsive crops. No character, no bottle, no text, no letters, no HUD, no buttons, no watermark. This is game cover art rather than a screenshot.",
+    "mode": "built-in image_gen",
+    "alpha": false
+  },
+  {
+    "name": "sequence-cover",
+    "path": "arcade/ui/assets/cover-sequence-v2.webp",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-6bb5697a-4930-4ead-aff4-23788734f981.png",
+    "prompt": "Use case: stylized-concept. Asset type: landscape 16:9 game cover for Peak Haven Arcade's Sequence match-three game. Premium polished 3D crystal puzzle key art. A navy recessed seven-column grid with large distinct sapphire diamond gems, cyan teardrop gems, purple hexagonal gems and gold star gems. Feature a central blue faceted diamond power crystal with two bright vertical silver-white luminous stripes and a restrained beam clearing its column; show a few neighboring gems under thin translucent ice to convey progression. Quiet deep navy alpine backdrop and soft distant mountains, clean cyan lighting, tactile jewel materials. Centre main grid within middle 75 percent for responsive crops. Spacious, legible, premium not busy. No mascot, no vial, no text, no letters, no score or HUD or buttons, no watermark.",
+    "mode": "built-in image_gen",
+    "alpha": false
+  },
+  {
+    "name": "ridge-cover",
+    "path": "arcade/ui/assets/cover-ridge-run-v2.webp",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-4f3b043b-2692-4cc4-bd5b-026d2eb954e8.png",
+    "prompt": "Use case: stylized-concept. Asset type: landscape 16:9 game cover for Peak Haven Arcade Ridge Run. Premium polished 3D arcade key art of a small luminous faceted cyan crystal orb flying through a clear gap between upright/inverted transparent electric-blue glass vials with silver chrome mouth rims as obstacles. Orb is clearly spherical crystal, NOT a bottle or character; its flight trail curves from lower left toward centre. Minimal calm blue atmosphere with distant alpine mountain silhouettes and subtle violet gradient along far right hinting next region. Large readable shapes, plenty of space around orb, centre subject within middle 70 percent for responsive crops, glossy jewel lighting with restrained glow. No text, letters, HUD, buttons, faces or watermark.",
+    "mode": "built-in image_gen",
+    "alpha": false
+  },
+  {
+    "name": "sequence-stripe",
+    "path": "dist/assets/gameplay/special-stripe.webp",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-016c1731-b7eb-428b-8cb8-793a4a0d7327.png",
+    "prompt": "Use case: stylized-concept. Asset type: transparent game sprite OVERLAY for Sequence's four-match special crystal, not a full crystal. Draw ONLY a pair of parallel vertical luminous silver-white chrome crystal rails, each with a small pointed arrowhead at both ends, joined by two very fine translucent icy cross braces. Front view orthographic square composition, symmetric. Rails at 35 and 65 percent of width, spanning 85 percent height. Broad bright ivory-white faces, thin cyan bevels, restrained glow. Centre is EMPTY and transparent so a coloured gem underneath remains clearly visible. Distinct vertical direction at 28px size. Isolated on genuine transparent alpha background, no backdrop, no floor, no lettering, no full jewel, no extra objects. Tight square framing with 6 percent transparent margin.",
+    "mode": "built-in image_gen",
+    "alpha": true
+  },
+  {
+    "name": "sequence-wrap",
+    "path": "dist/assets/gameplay/special-wrap.webp",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-c3a05568-63c3-4541-a423-bc40ec315a1a.png",
+    "prompt": "Use case: stylized-concept. Asset type: transparent game sprite OVERLAY for Sequence wrapped special crystal. Draw ONLY a chunky beveled square silver-white and pale gold crystal harness frame with four small outward pointed corner facets. Front view orthographic, symmetric, rounded-square silhouette. EMPTY truly transparent open centre occupying 65 percent of the width, so a coloured crystal beneath remains visible. Clean premium 3D crystal material, bright ivory faces, subtle warm gold bevels, restrained cyan outer glow. Recognizable at 28px. No gem inside, no letters, no backdrop, no floor, no extra objects. Tight square framing, genuine transparent alpha background with 6 percent transparent margin.",
+    "mode": "built-in image_gen",
+    "alpha": true
+  },
+  {
+    "name": "sequence-bomb",
+    "path": "dist/assets/gameplay/special-colour-bomb.webp",
+    "source": "/Users/mac/.codex/generated_images/01a1247e-a746-7661-8775-15bc24fb5a75/exec-86e5056c-2109-4a07-95da-634fc3f6ec61.png",
+    "prompt": "Use case: stylized-concept. Asset type: transparent game sprite for Sequence colour bomb. A single spherical faceted prismatic crystal orb with a bright white core, six large distinct coloured facets sapphire, cyan, gold, purple, green and pink, encircled by one thin polished silver ring. Premium jewel 3D render, frontal orthographic square composition, bold simple silhouette readable at 28px, restrained glow, high contrast. Isolated centred on genuine transparent alpha background, tight square framing 6 percent margin. No face, no text, no stars outside orb, no floor or backdrop.",
+    "mode": "built-in image_gen",
+    "alpha": true
+  }
+]
