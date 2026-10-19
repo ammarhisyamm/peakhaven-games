@@ -77,6 +77,16 @@ export function blocksHint(g){
   if(!best)return null;
   g.tools.hint--;s.selected=best.i;g.log.push(['h']);return best;
 }
+// What the assist banner says, and which tool buttons should call for attention. Kept pure and out of
+// the UI so the wording and the suggested set are covered by tests with no DOM. `suggest` lists every
+// tool the player can still press: Hint spends no use on a blocked board, so offering it costs nothing.
+export function blocksAssist(g,{bomb=false,ended=false}={}){
+  if(bomb)return {mode:'bomb',title:'Bomb ready · clears 3 × 3',text:'Drag it onto the board, or tap a square. Tap Bomb again to cancel.',suggest:[]};
+  if(ended||g.ended||anyFit(g))return {mode:null,title:'',text:'',suggest:[]};
+  const suggest=['bomb','undo','shuffle','hint'].filter(k=>g.tools[k]>0&&(k!=='undo'||g.history.length>0));
+  const names=suggest.map(k=>k[0].toUpperCase()+k.slice(1)).join(', ').replace(/, ([^,]+)$/,' or $1');
+  return {mode:'stuck',title:'No space left! Use a tool',text:names?`Tap ${names} below to make room.`:'No tools left.',suggest};
+}
 export function blocksResult(g){const s=g.state;return {score:s.score,lines:s.lines,moves:s.moves,bestCombo:s.bestChain||0,won:false,replay:{v:g.version,game:'blocks',seed:g.seed,log:g.log.map(x=>[...x])}};}
 
 // Server side: rebuild a run from its seed and log. Any illegal step means the log was tampered with.

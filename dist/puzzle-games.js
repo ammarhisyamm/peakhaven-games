@@ -1,4 +1,4 @@
-import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,anyFit} from './blocks-core.js';
+import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit} from './blocks-core.js';
 import {makeSeed} from './rng.js';
 import {SHAPES,emptyGrid,tileLayout,tileRows,fits,placements,placeBlock,makeTray,bombGrid,dealTiles,freeTile,matchTiles,tileHint} from './puzzle-rules.js';
 const symbols=['Blue vial','Pink vial','Gold vial','Purple vial','Green vial','Blue crystal','Pink crystal','Gold crystal','Green crystal'];
@@ -12,12 +12,14 @@ export function startBlocks(root,cb,options={}){
  const locked=()=>paused||!alive||ended;
  const assist=document.createElement('aside');assist.className='block-assist';assist.hidden=true;assist.setAttribute('role','status');assist.setAttribute('aria-live','polite');root.querySelector('.game-tools').before(assist);
  const toolDescriptions={bomb:'Drag Bomb onto the board, or select it then tap a square. Clears a 3 by 3 area.',undo:'Restore your last move.',shuffle:'Replace the pieces in your hand.',hint:'Show where a piece fits.'};
+ // The banner and the calling-for-attention tools keep running until the player acts: every action
+ // re-renders, and the board is no longer blocked once it lands.
  function help(){
-  const stuck=!ended&&!g.ended&&!anyFit(g),available=['bomb','undo','shuffle'].filter(k=>tools[k]&&(k!=='undo'||g.history.length));root.classList.toggle('has-block-assist',bomb||stuck);root.classList.toggle('bomb-mode',bomb);
-  assist.hidden=!bomb&&!stuck;
-  const title=bomb?'Bomb ready · clear 3 × 3':'No pieces fit',text=bomb?'Drag to the board, or tap a square. Tap Bomb to cancel.':`Try ${available.map(k=>k[0].toUpperCase()+k.slice(1)).join(', ').replace(/, ([^,]+)$/,' or $1')} below to make room.`;
-  if(!assist.hidden&&assist.dataset.text!==title+text){assist.innerHTML='<strong></strong><span></span>';assist.querySelector('strong').textContent=title;assist.querySelector('span').textContent=text;assist.dataset.text=title+text;}
-  for(const [k,b]of Object.entries(buttons)){b.classList.toggle('tool-suggested',stuck&&available.includes(k)&&!bomb);b.setAttribute('aria-label',`${k[0].toUpperCase()+k.slice(1)}. ${tools[k]} uses left. ${toolDescriptions[k]}`);if(k==='bomb')b.setAttribute('aria-pressed',String(bomb));}
+  const advice=blocksAssist(g,{bomb,ended});
+  root.classList.toggle('has-block-assist',advice.mode!==null);root.classList.toggle('bomb-mode',bomb);root.classList.toggle('blocks-stuck',advice.mode==='stuck');
+  assist.hidden=advice.mode===null;
+  if(!assist.hidden&&assist.dataset.text!==advice.title+advice.text){assist.innerHTML='<strong></strong><span></span>';assist.querySelector('strong').textContent=advice.title;assist.querySelector('span').textContent=advice.text;assist.dataset.text=advice.title+advice.text;}
+  for(const [k,b]of Object.entries(buttons)){b.classList.toggle('tool-suggested',advice.suggest.includes(k));b.setAttribute('aria-label',`${k[0].toUpperCase()+k.slice(1)}. ${tools[k]} uses left. ${toolDescriptions[k]}`);if(k==='bomb')b.setAttribute('aria-pressed',String(bomb));}
  }
 
  // The first time a run passes the player's own best for Blocks: once per run, and only if they had a best to beat.
@@ -37,7 +39,7 @@ export function startBlocks(root,cb,options={}){
 const p=state.tray[state.selected];if(!p)return;const out=placeBlock(state.grid,p.shape,r,c,p.color);if(!out)return;
   for(const [x,y]of p.shape)board.querySelector(`[data-cell="${(r+y)*8+c+x}"]`)?.classList.add('ghost');
   for(const [rr,cc]of out.cleared)board.querySelector(`[data-cell="${rr*8+cc}"]`)?.classList.add('clear-preview');}
- function afterAction(){if(g.ended){finish();return;}hud();if(!anyFit(g))cb.message('No pieces fit. Choose a highlighted tool to make room.');}
+ function afterAction(){if(g.ended){finish();return;}hud();if(!anyFit(g))cb.message('No space left! Use one of the glowing tools to make room.');}
  // Block Blast style: every placement snaps; a clear pops on top, pitched up two semitones per combo step, with one more sparkle per step.
 function clearSound(out){if(out.lines){const rate=2**((Math.min(out.combo||1,6)-1)/6),big=out.lines>=2||out.perfect;cb.sound(big?'big':'perfect',{rate});for(let i=1;i<Math.min(out.combo||1,5);i++)cb.sound('sparkle',{rate:rate*2**((i*2)/12)*1.2,delay:.05+i*.045});}cb.sound('drop');}
 function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound('invalid');cb.message('Choose a square near filled blocks.');return;}state=g.state;bomb=false;cb.effect('SPACE CLEARED!','blocks');cb.sound('merge');render();afterAction();return;}const p=state.tray[state.selected];if(!p){cb.sound('invalid');cb.message('Select a piece from the tray first.');return;}const before=state.grid.map(row=>[...row]),out=blocksPlace(g,state.selected,r,c);if(!out){cb.sound('invalid');cb.message('That piece needs empty squares. Try another spot.');return;}state=g.state;hintCells=[];render();landed(p,r,c,out);blast(out,before,p.color,r,c);clearSound(out);cb.message(out.lines?`${out.lines} ${out.lines===1?'line':'lines'} cleared! +${out.points}${out.combo>1?` · combo ${out.combo}`:''}`:'Lovely fit. Keep a little space for the next piece.');let shown=false;if(out.lines){const praise=['','','GREAT!','EXCELLENT!','AMAZING!','UNBELIEVABLE!','UNBELIEVABLE!'][Math.min(out.lines,6)],label=out.perfect?'PERFECT CLEAR!':out.combo>1?`COMBO ${out.combo}${praise?` · ${praise}`:''}`:praise;if(label){cb.effect(label,'blocks',{lines:out.lines,combo:out.combo,perfect:out.perfect,points:out.points});shown=true;}}newBest(shown);cb.progress?.({lines:state.lines});afterAction();}
@@ -99,12 +101,12 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
   if(bombArt){bombArt.style.left=`${x}px`;bombArt.style.top=`${y}px`;bombArt.classList.toggle('invalid',!bombPointer.valid);}preview(r,c);
  }
  const bombDown=e=>{if(drag||bombPointer||locked()||!tools.bomb||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;bombPointer={id:e.pointerId,x:e.clientX,y:e.clientY,moving:false};buttons.bomb.setPointerCapture?.(e.pointerId);};
- const bombMove=e=>{if(!bombPointer||e.pointerId!==bombPointer.id||locked())return;if(!bombPointer.moving&&Math.hypot(e.clientX-bombPointer.x,e.clientY-bombPointer.y)>=TAP_SLOP){bombPointer.moving=true;bomb=true;hintCells=[];hud();bombArt=document.createElement('div');bombArt.className='bomb-drag-preview';bombArt.setAttribute('aria-hidden','true');bombArt.innerHTML=buttons.bomb.querySelector('svg').outerHTML;root.append(bombArt);cb.sound('tool');}if(bombPointer.moving){e.preventDefault();bombFollow(e);}};
+ const bombMove=e=>{if(!bombPointer||e.pointerId!==bombPointer.id||locked())return;if(!bombPointer.moving&&Math.hypot(e.clientX-bombPointer.x,e.clientY-bombPointer.y)>=TAP_SLOP){bombPointer.moving=true;bomb=true;hintCells=[];hud();bombArt=document.createElement('div');bombArt.className='bomb-drag-preview';bombArt.setAttribute('aria-hidden','true');bombArt.innerHTML=`${buttons.bomb.querySelector('svg').outerHTML}<span>Bomb</span>`;root.append(bombArt);cb.sound('tool');}if(bombPointer.moving){e.preventDefault();bombFollow(e);}};
  const bombUp=e=>{if(!bombPointer||e.pointerId!==bombPointer.id)return;if(!bombPointer.moving){clearBombPointer();return;}bombFollow(e);const last=bombPointer;clearBombPointer();suppressBombClick=true;setTimeout(()=>{suppressBombClick=false;},0);if(locked())return;if(last.valid)place(last.r,last.c);else{cb.sound('invalid');cb.message('Bomb not used. Drop it over filled squares, or tap Bomb to cancel.');hud();}};
  const bombCancel=e=>{if(!bombPointer||e?.pointerId!==undefined&&e.pointerId!==bombPointer.id)return;clearBombPointer();bomb=false;hud();};
  for(const [name,handler]of [['pointerdown',bombDown],['pointermove',bombMove],['pointerup',bombUp],['pointercancel',bombCancel],['lostpointercapture',bombCancel]])buttons.bomb.addEventListener(name,handler);
  window.addEventListener('blur',bombCancel);
- buttons.bomb.onclick=()=>{if(suppressBombClick){suppressBombClick=false;return;}if(locked()||!tools.bomb)return;bomb=!bomb;hintCells=[];clearPreview();hud();cb.sound('tool');cb.message(bomb?'Bomb ready. Drag it or tap a square. The outline shows the 3 by 3 area.':'Bomb cancelled. Select a piece to keep playing.');};
+ buttons.bomb.onclick=()=>{if(suppressBombClick){suppressBombClick=false;return;}if(locked()||!tools.bomb)return;bomb=!bomb;hintCells=[];clearPreview();hud();cb.sound('tool');cb.message(bomb?'Bomb ready. Drag it onto the board, or tap a square. The outline shows the 3 by 3 area.':'Bomb cancelled. Select a piece to keep playing.');};
 
  buttons.undo.onclick=()=>{if(locked()||!blocksUndo(g))return;state=g.state;bomb=false;hintCells=[];render();cb.sound('undo');cb.message('Last move restored.');afterAction();};
  buttons.shuffle.onclick=()=>{if(locked()||!blocksShuffle(g))return;state=g.state;bomb=false;hintCells=[];render();if(motion)tray.querySelectorAll('.shape-preview').forEach((p,i)=>p.animate([{transform:'translateY(9px) rotate(-8deg) scale(.75)',opacity:.2},{transform:'translateY(-3px) rotate(4deg) scale(1.04)',opacity:1,offset:.65},{transform:'none',opacity:1}],{duration:240,delay:i*35,easing:'cubic-bezier(.16,1,.3,1)'}));cb.sound('shuffle');cb.message('Three fresh pieces. Find a new fit.');afterAction();};

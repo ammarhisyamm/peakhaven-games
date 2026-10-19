@@ -7,7 +7,7 @@ globalThis.window={devicePixelRatio:1};
 globalThis.requestAnimationFrame=()=>{rafCalls++;return 1;};
 globalThis.cancelAnimationFrame=()=>{};
 globalThis.Image=class{complete=false;naturalWidth=0;};
-const {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,replayBlocks,anyFit}=await import('../dist/blocks-core.js');
+const {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,replayBlocks,anyFit}=await import('../dist/blocks-core.js');
 const {SHAPES,PIECES,makeTray,emptyGrid,placements,placeBlock,RAMP_MOVES}=await import('../dist/puzzle-rules.js');
 const {RidgeEngine,RIDGE_V4}=await import('../dist/tryout-games.js');
 const {MergeEngine,MERGE_SPAWN_TIERS}=await import('../dist/engines.js');
@@ -559,4 +559,70 @@ test('All supported Ridge replays verify, each on the course it was flown',async
   e.finish();
   await assert.rejects(replayRidge({...out.result.replay,v:7}),/Not a Ridge Run replay/);
   e.destroy();
+});
+
+
+// Dragging the bomb must leave exactly the log a tap leaves, or every ranked replay recorded with a
+// drag would fail server verification. The UI calls blocksBomb(g,row,col) either way; this pins the
+// shape of what that writes, and that the server rebuilds the same run from it.
+test('a bomb writes ["b",row,col] however it was aimed, and the run still replays',()=>{
+ const g=createBlocks(99);
+ blocksPlace(g,g.state.tray.findIndex(Boolean),0,0);
+ const filled=[];
+ g.state.grid.forEach((row,r)=>row.forEach((v,c)=>{if(v)filled.push([r,c]);}));
+ assert.ok(filled.length,'a placed piece to aim at');
+ const [r,c]=filled[0];
+ assert.equal(blocksBomb(g,r,c),true);
+ const step=g.log.at(-1);
+ assert.deepEqual(step,['b',r,c]);
+ assert.equal(step.length,3,'row and column only: no drag/tap marker sneaks into the log');
+ const result=blocksResult(g);
+ assert.deepEqual(replayBlocks(result.replay),result);
+});
+test('a bomb that lands on empty squares is refused and writes nothing',()=>{
+ const g=createBlocks(5),before=g.log.length,uses=g.tools.bomb;
+ assert.equal(blocksBomb(g,4,4),false);
+ assert.equal(g.log.length,before);assert.equal(g.tools.bomb,uses,'a wasted drop costs no use');
+});
+
+// The blocked-hand banner and the tools it points at. blocksAssist is the whole decision, so the
+// wording and the highlighted set are checked here rather than through the DOM.
+function stuckGame(){
+ // Fill the board except one square, so nothing in a three-piece hand can fit.
+ const g=createBlocks(1);
+ g.state.grid=g.state.grid.map((row,r)=>row.map((v,c)=>(r===7&&c===7?0:1)));
+ g.state.tray=[{shape:[[0,0],[1,0]],color:1},{shape:[[0,0],[1,0]],color:1},{shape:[[0,0],[1,0]],color:1}];
+ return g;
+}
+test('a blocked hand asks for a tool in plain words and names the ones that are left',()=>{
+ const g=stuckGame();
+ assert.equal(anyFit(g),false);
+ const advice=blocksAssist(g,{});
+ assert.equal(advice.mode,'stuck');
+ assert.equal(advice.title,'No space left! Use a tool');
+ assert.deepEqual(advice.suggest,['bomb','shuffle','hint'],'Undo is left out with nothing to undo');
+ assert.match(advice.text,/Bomb, Shuffle or Hint/);
+ g.history.push(structuredClone(g.state));
+ assert.deepEqual(blocksAssist(g,{}).suggest,['bomb','undo','shuffle','hint'],'Undo joins once there is a move to take back');
+ g.tools.bomb=0;g.tools.hint=0;
+ assert.deepEqual(blocksAssist(g,{}).suggest,['undo','shuffle']);
+ assert.match(blocksAssist(g,{}).text,/Undo or Shuffle/);
+});
+test('nothing is suggested while a piece still fits, after the run ends, or while the bomb is armed',()=>{
+ const playable=createBlocks(7);
+ assert.equal(blocksAssist(playable,{}).mode,null);
+ assert.deepEqual(blocksAssist(playable,{}).suggest,[]);
+ const g=stuckGame();
+ assert.equal(blocksAssist(g,{ended:true}).mode,null,'the result screen gets no banner');
+ g.ended=true;assert.equal(blocksAssist(g,{}).mode,null);
+ const armed=blocksAssist(stuckGame(),{bomb:true});
+ assert.equal(armed.mode,'bomb');
+ assert.match(armed.title,/Bomb ready/);
+ assert.deepEqual(armed.suggest,[],'bomb mode has one job and does not also flash the other tools');
+});
+test('a blocked hand keeps asking: the advice is the same until the player actually acts',()=>{
+ const g=stuckGame(),first=blocksAssist(g,{});
+ for(let i=0;i<5;i++)assert.deepEqual(blocksAssist(g,{}),first,'it does not time out on its own');
+ assert.equal(blocksShuffle(g),true);
+ assert.notEqual(blocksAssist(g,{}).suggest.length,4);
 });
