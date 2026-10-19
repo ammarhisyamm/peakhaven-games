@@ -16,7 +16,11 @@ export async function verifySegment({game,replay,seed,level,elapsedSeconds,rules
   if((replay.seed>>>0)!==(seed>>>0)||replay.seed!==seed)reject('Replay used a different course');
   let result;
   try{
-    if(game==='ridge')result=await replayRidge(replay);
+    if(game==='ridge'){
+      if(rulesVersion===6&&replay.v!==6)reject('Replay uses different course rules');
+      if(rulesVersion===5&&![4,5].includes(replay.v))reject('Replay uses different course rules');
+      result=await replayRidge(replay);
+    }
     else if(game==='sequence'){
       if(replay.level!==level)reject('Replay is for another level');
       if(rulesVersion!==undefined&&replay.v!==rulesVersion)reject('Replay uses different level rules');

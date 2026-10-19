@@ -164,7 +164,7 @@ test('The tap that resumes Ridge Run carries on the paused flight instead of for
 test('A Ridge run with pauses replays to the same score, and an old-format replay is refused',async()=>{
   const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:21,motion:false});e.action();
   for(let t=0;t<120*20&&!e.ended;t++){if(t%300===150){e.pause(true);e.pause(false);}const next=e.gates.find(g=>!g.passed);if(e.waiting&&t%300===170)e.action();else if(!e.waiting&&next&&e.py>next.cy+12&&e.vy>-60)e.action();e.step(SIM_STEP);}
-  e.finish();const rep=out.result.replay;assert.equal(rep.v,5);assert.ok(rep.resumes.length>0);
+  e.finish();const rep=out.result.replay;assert.equal(rep.v,6);assert.ok(rep.resumes.length>0);
   assert.equal((await replayRidge(rep)).score,out.result.score);
   await assert.rejects(replayRidge({...rep,v:3}),/Not a Ridge Run replay/);e.destroy();
 });
@@ -541,8 +541,8 @@ test('Ridge moving columns arrive in stages off the RAMP knob, and every column 
   assert.ok(meanSwing(full+8)>meanSwing(half),'and they should swing further than they did at the midpoint');
 });
 
-test('Both v4 and v5 Ridge replays verify, each on the course it was flown',async()=>{
-  for(const version of [4,5]){
+test('All supported Ridge replays verify, each on the course it was flown',async()=>{
+  for(const version of [4,5,6]){
     const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:777,motion:false,version});
     e.action();
     for(let t=0;t<120*40&&!e.ended;t++){if(ridgeBot(e)&&!e.dead)e.action();e.step(SIM_STEP);}
@@ -557,6 +557,6 @@ test('Both v4 and v5 Ridge replays verify, each on the course it was flown',asyn
   const out=callbacks(),e=new RidgeEngine(canvas(),out.cb,{seed:5,motion:false});
   e.action();for(let t=0;t<600&&!e.ended;t++)e.step(SIM_STEP);
   e.finish();
-  await assert.rejects(replayRidge({...out.result.replay,v:6}),/Not a Ridge Run replay/);
+  await assert.rejects(replayRidge({...out.result.replay,v:7}),/Not a Ridge Run replay/);
   e.destroy();
 });

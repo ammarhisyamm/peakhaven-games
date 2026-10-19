@@ -21,7 +21,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function tick(s,gates,R,hitsVial){
   const dt=SIM_STEP,G=R.GRAVITY;
   s.vy+=G*dt;s.py+=s.vy*dt;
-  const sp=R.SPEED+R.SPEED_GAIN*clamp(s.passed/60,0,1);
+  const sp=R.speedFor?R.speedFor(s.passed):R.SPEED+R.SPEED_GAIN*clamp(s.passed/60,0,1);
   s.rt+=dt;s.d+=sp*dt;
   for(let i=s.first;i<gates.length;i++){const g=gates[i];if(g.x0-s.d+R.PW<s.px-R.R){s.passed++;s.first=i+1;}else break;}
   if(s.py<R.R){s.py=R.R;s.vy=0;}
@@ -65,7 +65,7 @@ export function createPlanner(RIDGE,hitsVial,{every=5,horizon=300,margin=.35}={}
       const gates=e.gates.map(g=>({x0:g.x,gy:g.gy,amp:g.amp,phase:g.phase,rate:g.rate,gap:g.gap}));
       let first=0;while(first<gates.length&&e.gates[first].passed)first++;
       const s={py:e.py,vy:e.vy,rt:e.runTime,d:0,passed:e.gatesPassed,first,first0:0,px:e.px,margin};
-      const r=search(s,gates,RIDGE,hitsVial,{every,horizon,hint});planner.nodes+=r.nodes;
+      const r=search(s,gates,{...RIDGE,speedFor:n=>e.speedFor(n)},hitsVial,{every,horizon,hint});planner.nodes+=r.nodes;
       if(r.ok){hint=r.plan.slice(1);return r.plan[0];}
       // No safe line within the horizon: note where, then fall back to holding the next gate's centre.
       planner.stuckAt??={tick:e.ticks,gate:e.gatesPassed,survives:r.best};hint=null;return e.py>(gates[first]?.gy??300);
