@@ -14,6 +14,13 @@ body[data-page="play"] .prize-words strong{font-size:clamp(10px,2.8vw,24px);line
 body[data-page="play"] .prize-words p{font-size:clamp(10px,2.45vw,18px);margin-top:5px;line-height:1.15;white-space:nowrap}
 body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 12px}
 .daily-intro{text-align:left;margin:14px 0 16px}
+/* The balance and, for a guest, the way back to an account. Both sit above the game cards because this
+   page hides the site footer, which is where the session controls otherwise live. */
+.play-wallet{margin:0 0 14px}
+.play-wallet .wallet-balance{padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:#f4fbff}
+.play-signin{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:#eafaff;font-size:14px}
+.play-signin>span{flex:1;min-width:180px}
+.play-signin .primary{min-height:38px;font-size:14px;padding-inline:18px;white-space:nowrap}
 .daily-intro h2{font-size:clamp(20px,4.35vw,32px);font-weight:780;letter-spacing:-.035em;line-height:1.2;text-wrap:balance}
 .daily-intro p{font-size:clamp(13px,2.9vw,21px);color:#475c69;line-height:1.35;margin-top:5px}
 .daily-games{display:grid;gap:8px}

@@ -59,11 +59,13 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   const RECENT_MS=14*24*60*60*1000;
   async function wallet(playerId){
     const shop=await shopReady();
-    const base={coins:0,purchases:[],shop:{enabled:shop,provider:payments.id,packs:shop?packList():[],payment:shop?payments.describe():null}};
+    // coinsReady is sent on its own because a balance of nil and no coin system at all look identical
+    // from the browser, and only one of them should put a wallet on the screen.
+    const base={coinsReady:false,coins:0,purchases:[],shop:{enabled:shop,provider:payments.id,packs:shop?packList():[],payment:shop?payments.describe():null}};
     if(!(await coinsReady()))return base;
     const rows=await store.playerPurchases(playerId,['pending','paid']);
     const cutoff=now().getTime()-RECENT_MS;
-    return {...base,coins:await coinBalance(playerId),
+    return {...base,coinsReady:true,coins:await coinBalance(playerId),
       purchases:rows.filter(r=>r.status==='pending'||(Date.parse(r.resolved_at??'')||0)>cutoff).map(purchaseView)};
   }
   // The admin view of the money: what is waiting to be matched against the bank feed, every player's balance
