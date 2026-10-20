@@ -1,7 +1,9 @@
 // Shared samples keep the existing PH sound. Every known cue also has a same-context
 // fallback: a late/failed download or an interrupted mobile AudioContext cannot swallow it.
 import {audioSession} from './audio-session.js';
-const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear','blk-pick','blk-place','blk-clear','blk-big','blk-invalid','blk-over','blk-undo','blk-shuffle'];
+const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear','blk-pick','blk-place','blk-clear','blk-big','blk-invalid','blk-over','blk-undo','blk-shuffle',
+ // The marimba cascades for a Peak Blocks combo, and the Ridge Run jump.
+ 'blk-combo-1','blk-combo-2','blk-combo-3','blk-combo-4','blk-combo-5','blk-combo-big','ridge-jump'];
 // A context that is interrupted or suspended may take a moment to come back. Wait that long for it,
 // then give up: a cue older than STALE no longer reads as an answer to the tap that asked for it.
 const WAKE_WAIT=1200,STALE=500;
@@ -15,10 +17,14 @@ const cues={
  blkPick:{file:'blk-pick',gain:.55,jitter:.03,own:true},blkPlace:{file:'blk-place',gain:.5,jitter:.04,own:true},blkClear:{file:'blk-clear',gain:.7,own:true},
  blkBig:{file:'blk-big',gain:.8,own:true},blkSparkle:{file:'blk-pick',gain:.35,own:true},blkInvalid:{file:'blk-invalid',gain:.65,own:true},blkOver:{file:'blk-over',gain:.7,own:true},
  blkUndo:{file:'blk-undo',gain:.55,own:true},blkShuffle:{file:'blk-shuffle',gain:.55,own:true},
- // One clear cue per combo level, and a separate big clear. They all point at today's sounds on purpose:
- // the hook is the name, so a new sample per level drops in by changing one `file` here.
- blkClear1:{file:'blk-clear',gain:.7,own:true},blkClear2:{file:'blk-clear',gain:.7,own:true},blkClear3:{file:'blk-clear',gain:.7,own:true},
- blkClear4:{file:'blk-clear',gain:.7,own:true},blkClear5:{file:'blk-clear',gain:.7,own:true},blkBigClear:{file:'blk-big',gain:.8,own:true},
+ // One clear cue per combo level, and a separate big clear: a marimba cascade that runs longer and higher
+ // with each clear in a streak. blk-clear and blk-big stay for the cues that still use them (the Bomb, and
+ // NEW BEST!), so nothing else changed sound.
+ blkClear1:{file:'blk-combo-1',gain:.7,own:true},blkClear2:{file:'blk-combo-2',gain:.7,own:true},blkClear3:{file:'blk-combo-3',gain:.7,own:true},
+ blkClear4:{file:'blk-combo-4',gain:.7,own:true},blkClear5:{file:'blk-combo-5',gain:.7,own:true},blkBigClear:{file:'blk-combo-big',gain:.8,own:true},
+ // Ridge Run's flap: a soft low bloop. `jitter` is a plain Math.random spread on the playback rate, applied
+ // in play() and nowhere near the engine's seeded RNG, so a run's physics and its replay cannot feel it.
+ ridgeJump:{file:'ridge-jump',gain:.45,jitter:.06,own:true},
 };
 // How many combo levels have a clear sound of their own. A longer combo keeps the top one.
 export const COMBO_LEVELS=5;
@@ -29,7 +35,7 @@ export function clearEvent({combo=1,big=false}={}){
  return `clear${level}`;
 }
 const pitch={mahjong:1.12,merge:.88,sequence:1.08,blocks:.95};
-const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle',clear1:'blkClear1',clear2:'blkClear2',clear3:'blkClear3',clear4:'blkClear4',clear5:'blkClear5',bigClear:'blkBigClear'}};
+const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},ridge:{flap:'ridgeJump'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle',clear1:'blkClear1',clear2:'blkClear2',clear3:'blkClear3',clear4:'blkClear4',clear5:'blkClear5',bigClear:'blkBigClear'}};
 export function cueFor(game,event){const name=overrides[game]?.[event]??event,cue=cues[name];return cue?{...cue,rate:(cue.rate||1)*(cue.own?1:pitch[game]||1)}:null;}
 const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12],clear1:[0,7],clear2:[0,7,12],clear3:[0,4,7,12],clear4:[0,4,7,14],clear5:[0,5,9,12,17],bigClear:[0,4,7,12]};
 export class GameAudio{

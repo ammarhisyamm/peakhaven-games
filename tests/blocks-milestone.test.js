@@ -179,11 +179,15 @@ test('the clear cue carries the combo level, with a separate big clear',()=>{
  for(let level=1;level<=COMBO_LEVELS;level++){
   const cue=cueFor('blocks',`clear${level}`);
   assert.ok(cue,`clear${level} resolves to a cue`);
-  assert.equal(cue.file,'blk-clear','for now every level keeps the sound we already ship');
+  assert.equal(cue.file,`blk-combo-${level}`,'each level has its own marimba cascade');
+  assert.equal(cue.rate,1,'the cascades are already in tune: no Blocks pitch shift on top');
  }
  const big=cueFor('blocks','bigClear');
  assert.ok(big);
- assert.equal(big.file,'blk-big');
+ assert.equal(big.file,'blk-combo-big');
+ // The old samples stay for the cues that still use them, so the Bomb and NEW BEST! are unchanged.
+ assert.equal(cueFor('blocks','merge').file,'blk-clear');
+ assert.equal(cueFor('blocks','big').file,'blk-big');
  for(const combo of [1,2,3,4,5,6,20])for(const flag of [false,true]){
   assert.ok(cueFor('blocks',clearEvent({combo,big:flag})),`combo ${combo}${flag?' big':''} has a cue`);
  }
