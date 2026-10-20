@@ -259,7 +259,7 @@ test('two runs add up, and a best keeps the better of them', async () => {
     w.advance(run.seconds + 1);
     // The second run is played on the same seed the server handed out, so it verifies either way.
     const real = ridgeReplay(start.body.seed);
-    const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: real.replay}});
+    const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: real.replay, claimed: real.score}});
     assert.equal(finish.status, 200, JSON.stringify(finish.body));
     totals = (await w.api.me({token})).body.achievementTotals;
   }
@@ -274,7 +274,7 @@ test('a run the server rejects earns nothing at all', async () => {
   // A replay of a different course: the seed will not match the one the server handed out.
   const forged = ridgeReplay(start.body.seed + 777);
   w.advance(forged.seconds + 1);
-  const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: forged.replay}});
+  const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: forged.replay, claimed: forged.score}});
   assert.equal(finish.status, 422, JSON.stringify(finish.body));
   const me = await w.api.me({token});
   assert.deepEqual(me.body.achievementTotals, {}, 'a rejected run contributes nothing');
@@ -309,7 +309,7 @@ test('a refunded run stops counting, the moment it is refunded', async () => {
     assert.equal(start.status, 200, JSON.stringify(start.body));
     const run = ridgeReplay(start.body.seed);
     w.advance(run.seconds + 1);
-    const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: run.replay}});
+    const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: run.replay, claimed: run.score}});
     assert.equal(finish.status, 200, JSON.stringify(finish.body));
     if (i === 3) {paidRunId = start.body.runId; paidStats = run.stats;}
   }
@@ -345,7 +345,7 @@ test('a Sequence run folds every verified level into one row', async () => {
   for (let i = 0; i < 2; i++) {
     const out = level(seed, n);
     w.advance(out.seconds + 1);
-    const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: out.result.replay}});
+    const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: out.result.replay, claimed: out.result.score}});
     assert.equal(finish.status, 200, JSON.stringify(finish.body));
     played.push(out.stats);
     if (finish.body.done) break;
@@ -365,7 +365,7 @@ test('nothing is counted at all until the migration has run', async () => {
   const start = await w.api.start({token, body: {game: 'ridge'}});
   const run = ridgeReplay(start.body.seed);
   w.advance(run.seconds + 1);
-  const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: run.replay}});
+  const finish = await w.api.finish({token, body: {runId: start.body.runId, replay: run.replay, claimed: run.score}});
   assert.equal(finish.status, 200, 'the run itself still counts for the leaderboard');
   assert.deepEqual(finish.body.earned, []);
   const me = await w.api.me({token});

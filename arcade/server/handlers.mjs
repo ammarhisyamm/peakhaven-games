@@ -7,6 +7,7 @@ import {AdminLogNotReady,MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
+import {BLOCKS_REPLAY_VERSION} from '../../dist/blocks-core.js';
 import {addRun,totalsFrom,achievementState,newlyEarned} from '../../dist/achievements.js';
 import {COIN_CURRENCY,CoinsNotReady,MAX_PENDING_PURCHASES,cleanDelta,cleanNote,cleanPackCoins,formatAmount,newReference,packFor,packList} from './coins.mjs';
 import {createPaymentProvider} from './payments.mjs';
@@ -268,7 +269,12 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
    return 1;
   };
   const ridgeVersion=run=>run.seed===seedFor(secret,'ridge-v6',run.day,1)?6:5;
-  const runVersion=run=>run.game==='ridge'?ridgeVersion(run):sequenceVersion(run);
+  // Peak Blocks has one board rule set in play and its seed carries no version marker, so there is nothing
+  // to read back off a run: the version is whatever the client ships, which is what verify.mjs then pins a
+  // submitted replay to. Said plainly here rather than falling through to sequenceVersion, which answered
+  // 1 for a Blocks run and so pinned nothing at all.
+  const runVersion=run=>run.game==='ridge'?ridgeVersion(run)
+    :run.game==='sequence'?sequenceVersion(run):BLOCKS_REPLAY_VERSION;
   const courseGame=run=>{
    if(run.game==='ridge'&&ridgeVersion(run)===6)return 'ridge-v6';
    if(run.game!=='sequence')return run.game;
@@ -361,6 +367,13 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       const duplicate=run.status!=='rejected'&&(run.replays||[]).some(rep=>isDeepStrictEqual(rep,body?.replay));
       if(duplicate)return ok(await finishView(run,s.player.id));
       if(run.status!=='open')return fail(409,'This run is already finished.');
+      // The score the browser says it got. It is never used as the score — the replay below decides that —
+      // but it is the whole of the claimed-against-verified comparison, and so the only thing that puts a
+      // doctored run on the review page. Leaving it optional meant a run could dodge that comparison
+      // simply by not sending the field, which is the one move a cheat would always make. So it is
+      // required. Nothing honest is turned away: every finished game posts it (ui/app.js submitRanked),
+      // and the pending-result retry resends the same body, claim included.
+      if(!Number.isFinite(body?.claimed))return fail(400,'This score could not be submitted. Please try again.');
       const level=run.segments+1;
       if(run.game!=='sequence'&&run.segments>0)return fail(409,'This run is already finished.');
       const at=now(),elapsedSeconds=(at-Date.parse(run.updated_at))/1000;
@@ -372,8 +385,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
         return fail(422,'This run could not be verified, so it does not count.',{reason:error.message});
       }
       const done=run.game!=='sequence'||!result.won,score=run.score+result.score;
-      const claimed=Number(body?.claimed);
-      const mismatch=Number.isFinite(claimed)&&claimed!==result.score;
+      const claimed=body.claimed,mismatch=claimed!==result.score;
       const flagged=run.flagged||mismatch;
       // What the browser claimed against what the replay produced, both as the run's running total so they
       // compare with each other and with the score on the board. Only written once flag-details.sql has run;
