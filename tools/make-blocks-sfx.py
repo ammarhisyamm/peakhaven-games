@@ -58,4 +58,19 @@ write("blk-over", mix([(0, tone(P[4], P[4] * .97, .35, .12, shape="tri")), (.16,
 write("blk-undo", mix([(0, tone(P[7], P[7] * .55, .09, .03, curve=8)), (.07, tone(P[4], P[4] * .55, .09, .03, curve=8))], .2), .6)
 # Shuffle: six quick notes tumbling over each other, with a little riffle of noise at the end.
 write("blk-shuffle", mix([(i * .03, tone(f, f, .04, .012, shape="tri", vol=.8)) for i, f in enumerate([P[4], P[7], P[3], P[8], P[5], P[9]])] + [(.2, noise(.03, .006, 3000, 10000, .3))], .32), .55)
+# Combo clears (Marimba cascade): a woody arpeggio that gets longer and higher with each combo in a row.
+def semi(f, k): return f * 2 ** (k / 12)
+def bell(f, d, dec, vol=1):
+    return sum(tone(f * m, f * m, d, dec / (1 + i * .6), vol=vol * v) for i, (m, v) in enumerate([(1, 1), (2.0, .45), (3.01, .25), (4.2, .12)]))
+def marimba(f, vol=1):
+    return mix([(0, tone(f, f, .35, .09, vol=vol)), (0, tone(f * 4, f * 4, .08, .012, vol=.25 * vol)), (0, tone(f * 10, f * 10, .03, .004, vol=.1 * vol))], .35)
+CASCADE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24]
+def combo(c, big=False):
+    k = 2 + c + (3 if big else 0)
+    parts = [(0, tone(200, 80, .08, .025, vol=1.1)), (0, noise(.03, .008, 1000, 6000, .6))]
+    parts += [(i * .045, marimba(semi(P[2], CASCADE[min(i + c - 1, 10)]), .8)) for i in range(k)]
+    if big: parts += [(k * .045, bell(semi(P[2], 24), .6, .2, .6)), (0, tone(150, 45, .3, .06, vol=1.1))]
+    return mix(parts, k * .045 + .5)
+for c in range(1, 6): write(f"blk-combo-{c}", combo(c), .85)
+write("blk-combo-big", combo(3, True), .92)
 print("wrote Peak Blocks sounds to", os.path.abspath(OUT))

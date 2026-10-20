@@ -199,3 +199,32 @@ tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.fo
    finishing the last field brings the thing you press next into view with it. */
 .join-panel input{scroll-margin-bottom:140px}
 .join-panel #join-submit{scroll-margin-bottom:24px}
+/* Achievements. One shelf component, used on each game's card and in full on My Bottle, so a tier reads the
+   same in both. The medal shows all three tiers at once: an unearned shelf should read as "here is what
+   there is to get" rather than as an empty box. */
+.achievement-shelf{margin-top:14px;display:grid;gap:8px}
+.achievement-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.achievement-heading h3{margin:0;font-size:14px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+.achievement-heading span{font-size:12px;opacity:.7}
+.achievement-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.achievement{display:flex;gap:11px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:#ffffff0f;border:1px solid #ffffff1f}
+.achievement.has-tier{background:#ffffff17;border-color:#ffffff33}
+.achievement.complete{border-color:color-mix(in srgb, #ffc63a 55%, transparent);box-shadow:0 0 0 1px #ffc63a3d inset}
+.achievement-medal{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;position:relative;
+ background:radial-gradient(circle at 35% 30%, #ffffff40, transparent 60%), var(--medal, #ffffff14);
+ border:2px solid #ffffff2e}
+.achievement-medal.unearned{background:#ffffff0d;border-style:dashed}
+.achievement-medal i{position:absolute;width:5px;height:5px;border-radius:50%;background:#ffffff26}
+.achievement-medal i.past,.achievement-medal i.now{background:var(--pip)}
+.achievement-medal i:nth-child(1){left:3px;bottom:4px}
+.achievement-medal i:nth-child(2){left:50%;top:2px;transform:translateX(-50%)}
+.achievement-medal i:nth-child(3){right:3px;bottom:4px}
+.achievement-copy{display:grid;gap:3px;min-width:0;flex:1}
+.achievement-copy b{font-size:14px}
+.achievement-copy small{font-size:12px;opacity:.72;line-height:1.35}
+.achievement-track{height:5px;border-radius:99px;background:#ffffff1c;overflow:hidden;margin-top:3px}
+.achievement-track i{display:block;height:100%;border-radius:99px;transform-origin:left;background:linear-gradient(90deg,#6fe3ff,#ffc63a)}
+.achievement-progress{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-variant-numeric:tabular-nums}
+.achievement-progress em{font-style:normal;opacity:.6;text-transform:capitalize}
+.achievement-guest{margin:2px 0 0;font-size:12px;opacity:.8}
+@media(max-width:420px){.achievement-copy small{display:none}}

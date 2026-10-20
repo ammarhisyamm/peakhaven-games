@@ -24,13 +24,10 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
 .daily-intro h2{font-size:clamp(20px,4.35vw,32px);font-weight:780;letter-spacing:-.035em;line-height:1.2;text-wrap:balance}
 .daily-intro p{font-size:clamp(14px,2.9vw,21px);color:#475c69;line-height:1.35;margin-top:5px}
 .daily-games{display:grid;gap:8px}
-.daily-game{display:grid;grid-template-columns:clamp(112px,33vw,242px) minmax(0,1fr) auto;gap:clamp(8px,2vw,16px);align-items:center;min-height:clamp(94px,16.7vw,150px);padding:6px 10px 6px 6px;background:#f2fbfd;border:1px solid #d3eef3;border-radius:16px;min-width:0}
+.daily-game{display:grid;background:#f2fbfd;border:1px solid #d3eef3;border-radius:16px;min-width:0}
 .daily-game-image{width:100%;aspect-ratio:1672/941;height:auto;border-radius:11px;background:#e3f5ff;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .daily-game-image img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit;mask-image:none}
-.daily-game-copy{min-width:0;text-align:left}
 .prize-words,.prize-info{min-width:0}
-.daily-game-copy h3{font-size:clamp(17px,3.6vw,27px);font-weight:760;letter-spacing:-.025em;line-height:1.15;margin:0;color:#080b0c}
-.daily-game-copy>p{font-size:clamp(12px,2.45vw,18px);line-height:1.35;color:#445965;margin-top:5px}
 .plays-left{display:flex;gap:7px;align-items:center;font-size:clamp(12px,2.7vw,19px);line-height:1.2;color:#006aab;font-weight:650;margin-top:7px;font-variant-numeric:tabular-nums}
 .plays-left svg{width:clamp(18px,3.7vw,27px);height:clamp(18px,3.7vw,27px);color:#004778;flex:none;stroke-width:2}
 .daily-play-button{width:clamp(72px,19vw,136px);min-height:clamp(36px,6.6vw,48px);font-size:clamp(13px,3vw,20px);padding:8px 12px;gap:7px;font-weight:600;white-space:nowrap;flex-wrap:nowrap}
@@ -69,10 +66,6 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
 .extra-plays>svg:last-child{width:14px;height:14px}
 @media(min-width:1000px){
  .daily-games{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
- .daily-game{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 1fr;gap:12px;min-height:0;padding:10px}
- .daily-game-image{grid-column:1/-1}
- .daily-game-copy{grid-column:1;grid-row:2;align-self:center}
- .daily-play-button{grid-column:2;grid-row:2;width:max-content;min-width:132px;padding-inline:12px}
  .leaderboard-shortcut{column-gap:16px;row-gap:9px;padding:16px 20px}
  .leaderboard-shortcut .shortcut-copy{display:flex;align-items:baseline;gap:14px}
  .leaderboard-shortcut .shortcut-copy p{white-space:nowrap;margin:0}
@@ -98,16 +91,15 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
  .play-end{font-size:12px}
 }
 @media(max-width:800px){
- .daily-game{grid-template-columns:clamp(96px,34vw,224px) minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:8px 12px;padding:8px}
- .daily-game-image{grid-column:1;grid-row:1/3}
- .daily-game-copy{grid-column:2;grid-row:1;align-self:end}
- .daily-play-button{grid-column:2;grid-row:2;justify-self:start;align-self:start;width:max-content;min-width:132px;min-height:44px;padding:8px 13px;font-size:15px}
+ .daily-game{gap:7px;padding:8px}
+ .daily-play-button{min-height:44px;padding:8px 13px;font-size:15px}
 }
 @media(max-width:370px){
- .daily-game{gap:7px 9px;padding:7px;grid-template-columns:clamp(96px,34vw,126px) minmax(0,1fr)}
- .daily-game-copy h3{font-size:16px}
- .daily-game-copy>p{font-size:12px}
- .daily-play-button{min-width:126px;padding-inline:10px;font-size:14px}
+ .daily-game{gap:6px;padding:7px}
+ .daily-game-title{font-size:17px}
+ .daily-game-tagline{font-size:12px}
+ .daily-game-blurb{font-size:12px}
+ .daily-play-button{padding-inline:10px;font-size:14px}
  .leaderboard-shortcut{grid-template-columns:30px minmax(0,1fr) auto}
  .shortcut-period{grid-column:2;grid-row:2;max-width:130px}
  .leaderboard-shortcut .shortcut-icon{grid-row:1/3}
@@ -118,8 +110,6 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
 .hero-copy .hero-note{max-width:34em;font-size:clamp(12px,1.25vw,17px);font-weight:500;letter-spacing:-.01em;color:#2d4a5e;margin-top:6px}
 .daily-game-image{position:relative}
 .daily-game-image .daily-game-badge{position:absolute;right:6px;bottom:6px;width:clamp(20px,4.5vw,44px);height:auto;aspect-ratio:1;object-fit:contain;padding:3px;border-radius:50%;background:#ffffffd9;box-shadow:0 2px 8px #00213a33}
-.daily-game-copy>p strong{display:block;color:#0d2233;font-weight:700}
-.daily-game-copy>p span{display:block;font-size:max(12px,.84em);margin-top:2px}
 .shortcut-filters{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
 .leaderboard-shortcut .shortcut-filters{grid-column:2;grid-row:2;justify-self:start}
 .board-games,.board-period{min-width:0;height:clamp(34px,6vw,44px)}
@@ -162,4 +152,66 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
  .collection-card .tier{font-size:12px;margin:-5px 0 4px}
  .unlock-progress small{font-size:12px}
  .collection-grid .collection-card{min-height:93px}
+}
+/* ---- Play page game cards: one column, rows shared across the three cards ---- */
+.daily-games{align-items:start}
+.daily-game{
+ grid-template-columns:minmax(0,1fr);
+ grid-template-rows:auto auto auto 1fr auto auto auto;
+ align-items:start;align-content:start;
+ gap:8px;min-height:0;padding:10px;
+ text-align:left;
+}
+.daily-game>*{grid-column:1;min-width:0}
+.daily-game-image{grid-row:1;align-self:start}
+.daily-game-title{grid-row:2;font-size:clamp(17px,3.6vw,27px);font-weight:760;letter-spacing:-.025em;line-height:1.15;margin:0;color:#080b0c}
+.daily-game-tagline{grid-row:3;margin:0;font-weight:700;font-size:clamp(12px,2.5vw,17px);line-height:1.3;color:#10303f}
+.daily-game-blurb{grid-row:4;margin:0;font-size:clamp(12px,2.45vw,16px);line-height:1.35;color:#445965;align-self:start}
+.daily-game .plays-left{grid-row:5;align-self:start}
+.daily-game .daily-play-button{grid-row:6;width:100%;min-width:0;justify-content:center}
+.daily-game .achievement-collapse{grid-row:7}
+@supports(grid-template-rows:subgrid){
+ .daily-games{grid-auto-rows:auto}
+ .daily-game{grid-row:span 7;grid-template-rows:subgrid}
+}
+
+/* The achievements row: closed by default, opens on tap. */
+.achievement-collapse{border-top:1px solid #e4edf2;margin-top:2px}
+.achievement-collapse>summary{display:flex;align-items:center;gap:8px;padding:9px 2px 7px;cursor:pointer;
+ list-style:none;font-size:clamp(12px,2.3vw,14px);font-weight:700;color:#18384f}
+.achievement-collapse>summary::-webkit-details-marker{display:none}
+.achievement-collapse>summary:focus-visible{outline:2px solid #0a84ff;outline-offset:2px;border-radius:8px}
+.achievement-collapse-label{flex:1}
+.achievement-collapse>summary>b{font-variant-numeric:tabular-nums;color:#0b6fb8}
+.achievement-collapse-mark{font-style:normal;color:#6c8597;transition:transform .18s ease;display:inline-block}
+.achievement-collapse[open]>summary .achievement-collapse-mark{transform:rotate(90deg)}
+.achievement-collapse .achievement-shelf{margin-top:0;padding-bottom:8px}
+@media(prefers-reduced-motion:reduce){.achievement-collapse-mark{transition:none}}
+/* ---- Below the three-across breakpoint: the compact card ---- */
+@media(max-width:999px){
+ .daily-game{
+  grid-row:auto;
+  grid-template-columns:clamp(96px,26vw,112px) minmax(0,1fr);
+  grid-template-rows:auto auto auto auto;
+  align-items:center;
+  gap:3px 10px;
+  padding:8px;
+ }
+ .daily-game-image{grid-column:1;grid-row:1/4;aspect-ratio:1;align-self:center}
+ .daily-game-title{grid-column:2;grid-row:1;align-self:end;font-size:clamp(16px,4.4vw,20px)}
+ .daily-game-tagline{grid-column:2;grid-row:2;font-size:clamp(12px,3vw,14px);align-self:center}
+ .daily-game-blurb{display:none}
+ .daily-game .plays-left{grid-column:2;grid-row:3;align-self:center}
+ .daily-game .daily-play-button{grid-column:2;grid-row:4;width:100%;min-height:40px}
+ .daily-game .achievement-collapse{grid-column:1/-1;grid-row:5;margin-top:4px}
+ .achievement-collapse>summary{padding:7px 2px 5px}
+}
+/* A phone has room for the name, the plays and the button, and not for a tagline as well. */
+@media(max-width:620px){
+ .daily-game{grid-template-rows:auto auto auto;gap:2px 9px}
+ .daily-game-image{grid-row:1/4}
+ .daily-game-tagline{display:none}
+ .daily-game .plays-left{grid-row:2}
+ .daily-game .daily-play-button{grid-row:3}
+ .daily-game .achievement-collapse{grid-row:4}
 }

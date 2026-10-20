@@ -105,7 +105,7 @@ alter table public.runs drop column if exists paid;
 
 // A fresh database, built up to a chosen point: 'production' is what is live now, 'migrated' has the file
 // under test applied on top.
-async function build(adminUrl, name, {migration = null, twice = false} = {}) {
+async function build(adminUrl, name, {migration = null, migrations = null, twice = false} = {}) {
   const admin = new pg.Client({connectionString: adminUrl});
   await admin.connect();
   await admin.query(`drop database if exists ${name}`);
@@ -117,10 +117,9 @@ async function build(adminUrl, name, {migration = null, twice = false} = {}) {
   await db.query(SUPABASE_BASELINE);
   await db.query(gitShow('arcade/supabase/schema.sql'));
   await db.query(gitShow('arcade/supabase/month-end.sql'));
-  if (migration) {
-    await db.query(migration);
-    if (twice) await db.query(migration);
-  }
+  const list = migrations ?? (migration ? [migration] : []);
+  for (const sql of list) await db.query(sql);
+  if (twice) for (const sql of list) await db.query(sql);
   return {db, url};
 }
 
@@ -180,6 +179,7 @@ console.log(`Postgres: ${server.label}`);
 let migrated;
 try {
   const migration = await readFile(join(root, 'arcade/supabase/paid-tries.sql'), 'utf8');
+  const achievements = await readFile(join(root, 'arcade/supabase/achievements.sql'), 'utf8');
 
   // ---------------------------------------------------------------- the migration itself
   section('The migration applies to the production schema, and applies twice');
@@ -202,10 +202,23 @@ try {
   const twice = (await production.db.query(FINGERPRINT)).rows[0].fingerprint;
   check('running it twice changes nothing', JSON.stringify(once) === JSON.stringify(twice),
     JSON.stringify(once) === JSON.stringify(twice) ? '' : 'the schema differs after a second run');
+
+  // achievements.sql is new, so against production it is a first run. It has to apply, and then be as
+  // harmless the second time as every other migration here.
+  let ach = null;
+  try {await production.db.query(achievements); ach = true;} catch (error) {ach = error.message;}
+  check('achievements.sql applies to the live schema', ach === true, ach === true ? '' : String(ach));
+  const achOnce = (await production.db.query(FINGERPRINT)).rows[0].fingerprint;
+  let achAgain = null;
+  try {await production.db.query(achievements); achAgain = true;} catch (error) {achAgain = error.message;}
+  check('and applies a second time without error', achAgain === true, achAgain === true ? '' : String(achAgain));
+  const achTwice = (await production.db.query(FINGERPRINT)).rows[0].fingerprint;
+  check('running achievements.sql twice changes nothing', JSON.stringify(achOnce) === JSON.stringify(achTwice),
+    JSON.stringify(achOnce) === JSON.stringify(achTwice) ? '' : 'the schema differs after a second run');
   await production.db.end();
 
   // A clean database at the migrated state for everything below.
-  migrated = await build(server.url, 'ph_migrated', {migration, twice: true});
+  migrated = await build(server.url, 'ph_migrated', {migrations: [migration, achievements], twice: true});
   const db = migrated.db;
 
   // ---------------------------------------------------------------- shape
@@ -397,6 +410,77 @@ try {
   check(`one coin only ever makes one run (${races}/${ROUNDS})`, races === ROUNDS, bad.length ? JSON.stringify(bad.slice(0, 3)) : '');
 
   // ---------------------------------------------------------------- permissions
+  // ---------------------------------------------------------------- achievements
+  section('run_achievements');
+  const achCols = (await db.query(`select column_name, data_type, is_nullable from information_schema.columns
+    where table_schema='public' and table_name='run_achievements' order by ordinal_position`)).rows;
+  check('the table has the columns it should',
+    achCols.map(c => c.column_name).join(',') === 'run_id,player_id,game,stats,created_at',
+    achCols.map(c => c.column_name).join(','));
+  check('stats is jsonb and not null',
+    achCols.find(c => c.column_name === 'stats')?.data_type === 'jsonb' &&
+    achCols.find(c => c.column_name === 'stats')?.is_nullable === 'NO');
+  const achRls = (await db.query(`select relrowsecurity from pg_class where oid='public.run_achievements'::regclass`)).rows[0];
+  check('row-level security is on', achRls?.relrowsecurity === true);
+  const achPolicies = (await db.query(`select policyname from pg_policies where schemaname='public' and tablename='run_achievements'`)).rows;
+  check('and it has no policy at all, so only the service role is in', achPolicies.length === 0,
+    achPolicies.map(p => p.policyname).join(','));
+  const achGrants = (await db.query(`select grantee, privilege_type from information_schema.role_table_grants
+    where table_schema='public' and table_name='run_achievements' order by 1,2`)).rows;
+  check('no browser key holds anything on it',
+    !achGrants.some(g => ['anon', 'authenticated', 'PUBLIC'].includes(g.grantee)),
+    achGrants.map(g => `${g.grantee}:${g.privilege_type}`).join(' '));
+  check('and the service role holds it',
+    achGrants.some(g => g.grantee === 'service_role' && g.privilege_type === 'SELECT') &&
+    achGrants.some(g => g.grantee === 'service_role' && g.privilege_type === 'INSERT'),
+    achGrants.filter(g => g.grantee === 'service_role').map(g => g.privilege_type).join(','));
+  check('the index the reads use is there',
+    (await db.query(`select indexname from pg_indexes where schemaname='public' and tablename='run_achievements'`))
+      .rows.some(r => r.indexname === 'run_achievements_player'));
+
+  // What the trigger is for: a run that stops counting takes its achievements with it.
+  const achAce = await newPlayer(db, 'Ace');
+  const aceRun = (await db.query(START, [achAce, 'ridge', DAY, seed, 3, null, false])).rows[0];
+  const keptRun = (await db.query(START, [achAce, 'blocks', DAY, seed, 3, null, false])).rows[0];
+  const addStats = (runId, game, stats) => db.query(
+    `insert into public.run_achievements (run_id, player_id, game, stats) values ($1, $2, $3, $4)`,
+    [runId, achAce, game, stats]);
+  await addStats(aceRun.id, 'ridge', {zones: 2, close: 9, vials: 31});
+  await addStats(keptRun.id, 'blocks', {score: 12000, combo: 9, levels: 2});
+  const rowsFor = async () => (await db.query('select run_id, game, stats from public.run_achievements where player_id=$1 order by game', [achAce])).rows;
+  check('both runs have a row', (await rowsFor()).length === 2);
+  // jsonb stores an object by key, not by the order it was written in, so this compares the numbers.
+  const achRidge = (await rowsFor()).find(r => r.game === 'ridge').stats;
+  check('the stats come back as the numbers that went in',
+    achRidge.zones === 2 && achRidge.close === 9 && achRidge.vials === 31, JSON.stringify(achRidge));
+  await db.query(`update public.runs set score = 500, status = 'closed' where id = $1`, [aceRun.id]);
+  check('closing a run leaves its row alone', (await rowsFor()).length === 2);
+  await db.query(`update public.runs set status = 'rejected', reject_reason = 'by hand' where id = $1`, [aceRun.id]);
+  const achLeft = await rowsFor();
+  check('rejecting a run drops its row', achLeft.length === 1 && achLeft[0].game === 'blocks',
+    achLeft.map(r => r.game).join(','));
+  await db.query(`update public.runs set status = 'rejected' where id = $1`, [aceRun.id]);
+  check('and rejecting it again is harmless', (await rowsFor()).length === 1);
+
+  // The same thing, down the path a refund actually takes: refund_purchase marks the runs from inside the
+  // database, so the trigger is the only thing that can catch it.
+  const achBee = await newPlayer(db, 'Bee');
+  const achBeeBuy = await newPurchase(db, achBee, 2, 499, 'PHA-BEEE');
+  await db.query('select public.grant_purchase($1, $2)', [achBeeBuy.id, 'boss@peak.test']);
+  for (let i = 0; i < 3; i++) await db.query(START, [achBee, 'ridge', DAY, seed, 3, null, true]);
+  const achPaidRun = (await db.query(START, [achBee, 'ridge', DAY, seed, 3, null, true])).rows[0];
+  await db.query(`update public.runs set score = 700, status = 'closed' where id = $1`, [achPaidRun.id]);
+  await db.query(`insert into public.run_achievements (run_id, player_id, game, stats) values ($1, $2, 'ridge', $3)`,
+    [achPaidRun.id, achBee, {zones: 1, close: 4, vials: 12}]);
+  check('the paid run has a row', (await db.query('select 1 from public.run_achievements where run_id=$1', [achPaidRun.id])).rows.length === 1);
+  await db.query('select public.refund_purchase($1, $2) as r', [achBeeBuy.id, 'boss@peak.test']);
+  check('a refund takes the achievements with the run it voids',
+    (await db.query('select 1 from public.run_achievements where run_id=$1', [achPaidRun.id])).rows.length === 0);
+
+  // And the foreign keys, so nothing is achLeft orphaned.
+  await db.query('delete from public.runs where id = $1', [keptRun.id]);
+  check('deleting a run deletes its row', (await rowsFor()).length === 0);
+
   section('What a browser key can do');
   const fay = await newPlayer(db, 'Fay', 0);
   const pf = await newPurchase(db, fay, 1, 299, 'PHA-FFFF');
