@@ -3,7 +3,7 @@
    Spacing follows an 4px scale. Touch targets are at least 44px. */
 @font-face{font-family:Anybody;src:url('assets/anybody.ttf') format('truetype');font-weight:100 900;font-display:swap}
 .kg-dialog{
- --kg-coin-atlas:url('assets/ui/blue-coins-atlas.png');--kg-mountains:url('assets/ui/result-mountains.webp');
+ --kg-coin-atlas:url('assets/ui/blue-coins-atlas.webp');--kg-mountains:url('assets/ui/result-mountains.webp');
  --kg-ink:#07183e;--kg-ink-soft:#284a7c;--kg-cyan:#00c7ed;--kg-cyan-soft:#80e9ff;--kg-rim:#6df7ff;--kg-navy:#06264ed9;
  --kg-pad:24px;--kg-gap:16px;--kg-radius:24px;--kg-width:400px;
  box-sizing:border-box;width:calc(100% - 32px);max-width:var(--kg-width);max-height:calc(100dvh - 32px);margin:auto;padding:0;

@@ -1,4 +1,16 @@
 /* Full mobile game screen. Desktop retains the same portrait camera. */
+/* Shown while a phone is held sideways with a game open. Covers everything, including the HUD, so
+   there is nothing to half-play behind it. */
+.rotate-notice{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px;
+  background:#041d4ceb;backdrop-filter:blur(6px);color:#fff;text-align:center}
+.rotate-notice[hidden]{display:none}
+.rotate-card{display:grid;gap:14px;justify-items:center;max-width:320px}
+.rotate-card h2{font-size:22px;margin:0}
+.rotate-card p{font-size:15px;margin:0;opacity:.85}
+.rotate-phone{width:44px;height:72px;border:3px solid #7fe3ff;border-radius:10px;
+  animation:rotate-hint 2.4s ease-in-out infinite}
+@keyframes rotate-hint{0%,40%{transform:rotate(90deg)}60%,100%{transform:rotate(0)}}
+@media(prefers-reduced-motion:reduce){.rotate-phone{animation:none;transform:rotate(0)}}
 /* The scroll chain starts at the document element, so the pull-to-refresh guard has to be there too. */
 html{overscroll-behavior:none}
 body.game-open{overflow:hidden;overscroll-behavior:none}

@@ -1,4 +1,5 @@
 import {startBlocks,startMahjong} from './puzzle-games.js';
+import {rotateWanted} from './rotate-notice.js';
 import {SKINS,normalizeCollection,claimDaily,claimSpin,buySkin,skinUnlocked,runLoot,boostCost,dailySchedule} from './collection.js';
 import {gameChallenge,objective} from './progression.js';
 import {TowerEngine,MergeEngine} from './engines.js';
@@ -53,7 +54,7 @@ function currency(){return `<div class="player-pills"><button class="currency co
 function shell(content,selected='home',world=selected){const scene=selected==='game'?`game-${world}`:world==='help'?'profile':world,format='webp',asset=['orbit','ridge','bond','sequence'].includes(world)?`${scene}-v2`:scene==='home'?'home-lobby':scene;document.body.classList.toggle('game-open',selected==='game');document.body.dataset.scene=scene;document.body.style.setProperty('--world-art',`url("assets/worlds/${asset}.${format}")`);app.innerHTML=`<div class="phone-app world-interface view-${selected} ${selected==='game'?'in-game':''}">${selected==='game'?'':`<header class="app-header"><a class="brand" href="#home" aria-label="PH Arcade home">${logo()}</a>${currency()}</header>`}<main>${content}</main>${selected==='game'?'':`<nav class="bottom-nav" aria-label="Main navigation">${[['home','home','Home'],['arcade','games','Arcade'],['journey','gift','Rewards'],['collection','bottle','Bottles'],['profile','user','Profile']].map(([id,s,label])=>`<button data-nav="${id}" class="${selected===id?'active':''}" ${selected===id?'aria-current="page"':''}>${icon(s)}<span>${label}</span></button>`).join('')}</nav>`}</div>`;document.body.classList.toggle('motion-off',!data.motion);syncSceneParallax();app.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>navigate(b.dataset.nav));app.querySelectorAll('[data-wallet]').forEach(b=>b.onclick=()=>navigate('journey'));$('[data-settings]')?.addEventListener('click',openSettings);$('.brand')?.addEventListener('click',e=>{e.preventDefault();navigate('home');});}
 
 function gameArt(type){return `<div class="game-art cover-art cover-${type}" role="img" aria-label="${games[type].name} colourful 3D alpine game artwork"></div>`;}
-const GAME_ICONS={tower:'merge.png',merge:'tower.png',sort:'sort.png',blocks:'blocks.png',mahjong:'mahjong.png',orbit:'orbit.png',ridge:'ridge.png',bond:'bond.png',sequence:'sequence.png'};
+const GAME_ICONS={tower:'merge.webp',merge:'tower.webp',sort:'sort.webp',blocks:'blocks.webp',mahjong:'mahjong.webp',orbit:'orbit.png',ridge:'ridge.webp',bond:'bond.png',sequence:'sequence.webp'};
 function gameIcon(type){return `<img class="game-icon" src="assets/game-icons/${GAME_ICONS[type]}" alt="" aria-hidden="true" decoding="async">`;}
 function gameDisplay(id,{compact=false,kind=false}={}){const g=games[id];return `<button class="game-display ${compact?'compact':''}" data-play="${id}" ${kind?`data-kind="${puzzleGames.includes(id)||id==='blocks'?'puzzle':'casual'}"`:''} aria-label="Play ${g.name}"><span class="display-object">${gameIcon(id)}</span><span class="display-label"><b>${g.name}</b>${compact?'':`<small>${puzzleGames.includes(id)?`Level ${puzzleLevel(id)}`:`Best ${fmt(data.best[id])}`}</small>`}</span></button>`;}
 function renderHome(){view='home';const nextPuzzle=puzzleLevel('sort'),done=Math.min(data.mergeDay===localDay()?data.mergeToday||0:0,10);shell(`<section class="home-hero scene-banner" aria-label="Peak Haven waterfall world"><h1 class="sr-only">Peak Haven Arcade</h1><div class="lobby-mascot" aria-hidden="true">${mascot()}</div></section><section class="home-content"><div class="category-tabs" aria-label="Choose game category"><button class="active" aria-pressed="true" data-category="all">${icon('games')}All Games</button><button aria-pressed="false" data-category="puzzle">${icon('leaf')}Puzzle</button><button aria-pressed="false" data-category="casual">${icon('star')}Casual</button></div><div class="section-heading world-heading"><h2>Your arcade</h2><button class="text-button" data-nav="freeplay">See all ${icon('arrow')}</button></div><div class="game-display-grid" aria-label="Popular games">${Object.keys(games).map(id=>gameDisplay(id,{compact:true,kind:true})).join('')}<button class="game-display reward-display" data-nav="journey" aria-label="Open daily rewards"><span class="display-object"><img src="assets/reward-chest.webp" alt="" aria-hidden="true"></span><span class="display-label"><b>Daily rewards</b></span></button></div><button class="daily-pick lab-console" data-play="merge"><span class="daily-copy"><h2>Merge 10 bottles</h2><p>${done>=10?'Complete! Collect your reward.':'Your daily challenge'}</p><span class="daily-progress"><i style="transform:scaleX(${done/10})"></i><b>${done} / 10</b></span></span><span class="daily-object">${gameIcon('merge')}</span>${icon('play')}</button><button class="next-mission lab-console slim-console" data-nav="arcade">${icon('flag')}<span><b>Continue a puzzle</b><small>Lab Sort · Level ${nextPuzzle}</small></span>${icon('arrow')}</button><p class="device-note">Progress saves on this device.</p></section>`,'home');bindPlay();app.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{app.querySelectorAll('[data-category]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});app.querySelectorAll('[data-kind]').forEach(x=>x.hidden=b.dataset.category!=='all'&&x.dataset.kind!==b.dataset.category);});}
@@ -134,7 +135,7 @@ function mountGame(id,level=null){
  if(!history.state?.ingame){history.replaceState(null,'',backHash);history.pushState({ingame:true},'',`#play/${id}`);}
  runningLevel=level||(puzzleGames.includes(id)?puzzleLevel(id):1);
  runChallenge=['sort','mahjong'].includes(id)?gameChallenge(id,runningLevel):null;
- active=id;finishing=false;view='game';gameAudio.prepare(id);
+ active=id;rotateCheck();finishing=false;view='game';gameAudio.prepare(id);
  const g=games[id],isPuzzle=id==='blocks'||id==='mahjong';
  const objectiveText=runChallenge?objective(runChallenge):id==='sequence'?`Reach ${fmt(sequenceTarget(runningLevel))} points in ${25} moves.`:id==='orbit'?'Pull and release the ball. Score by dropping it into the hoop.':id==='ridge'?'Thread the mountain gates and keep a clean line.':id==='bond'?'Fire into a clear gap in the turning ring.':'Keep going and set a new personal best.';
  const canvasAlt={tower:'Vial Tower. Tap or press Space to drop the moving vial.',merge:'Vial Merge. Arrow keys position the vial. Space drops it. Matching tiers merge.',orbit:'Orbit. Pull the ball down and sideways, release to shoot into the hoop. Arrow keys aim. Space shoots.',ridge:'Ridge Run. Tap anywhere or press Space to fly through the open center of each gate.',bond:'Bond. Tap anywhere or press Space to attach a vial to the moving ring without hitting another.',sequence:`Sequence match three puzzle. Level ${runningLevel}, 7 by 7 board, ${25} moves. Select neighbouring crystals to swap. Arrow keys move the selector and Enter selects.`};
@@ -206,5 +207,36 @@ function finishGame(id,result){
 
 window.addEventListener('keydown',e=>{if(dialog.open||!active)return;if(e.key==='Escape'){e.preventDefault();pauseGame();return;}if(!engine||e.target.closest('button,input,a'))return;if(active==='orbit'&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();engine.aim(e.key);return;}if(active==='sequence'&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();engine.moveSelection(e.key);return;}if(e.code==='Space'||e.key==='Enter'){e.preventDefault();engine.action?.();}if(active==='merge'&&['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();engine.move(e.key==='ArrowLeft'?-1:1);}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&active&&!dialog.open)pauseGame();});
+// A phone turned sideways leaves a board too small to play on: Peak Blocks drops from 38px cells to
+// 18px. Rather than build a second layout for a position nobody plays in on purpose, ask for the
+// phone back and hold the run exactly where it was. The overlay only appears on a phone-sized screen,
+// so a landscape tablet or a desktop window is never interrupted.
+let rotateOverlay=null,rotateShown=false;
+function rotateCheck(){
+  const want=rotateWanted({width:window.innerWidth,height:window.innerHeight,inGame:active});
+  if(want===rotateShown)return;
+  rotateShown=want;
+  if(want){
+    if(!rotateOverlay){
+      rotateOverlay=document.createElement('div');
+      rotateOverlay.className='rotate-notice';
+      rotateOverlay.setAttribute('role','status');
+      rotateOverlay.innerHTML='<div class="rotate-card"><div class="rotate-phone" aria-hidden="true"></div>'+
+        '<h2>Turn your phone upright</h2><p>Your game is paused and waiting. Nothing is lost.</p></div>';
+      document.body.append(rotateOverlay);
+    }
+    rotateOverlay.hidden=false;
+    document.body.classList.add('rotate-blocked');
+    engine?.pause();
+  }else{
+    if(rotateOverlay)rotateOverlay.hidden=true;
+    document.body.classList.remove('rotate-blocked');
+    // Only hand the game back if nothing else is holding it: the pause dialog may have opened
+    // underneath, and resuming out from under it would start the game behind a modal.
+    if(!dialog.open)engine?.pause(false);
+  }
+}
+window.addEventListener('resize',rotateCheck);
+window.addEventListener('orientationchange',rotateCheck);
 window.addEventListener('hashchange',()=>{if(skipHashChange){skipHashChange=false;return;}route(location.hash.slice(1)||'home');});
 route(location.hash.slice(1)||'home');

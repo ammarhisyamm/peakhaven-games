@@ -86,9 +86,9 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  const dialog=document.createElement('dialog');
  dialog.className=`kg-dialog kg-${game}`;
  const assetUrl=file=>new URL(file,new URL(assetBase,document.baseURI)).href;
- dialog.style.setProperty('--kg-coin-atlas',`url("${assetUrl('ui/blue-coins-atlas.png')}")`);
+ dialog.style.setProperty('--kg-coin-atlas',`url("${assetUrl('ui/blue-coins-atlas.webp')}")`);
  dialog.style.setProperty('--kg-mountains',`url("${assetUrl('ui/result-mountains.webp')}")`);
- const mascot=cls=>`<img class="${cls}" src="${assetBase}ui/run-over-mascot.png" alt="" width="1456" height="1056" decoding="async">`;
+ const mascot=cls=>`<img class="${cls}" src="${assetBase}ui/run-over-mascot.webp" alt="" width="1456" height="1056" decoding="async">`;
  const title=cfg.title(ctx),eyebrow=cfg.eyebrow?.(ctx)||cfg.name;
  dialog.innerHTML=`
 <section class="kg-result" aria-labelledby="kg-result-title">

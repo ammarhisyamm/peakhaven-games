@@ -1,4 +1,5 @@
 import {startRequestStore} from './start-request.js';
+import {applyStandaloneManifest} from './standalone.js';
 import {achievementShelf,achievementCollapse} from './game/achievement-ui.js';
 import {totalsFromShelf} from './game/achievements.js';
 import {walletView,playOffer} from './wallet-view.js';
@@ -56,7 +57,7 @@ const boardRows=(top,empty)=>top.length?top.map(r=>`<tr${r.you?' class="you"':''
 const save=()=>{try{localStorage.setItem('ph-clean-concept-v2',JSON.stringify(state));}catch{toast('Your browser could not save changes. You can keep playing.');}};
 function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3200);}
 const navItems=[['play','Play','play'],['ranks','Ranks','ranks'],['prizes','Prizes','prizes'],['bottle','My Bottle','my-bottle']];
-const games=[['blocks','Peak Blocks','Stack. Clear. Chain.','Endless','blocks.png','blocks','Fit every piece. Clear rows. Build your combo.'],['sequence','Sequence','Swap. Match. Beat the goal.','Levels','sequence.png','sequence-v2','Match three or more before you run out of moves.'],['ridge','Ridge Run','Tap. Fly. Go further.','Endless','ridge.png','ridge-v2','Thread the bottle caps. The course speeds up.']];
+const games=[['blocks','Peak Blocks','Stack. Clear. Chain.','Endless','blocks.webp','blocks','Fit every piece. Clear rows. Build your combo.'],['sequence','Sequence','Swap. Match. Beat the goal.','Levels','sequence.webp','sequence-v2','Match three or more before you run out of moves.'],['ridge','Ridge Run','Tap. Fly. Go further.','Endless','ridge.webp','ridge-v2','Thread the bottle caps. The course speeds up.']];
 // How-to-play popups lead with the goal, then the controls.
 const howTo={blocks:{goal:'Clear rows and columns to score. Chain clears for a combo.',how:'Drag a piece onto the board, or tap it, then tap a square.'},sequence:{goal:'Complete the goals shown above the board before your moves run out.',how:'Swap neighbours to match 3. Match on or beside ice; each rim needs one hit. Match beside padlocks to open them. Match the requested colour to collect it.'},ridge:{goal:'Fly as far as you can.',how:'Tap or press Space to lift your round crystal between the vial caps. Every 50 gates brings a new colour, more speed and tighter gaps. One free revive per run.'}};
 const playsText=n=>`${n} free play${n===1?'':'s'} today`;
@@ -303,3 +304,6 @@ route();
 let refreshing=false;
 async function refreshAfterReturn(){if(document.hidden||refreshing||gameModal.open||modal.open||!account.enabled||!account.signedIn())return;refreshing=true;try{await refreshMe();if(!gameModal.open&&!modal.open)route();}finally{refreshing=false;}}
 document.addEventListener('visibilitychange',refreshAfterReturn);
+// Upgrade the manifest for browsers that can safely be installed. iOS keeps the browser manifest it
+// was served, because a standalone Home Screen app there cannot complete a magic-link sign-in.
+applyStandaloneManifest();
