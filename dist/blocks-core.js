@@ -147,13 +147,23 @@ export function blocksAssist(g,{bomb=false,ended=false}={}){
   return {mode:'stuck',title:'No space left! Use a tool',text:names?`Tap ${names} below to make room.`:'No tools left.',suggest};
 }
 // Where a dragged piece is drawn and which square it would land on. Pure geometry, kept out of the
-// drag handler so the feel is covered by tests with no browser. `lift` is how far the BOTTOM of the
-// piece floats above the pointer, measured in board cells, so a tall piece rides as high as a short
-// one instead of further; the piece is centred horizontally on the pointer.
-export const BLOCK_LIFT=Object.freeze({touch:1.8,mouse:.8});
-export function dragLanding({x,y,cols,rows,lift=0,cell,step,left:boardLeft,top:boardTop}){
+// drag handler so the feel is covered by tests with no browser. The piece is always centred horizontally
+// on the pointer; `anchor` says how much of its height sits above the pointer, and `lift` then floats it
+// further clear, measured in board cells.
+//
+// A finger has to be able to see the piece it is holding, so touch keeps the whole piece above the
+// pointer (anchor 1) and lifts it clear as well. A cursor is a few pixels and hides nothing, so a mouse
+// or a pen holds the piece in the middle of itself (anchor .5, no lift) — the piece is under the cursor,
+// which is where a piece being dragged by a mouse belongs.
+export const BLOCK_LIFT=Object.freeze({touch:1.8,mouse:0});
+export const BLOCK_ANCHOR=Object.freeze({touch:1,mouse:.5});
+// Which of those a pointer gets. Pen behaves like a mouse: it is precise and it does not sit on the piece.
+export const dragGrip=pointerType=>pointerType==='touch'
+  ?{lift:BLOCK_LIFT.touch,anchor:BLOCK_ANCHOR.touch}
+  :{lift:BLOCK_LIFT.mouse,anchor:BLOCK_ANCHOR.mouse};
+export function dragLanding({x,y,cols,rows,lift=0,anchor=1,cell,step,left:boardLeft,top:boardTop}){
   const width=cols*step-(step-cell),height=rows*step-(step-cell);
-  const left=x-width/2,top=y-lift*cell-height;
+  const left=x-width/2,top=y-lift*cell-height*anchor;
   // Math.round hands back -0 just above the top-left corner; adding zero keeps the index a plain 0.
   const square=n=>Math.round(n)+0;
   return {left,top,width,height,r:square((top-boardTop)/step),c:square((left-boardLeft)/step)};

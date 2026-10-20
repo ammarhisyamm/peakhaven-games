@@ -1,4 +1,4 @@
-import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit,dragLanding,BLOCK_LIFT,comboFeedback,clearedLines} from './blocks-core.js';
+import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit,dragLanding,dragGrip,comboFeedback,clearedLines} from './blocks-core.js';
 import {clearEvent} from './game-audio.js';
 import {makeSeed} from './rng.js';
 import {SHAPES,emptyGrid,tileLayout,tileRows,fits,placements,placeBlock,makeTray,bombGrid,dealTiles,freeTile,matchTiles,tileHint} from './puzzle-rules.js';
@@ -147,9 +147,11 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
  // touched and snaps to the nearest cells. On touch it floats centred about 1.75 cells above the finger so
  // the thumb never hides it; with a mouse or pen it sits centred on the pointer. The landing spot and any lines it would clear light up; an invalid drop goes back to the tray.
  // A tap without moving still selects the piece, and keyboard play is unchanged.
- // Block Blast's drag: the piece you hold is the piece that lands, at board size, floating clear of
- // the pointer so your hand never covers it. A finger needs the whole piece clear of it; a cursor only
- // needs to not sit on top of the piece, so BLOCK_LIFT lifts the two by different amounts.
+ // Block Blast's drag: the piece you hold is the piece that lands, at board size. A finger needs the
+ // whole piece clear of it so the hand never covers it; a cursor hides nothing, so a mouse or a pen
+ // carries the piece centred on the pointer. dragGrip says which, and dragLanding works out both where
+ // the piece is drawn and which square it would land on from the one box, so the ghost cannot drift
+ // away from the piece — at an edge, in a corner, or anywhere else.
  const TAP_SLOP=6,RETURN_MS=160;
  let drag=null,dragArt=null,suppressClick=false,dragFrame=0;
  const buzz=ms=>{try{navigator.vibrate?.(ms);}catch{}};
@@ -171,7 +173,7 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
  function paintDrag(){dragFrame=0;if(!drag||!dragArt)return;
   const p=state.tray[drag.index];if(!p)return;
   const cols=Math.max(...p.shape.map(s=>s[0]))+1,rows=Math.max(...p.shape.map(s=>s[1]))+1;
-  const {left,top,r,c}=dragLanding({x:drag.clientX,y:drag.clientY,cols,rows,lift:drag.lift,...drag.metrics});
+  const {left,top,r,c}=dragLanding({x:drag.clientX,y:drag.clientY,cols,rows,lift:drag.lift,anchor:drag.anchor,...drag.metrics});
   dragArt.style.translate=`${Math.round(left)}px ${Math.round(top)}px`;
   const valid=fits(state.grid,p.shape,r,c);
   if(r!==drag.r||c!==drag.c||valid!==drag.valid){
@@ -195,7 +197,7 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
    .finished.catch(()=>{}).then(()=>{art.remove();tray.querySelector('.lifted')?.classList.remove('lifted');});}
  const dragDown=e=>{const slot=e.target.closest('[data-shape]');if(drag||bombPointer||locked()||e.isPrimary===false||(e.button!==undefined&&e.button!==0)||!slot||!state.tray[slot.dataset.shape])return;
   drag={pointerId:e.pointerId,index:Number(slot.dataset.shape),x:e.clientX,y:e.clientY,moving:false,
-   lift:e.pointerType==='touch'?BLOCK_LIFT.touch:BLOCK_LIFT.mouse,metrics:boardMetrics(),r:null,c:null,valid:null};
+   ...dragGrip(e.pointerType),metrics:boardMetrics(),r:null,c:null,valid:null};
   tray.setPointerCapture?.(e.pointerId);
   state.selected=drag.index;bomb=false;hintCells=[];liftPiece();follow(e);paintDrag();cb.sound('select');};
  const dragMove=e=>{if(!drag||e.pointerId!==drag.pointerId||locked())return;if(!drag.moving&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>=TAP_SLOP)drag.moving=true;follow(e);};
@@ -214,6 +216,7 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
  function clearBombPointer(){const id=bombPointer?.id;bombPointer=null;try{if(buttons.bomb.hasPointerCapture?.(id))buttons.bomb.releasePointerCapture(id);}catch{}bombArt?.remove();bombArt=null;clearPreview();}
  function bombFollow(e){
   if(!bombPointer)return;const m=boardMetrics(),x=e.clientX,y=e.clientY-(e.pointerType==='touch'?1.5*m.step:0);
+  // The 3x3 is centred on the cursor, so the square under the pointer is the middle of the blast.
   bombPointer.r=Math.floor((y-m.top)/m.step);bombPointer.c=Math.floor((x-m.left)/m.step);
   const {r,c}=bombPointer;bombPointer.valid=r>=0&&r<8&&c>=0&&c<8&&state.grid.some((row,rr)=>row.some((v,cc)=>v&&Math.abs(rr-r)<=1&&Math.abs(cc-c)<=1));
   if(bombArt){bombArt.style.left=`${x}px`;bombArt.style.top=`${y}px`;bombArt.classList.toggle('invalid',!bombPointer.valid);}preview(r,c);

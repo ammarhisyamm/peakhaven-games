@@ -11,6 +11,9 @@ const TAU=Math.PI*2;
 export const BOND_HIT=.17,BOND_KNEE=6,BOND_MAX_FIXED=5,BOND_FIXED_GAP=.55,BOND_CLOCK_MAX=4,BOND_CLOCK_MIN=2.5,BOND_CLOCK_FROM=5,BOND_CLOCK_TO=20;
 const SEQ_SWAP=.16,SEQ_CLEAR=.18,SEQ_HINT_AFTER=5,SEQ_BONUS_RATE=.4,SEQ_CRACK=.42,fallTime=d=>.12+.05*Math.abs(d);
 // What a v3 combo is called when it goes off. The bigger the blast, the louder the word.
+// What a cascade is called at each length. Chains of two and three are named too: they used to show only
+// on the banner this replaces, and saying nothing for them would be a step back.
+const chainLabel=n=>n>=5?`CHAIN x${n} AMAZING!`:n>=4?`CHAIN x${n} GREAT!`:n>=3?`CHAIN x${n} NICE!`:`CHAIN x${n}`;
 const COMBO_LABELS={stripeStripe:'CROSS BLAST!',stripeWrap:'MEGA CROSS!',wrapWrap:'DOUBLE BLAST!',bombStripe:'COLOUR STRIPES!',bombWrap:'COLOUR BLAST!',bombBomb:'BOARD CLEAR!'};
 // Ridge Run constants, from the Tryout Arcade (world units; the world is 640 tall).
 // Every number here is the Tryout Arcade's Flap Dash, in its fixed 360x640 world: ground H-70, a node of
@@ -432,7 +435,7 @@ export class SequenceEngine extends MiniEngine{
   // v4 only: two uses of each tool per run. Neither costs a move — a tool is the way out of a board that
   // has stopped giving, and charging a move for one would make reaching for it feel like a punishment.
   this.tools=this.rulesVersion>=SEQUENCE_V4_VERSION?{...SEQUENCE_TOOLS}:null;this.stuck=false;this.hammerArmed=false;
-  this.inputs=[];this.movesTotal=v3?this.config.moves:SEQUENCE_MOVES;this.moves=this.movesTotal;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.creating=null;this.fallDur=0;this.popups=[];this.cracks=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  this.inputs=[];this.movesTotal=v3?this.config.moves:SEQUENCE_MOVES;this.moves=this.movesTotal;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.creating=null;this.fallDur=0;this.popups=[];this.cracks=[];this.shake=0;this.idle=0;this.hintPair=null;
   // Achievement counters, derived as the run plays and read back by the server when it replays it.
   this.maxChain=0;this.specialsMade=0;
   // v3 only: what the current cascade is still owed. `again` is the wrapped crystals due a second blast,
@@ -491,7 +494,7 @@ export class SequenceEngine extends MiniEngine{
   for(const i of matches){this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);sx+=i%7;sy+=Math.floor(i/7);}
   const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.noteRun(0);this.clearing=matches;if(this.rulesVersion===2){const was=this.progress;this.progress=applySequenceWave(this.config,this.progress,this.board,matches);this.noteBreaks(was,this.progress);this.reportGoals();}
   this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
-  if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
+  if(this.chain>1){const n=this.chain;this.cb.effect?.(chainLabel(n),'sequence');if(n>=4&&this.motion)this.shake=1;}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
  // ---- v4 helper tools ----
  // Whether the tools are live at all: this run is still going and still able to take one. Split out from
@@ -573,8 +576,8 @@ export class SequenceEngine extends MiniEngine{
   // plus a flash on every special that was just made.
   this.blasts=[...plan.effects.map(e=>({...e,t:0})),...[...plan.create.keys()].map(at=>({type:'make',at,t:0}))];
   const label=COMBO_LABELS[plan.combo];
-  if(label){this.banner={text:label,t:0};this.cb.effect?.(label,'sequence');}
-  else if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4)this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');}
+  if(label)this.cb.effect?.(label,'sequence');
+  else if(this.chain>1)this.cb.effect?.(chainLabel(this.chain),'sequence');
   else if(plan.made.bomb)this.cb.effect?.('COLOUR BOMB!','sequence');
   else if(plan.made.wrap)this.cb.effect?.('WRAPPED!','sequence');
   // The cascade climbs two semitones a wave, and the buzz is forced through so a fast chain is still felt.
@@ -591,7 +594,7 @@ export class SequenceEngine extends MiniEngine{
   if(this.rulesVersion<3||this.bonusDone||!this.complete())return false;
   if(!this.bonus){
    if(this.moves<=0&&!v3RemainingSpecials(this.board).length){this.bonusDone=true;return false;}
-   this.bonus={left:Math.max(0,this.moves),sweeps:0};this.banner={text:'BONUS!',t:0};this.cb.effect?.('BONUS!','sequence');this.cb.message('Bonus! Every move you did not need fires a striped crystal.');
+   this.bonus={left:Math.max(0,this.moves),sweeps:0};this.cb.effect?.('BONUS!','sequence');this.cb.message('Bonus! Every move you did not need fires a striped crystal.');
   }
   if(this.bonus.left>0){
    this.bonus.left--;
@@ -619,7 +622,7 @@ export class SequenceEngine extends MiniEngine{
    if(held){this.stuck=true;this.reportTools();this.cb.message('No moves? Use a tool.');this.cb.effect?.('NO MOVES? USE A TOOL','sequence');return;}
    this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):this.rulesVersion>=3?createV3Board(this.config,this.random,this.progress,this.board):createProgressionBoard(this.config,this.random,this.progress,this.board);this.cb.message('Fresh crystals. No move used.');}else{const remaining=this.rulesVersion===1?[]:(this.rulesVersion>=3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress)).filter(g=>g.left).map(g=>`${g.left} ${g.label.toLowerCase()}`);this.cb.message(`${this.moves} moves left. ${this.score<this.target?`${Math.max(0,this.target-this.score)} points to go.`:'Score goal reached.'}${remaining.length?' Still needed: '+remaining.join(', ')+'.':''}`);}
  }
- tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
+ tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);this.shake=Math.max(0,this.shake-dt*4);
   for(const b of this.blasts)b.t+=dt;this.blasts=this.blasts.filter(b=>b.t<.45);
   for(const k of this.cracks)k.t+=dt;this.cracks=this.cracks.filter(k=>k.t<SEQ_CRACK);
   if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
@@ -659,7 +662,6 @@ export class SequenceEngine extends MiniEngine{
   c.restore();
   c.textAlign='center';c.textBaseline='middle';
   for(const p of this.popups){c.globalAlpha=Math.max(0,1-p.t/.9);c.fillStyle='#ffffff';c.shadowColor='#00c9ff';c.shadowBlur=10;c.font=`800 ${Math.round(g.cell*.36)}px Inter, sans-serif`;c.fillText(p.text,p.x,p.y-p.t*g.cell*.7);}
-  if(this.banner){const t=this.banner.t,a=Math.min(1,t*6,(1.1-t)*3);c.globalAlpha=Math.max(0,a);c.fillStyle='#ffe77a';c.shadowColor='#ff9d2e';c.shadowBlur=16;c.font=`900 ${Math.round(g.cell*.5)}px Inter, sans-serif`;c.fillText(this.banner.text.toUpperCase(),g.x+g.size/2,g.y+g.size/2-(1-Math.min(1,t*5))*12);}
   c.globalAlpha=1;c.shadowBlur=0;c.restore();
  }
  // Each special reads at a glance: stripes run the way the blast will travel, a wrapped crystal wears a
