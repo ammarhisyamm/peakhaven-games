@@ -177,7 +177,7 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
 
 /* The achievements row: closed by default, opens on tap. */
 .achievement-collapse{border-top:1px solid #e4edf2;margin-top:2px}
-.achievement-collapse>summary{display:flex;align-items:center;gap:8px;padding:9px 2px 7px;cursor:pointer;
+.achievement-collapse>summary{display:flex;align-items:center;gap:8px;padding:9px 2px 7px;min-height:44px;cursor:pointer;
  list-style:none;font-size:clamp(12px,2.3vw,14px);font-weight:700;color:#18384f}
 .achievement-collapse>summary::-webkit-details-marker{display:none}
 .achievement-collapse>summary:focus-visible{outline:2px solid #0a84ff;outline-offset:2px;border-radius:8px}
@@ -202,9 +202,9 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
  .daily-game-tagline{grid-column:2;grid-row:2;font-size:clamp(12px,3vw,14px);align-self:center}
  .daily-game-blurb{display:none}
  .daily-game .plays-left{grid-column:2;grid-row:3;align-self:center}
- .daily-game .daily-play-button{grid-column:2;grid-row:4;width:100%;min-height:40px}
+ .daily-game .daily-play-button{grid-column:2;grid-row:4;width:100%;min-height:44px}
  .daily-game .achievement-collapse{grid-column:1/-1;grid-row:5;margin-top:4px}
- .achievement-collapse>summary{padding:7px 2px 5px}
+ .achievement-collapse>summary{padding:7px 2px 5px;min-height:44px}
 }
 /* A phone has room for the name, the plays and the button, and not for a tagline as well. */
 @media(max-width:620px){

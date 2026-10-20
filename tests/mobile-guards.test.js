@@ -28,6 +28,60 @@ test('Every game surface claims the touch, and cannot be selected or long-presse
       `${surface} is not in the guard rule, so a drag there can still scroll the page`);
 });
 
+// Every rule inside a max-width block, with the block it came from, so a height can be checked where
+// it actually applies. A plain brace walk, with the comments taken out first because a comment sits
+// between a brace and the selector that follows it: @media pushes a scope, a selector pushes one and
+// keeps its body, and a closing brace pops.
+const uncommented=css=>{
+ let out='',at=0;
+ for(;;){
+  const start=css.indexOf('/*',at);
+  if(start<0)return out+css.slice(at);
+  const end=css.indexOf('*/',start);
+  out+=css.slice(at,start);
+  if(end<0)return out;
+  at=end+2;
+ }
+};
+const phoneRules=sheet=>{
+ const css=uncommented(sheet),rules=[],scopes=[];let at=0;
+ while(at<css.length){
+  const open=css.indexOf('{',at),close=css.indexOf('}',at);
+  if(open<0&&close<0)break;
+  if(open>=0&&(close<0||open<close)){
+   const head=css.slice(at,open).trim(),phone=scopes.find(s=>s.phone);
+   if(head.startsWith('@'))scopes.push({phone:head.includes('max-width')?head:null});
+   else{scopes.push({phone:null});
+    if(phone)rules.push({where:`${phone.phone} ${head}`,selector:head,body:css.slice(open+1,close)});}
+   at=open+1;
+  }else{scopes.pop();at=close+1;}
+ }
+ return rules;
+};
+// clamp(floor,…) is only ever as tall as its floor, so that is the number a thumb gets.
+const minHeight=body=>{
+ const at=body.indexOf('min-height:');
+ if(at<0)return null;
+ const value=body.slice(at+'min-height:'.length).split(';')[0].trim();
+ return parseFloat(value.startsWith('clamp(')?value.slice('clamp('.length):value);
+};
+
+// The play page's two full-width controls, at the widths a phone actually uses. Both came up short
+// once main's card layout landed on this branch -- the Play button because a later and more specific
+// rule set 40px, the achievements summary because it did not exist when this pass was written -- and
+// both are easy to shorten again by trimming padding, so every phone-width rule that gives either one
+// a height is checked. The unmediated rules above them are left out: that is the desktop card, where
+// there is room for the button to be tall on its own.
+test('Nothing on the play page is a target a thumb misses',()=>{
+ const rules=phoneRules(play);
+ for(const selector of ['.daily-play-button','.achievement-collapse>summary']){
+  const found=rules.filter(r=>r.selector.includes(selector)).map(r=>({...r,px:minHeight(r.body)}));
+  assert.ok(found.length,`${selector} has no phone-width rule left in play.css: this test is reading the wrong file`);
+  assert.ok(found.some(r=>r.px!==null),
+   `${selector} sets no min-height at any phone width, so its height is whatever its padding happens to be`);
+  for(const {where,px} of found)if(px!==null)assert.ok(px>=44,`${where} is ${px}px: a thumb needs 44`);
+ }
+});
 test('The pull-to-refresh guard is on the document element, where the scroll chain starts',()=>{
   assert.match(gameplay,/html\{[^}]*overscroll-behavior:none/,
     'overscroll-behavior on body alone does not reliably stop the rubber band');
