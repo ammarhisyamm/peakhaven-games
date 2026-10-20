@@ -33,16 +33,18 @@ test('every 25 lines pays one tool, rotating Bomb, then Undo, then Shuffle',()=>
  assert.deepEqual(paid.map(r=>r.tool),['bomb','undo','shuffle','bomb']);
  assert.deepEqual(paid.map(r=>r.at),[25,50,75,100]);
  assert.deepEqual(paid.map(r=>r.lines),[25,50,75,100]);
- assert.equal(paid[0].label,'Level 25! Free Bomb');
- assert.equal(paid[1].label,'Level 50! Free Undo');
- assert.equal(paid[2].label,'Level 75! Free Shuffle');
+ // The banner names the level the player has just reached, which is the number the HUD shows: clearing
+ // 25 lines passes level 1 and puts them on level 2.
+ assert.equal(paid[0].label,'Level 2! Free Bomb');
+ assert.equal(paid[1].label,'Level 3! Free Undo');
+ assert.equal(paid[2].label,'Level 4! Free Shuffle');
  assert.equal(g.tools.bomb,BLOCK_TOOLS.bomb+2);
  assert.equal(g.tools.undo,BLOCK_TOOLS.undo+1);
  assert.equal(g.tools.shuffle,BLOCK_TOOLS.shuffle+1);
  // The reward is tools, never points: the scoring is untouched.
  assert.equal(BLOCK_MILESTONE.every,25);
  assert.deepEqual([...BLOCK_MILESTONE.tools],['bomb','undo','shuffle']);
- assert.deepEqual(milestoneReward(4),{milestone:4,lines:100,tool:'bomb',label:'Level 100! Free Bomb'});
+ assert.deepEqual(milestoneReward(4),{milestone:4,lines:100,level:5,tool:'bomb',label:'Level 5! Free Bomb'});
 });
 
 test('a placement that clears several lines at once still pays the milestone it crossed',()=>{

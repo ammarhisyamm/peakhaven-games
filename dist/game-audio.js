@@ -35,8 +35,25 @@ export function clearEvent({combo=1,big=false}={}){
  return `clear${level}`;
 }
 const pitch={mahjong:1.12,merge:.88,sequence:1.08,blocks:.95};
+// The names a game asks for. The internal cue names (blkPick and the rest) are what an override points AT,
+// not what a game asks for, which is why they are not here: a game reaches them only through its override.
+export const EVENTS=Object.freeze(['select','toggle','hint','tool','undo','shuffle','launch','flap','drop',
+ 'invalid','bond','crystal','merge','perfect','win','swish','rim','miss','big','sparkle',
+ 'clear1','clear2','clear3','clear4','clear5','bigClear']);
 const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},ridge:{flap:'ridgeJump'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle',clear1:'blkClear1',clear2:'blkClear2',clear3:'blkClear3',clear4:'blkClear4',clear5:'blkClear5',bigClear:'blkBigClear'}};
 export function cueFor(game,event){const name=overrides[game]?.[event]??event,cue=cues[name];return cue?{...cue,rate:(cue.rate||1)*(cue.own?1:pitch[game]||1)}:null;}
+// Every file one game could possibly ask for. Peak Blocks' cascades are 598 KB of the set and no other game
+// can reach them, so loading per game is the difference between a Ridge Run player downloading 100 KB and
+// downloading all 733 KB.
+export function filesFor(game){
+ const out=new Set();
+ for(const event of EVENTS){const cue=cueFor(game,event);if(cue)out.add(cue.file);}
+ return [...out].sort();
+}
+// What the menus use, and so what every game needs whatever else it loads.
+export const SHARED_FILES=Object.freeze(filesFor(null));
+// The whole set, for anything that wants to check they all exist.
+export const ALL_FILES=Object.freeze(files);
 const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12],clear1:[0,7],clear2:[0,7,12],clear3:[0,4,7,12],clear4:[0,4,7,14],clear5:[0,5,9,12,17],bigClear:[0,4,7,12]};
 export class GameAudio{
  constructor(enabled,session=audioSession){this.enabled=enabled;this.session=session;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;this.waiting=null;}
@@ -63,7 +80,14 @@ export class GameAudio{
   this.waiting=entry;return entry.promise;
  }
 
- prepare(){
+ // Which files to have ready: the shared ones always, plus this game's own. A cue whose file has not
+ // arrived yet is not silent — play() races the download and falls back to the synth, as it always has.
+ wanted(game){
+  if(!game)return SHARED_FILES;
+  const own=filesFor(game);
+  return own.length?[...new Set([...SHARED_FILES,...own])]:SHARED_FILES;
+ }
+ prepare(game=null){
   if(!this.enabled())return;
   // Before the context: on iOS the session type decides whether anything the context plays is audible at all.
   this.session?.resume();
@@ -72,7 +96,7 @@ export class GameAudio{
     this.generation++;this.context=new(window.AudioContext||window.webkitAudioContext)();this.buffers.clear();this.decoded.clear();this.waiting=null;
    }
    this.wake();const ctx=this.context;
-   for(const file of files)if(!this.buffers.has(file)){
+   for(const file of this.wanted(game))if(!this.buffers.has(file)){
     const pending=fetch(`assets/audio/${file}.wav`).then(r=>{if(!r.ok)throw new Error('Audio unavailable');return r.arrayBuffer();}).then(bytes=>ctx.decodeAudioData(bytes)).then(buffer=>{if(this.context===ctx){this.decoded.set(file,buffer);this.failed.delete(file);}return buffer;}).catch(()=>{if(this.context===ctx){this.buffers.delete(file);this.failed.add(file);}return null;});
     this.buffers.set(file,pending);
    }
@@ -94,7 +118,7 @@ export class GameAudio{
  }
  play(game,event,opts={}){
   const cue=cueFor(game,event);if(!cue)return false;if(!this.enabled())return true;
-  this.prepare();const ctx=this.context;if(!ctx)return false;
+  this.prepare(game);const ctx=this.context;if(!ctx)return false;
   const generation=this.generation,rate=cue.rate*(opts.rate||1)*(1+(Math.random()*2-1)*(cue.jitter||0)),delay=Math.max(0,opts.delay||0);
   const ready=this.decoded.get(cue.file),pending=this.buffers.get(cue.file),queuedAt=Date.now();
   const deliver=async()=>{
