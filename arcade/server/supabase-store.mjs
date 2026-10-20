@@ -137,6 +137,30 @@ export function createSupabaseBackend(env=supabaseEnv()){
     async cancelPurchase(id,adminEmail){return needsCoins(await admin.rpc('cancel_purchase',{p_purchase:id,p_admin:adminEmail??null}))??{found:false};},
     async adjustCoins(playerId,delta,note,adminEmail){return needsCoins(await admin.rpc('adjust_coins',{p_player:playerId,p_delta:delta,p_note:note,p_admin:adminEmail??null}))??{found:false};},
     async refundPurchase(id,adminEmail){return needsCoins(await admin.rpc('refund_purchase',{p_purchase:id,p_admin:adminEmail??null}))??{found:false};},
+    // Achievements. See the note in memory-store.mjs: one row per verified, committed run, deleted with the
+    // run if a refund takes it off the boards. Reads fall back to empty until achievements.sql has run, so
+    // the shelf shows as unearned rather than the page failing.
+    async achievementsReady(){
+      const {error}=await admin.from('run_achievements').select('run_id',{head:true,count:'exact'});
+      if(error){if(tableMissing(error))return false;throw new Error(error.message);}
+      return true;
+    },
+    async runStatsFor(runId){
+      if(!/^[0-9a-f-]{36}$/i.test(runId))return null;
+      return optional(await admin.from('run_achievements').select('run_id,player_id,game,stats').eq('run_id',runId).maybeSingle(),null);
+    },
+    async saveRunStats({runId,playerId,game,stats}){
+      const row={run_id:runId,player_id:playerId,game,stats};
+      return optional(await admin.from('run_achievements').upsert(row,{onConflict:'run_id'}).select('run_id').maybeSingle(),null);
+    },
+    async playerRunStats(playerId){
+      const out=[];
+      for(let page=0;;page++){
+        const rows=optional(await admin.from('run_achievements').select('game,stats').eq('player_id',playerId).order('run_id').range(page*1000,page*1000+999),null);
+        if(!rows)return out;
+        out.push(...rows);if(rows.length<1000)return out;
+      }
+    },
     async coinLedger({playerId=null,limit=50}={}){
       let query=admin.from('coin_ledger').select('id,player_id,delta,reason,purchase_id,run_id,admin_email,note,created_at');
       if(playerId)query=query.eq('player_id',playerId);

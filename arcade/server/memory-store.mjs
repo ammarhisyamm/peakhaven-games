@@ -4,7 +4,7 @@ import {refundPlan,refundedRunReason} from './coins.mjs';
 
 export function createMemoryStore({invites={},now=()=>new Date()}={}){
   const codes=new Map(Object.entries(invites).map(([code,max])=>[code,{max,uses:0,note:'',created_at:null}]));
-  const players=new Map(),runs=new Map(),results=new Map(),prizes=new Map(),purchases=new Map(),ledger=[],adminEntries=[];
+  const players=new Map(),runs=new Map(),runStats=new Map(),results=new Map(),prizes=new Map(),purchases=new Map(),ledger=[],adminEntries=[];
   const copy=v=>v&&structuredClone(v);
   // The ledger is walked in order, so each row needs a stamp and a tie-break that keep insertion order.
   let ledgerSeq=0;
@@ -110,11 +110,26 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
       for(const runId of plan.runs){
         const run=runs.get(runId);
         if(run&&run.status!=='rejected')Object.assign(run,{status:'rejected',reject_reason:refundedRunReason(p.reference),updated_at:t,finished_at:run.finished_at??t});
+        // A refunded run is off the boards, so whatever it earned goes with it. In production the trigger in
+        // achievements.sql does this, on any path that rejects a run; here it is the same rule by hand.
+        runStats.delete(runId);
       }
       p.status='refunded';p.resolved_at=t;p.resolved_by=adminEmail??null;
       log({player_id:p.player_id,delta:-take,reason:'refund',purchase_id:p.id,admin_email:adminEmail??null,
         note:`Refunded ${p.reference}: ${take} unspent coin(s) taken back, ${plan.runs.length} paid run(s) dropped from the boards`});
       return {found:true,refunded:true,removed:take,unspent:plan.unspent,runs:plan.runs.length,balance:balance(p.player_id)};
+    },
+    // Achievements. One row per run that has been verified and committed, holding only what that run's own
+    // replay produced. A run rejected at verification never gets a row; a run rejected later by a refund has
+    // its row taken away with it, which is what makes "refunded runs never count" true in both directions.
+    async achievementsReady(){return true;},
+    async runStatsFor(runId){return copy(runStats.get(runId))??null;},
+    async saveRunStats({runId,playerId,game,stats}){
+      runStats.set(runId,{run_id:runId,player_id:playerId,game,stats:{...stats},created_at:now().toISOString()});
+      return copy(runStats.get(runId));
+    },
+    async playerRunStats(playerId){
+      return [...runStats.values()].filter(r=>r.player_id===playerId).map(copy);
     },
     async coinLedger({playerId=null,limit=50}={}){
       return ledger.filter(r=>!playerId||r.player_id===playerId).slice(-limit).reverse().map(copy);

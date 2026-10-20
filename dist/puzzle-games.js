@@ -70,7 +70,11 @@ const p=state.tray[state.selected];if(!p)return;const out=placeBlock(state.grid,
  // Block Blast style: every placement snaps, and a clear pops on top with one more sparkle per combo step.
 function clearSound(out){for(const cue of clearCues(out))cb.sound(cue.event,cue.opts);}
 function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound('invalid');cb.message('Choose a square near filled blocks.');return;}state=g.state;bomb=false;cb.effect('SPACE CLEARED!','blocks');cb.sound('merge');render();afterAction();return;}const p=state.tray[state.selected];if(!p){cb.sound('invalid');cb.message('Select a piece from the tray first.');return;}const before=state.grid.map(row=>[...row]),out=blocksPlace(g,state.selected,r,c);if(!out){cb.sound('invalid');cb.message('That piece needs empty squares. Try another spot.');return;}state=g.state;hintCells=[];render();landed(p,r,c,out);blast(out,before,p.color,r,c);clearSound(out);cb.message(out.lines?`${out.lines} ${out.lines===1?'line':'lines'} cleared! +${out.points}${out.combo>1?` · combo ${out.combo}`:''}`:'Lovely fit. Keep a little space for the next piece.');let shown=false;if(out.lines){const praise=['','','GREAT!','EXCELLENT!','AMAZING!','UNBELIEVABLE!','UNBELIEVABLE!'][Math.min(out.lines,6)],label=out.perfect?'PERFECT CLEAR!':out.combo>1?`COMBO ${out.combo}${praise?` · ${praise}`:''}`:praise;if(label){cb.effect(label,'blocks',{lines:out.lines,combo:out.combo,perfect:out.perfect,points:out.points});shown=true;}}const feel=comboFeedback(out,{motion});shake(feel);comboCount(feel);lineBurst(out,p.color);
-  milestones(out.rewards,shown);newBest(shown,(out.rewards?.length||0)*BANNER_GAP);cb.progress?.({lines:state.lines});afterAction();}
+  milestones(out.rewards,shown);newBest(shown,(out.rewards?.length||0)*BANNER_GAP);cb.progress?.({lines:state.lines});
+  // The numbers the Blocks achievements count, as the run makes them. Raw: the host turns lines into
+  // levels through the shared milestone constant, so the HUD, the banner and the achievement agree.
+  cb.milestone?.({score:state.score,combo:out.combo,lines:state.lines});
+  afterAction();}
  // Clear effects, modelled on Block Blast: every cleared block bursts (a flash, then it shrinks away and throws
  // shards), sweeping out from where the piece landed; the points for the move float up from the cleared lines; and the
  // piece just placed settles with a small bounce. Purely visual: it never touches the game state.

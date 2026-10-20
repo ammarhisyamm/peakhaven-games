@@ -181,7 +181,7 @@ async function refused(promise) {
   catch (error) {return error.code || error.message;}
 }
 
-const LIVE = ['schema.sql', 'month-end.sql', 'paid-tries.sql'];
+const LIVE = ['schema.sql', 'month-end.sql', 'paid-tries.sql', 'achievements.sql'];
 const DAY = '2026-10-17';
 
 const server = await startPostgres();
@@ -493,11 +493,11 @@ try {
     JSON.stringify(firstPrint) === JSON.stringify(secondPrint));
   await platform.end();
 
-  section('The other order: tighten first, then paid-tries.sql on top');
+  section('The other order: tighten first, then the later migrations on top');
   const reversed = await build(server.url, 'ph_reversed',
-    ['schema.sql', 'month-end.sql', 'tighten-grants.sql', 'paid-tries.sql']);
+    ['schema.sql', 'month-end.sql', 'tighten-grants.sql', 'paid-tries.sql', 'achievements.sql']);
   const reversedGrants = await grantsOf(reversed);
-  check('paid-tries.sql cannot reopen anything it runs after', writesOf(reversedGrants).length === 0,
+  check('a migration running after tighten-grants cannot reopen anything', writesOf(reversedGrants).length === 0,
     JSON.stringify(writesOf(reversedGrants)));
   check('and the two orders agree on exactly which reads survive',
     keptKey(reversedGrants) === KEPT_KEY, keptKey(reversedGrants) || '(nothing)');

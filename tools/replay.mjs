@@ -45,7 +45,8 @@ export async function replayRidge(rep){
   }
   if(rep.v===6&&!e.ended)e.finish();
   e.destroy();
-  return {score:e.score,ended:e.ended,ticks:e.ticks,unusedInputs:taps.length+resumes.length+revives.length+rejected};
+  const stats=e.stats?.()??null;
+  return {score:e.score,ended:e.ended,ticks:e.ticks,stats,unusedInputs:taps.length+resumes.length+revives.length+rejected};
 }
 
 export async function replayBond(rep){
@@ -117,9 +118,10 @@ export async function replaySequence(rep){
     e.step(SIM_STEP);
   }
   if(!e.ended)e.finish();
+  const stats=e.stats?.()??null;
   e.destroy();
   const result=out.result();
-  return {score:e.score,won:result.won,level,ended:true,ticks:e.ticks,unusedInputs:moves.length+rejected};
+  return {score:e.score,won:result.won,level,ended:true,ticks:e.ticks,stats,unusedInputs:moves.length+rejected};
 }
 
 export {replayBlocks} from '../dist/blocks-core.js';
