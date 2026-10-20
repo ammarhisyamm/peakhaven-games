@@ -1,6 +1,6 @@
 import {SEQUENCE_RULES_VERSION,sequenceLevel,createSequenceProgress,sequenceGoals,sequenceComplete,sequenceBrief,applySequenceWave,progressionExchange,progressionMove,settleProgression,createProgressionBoard} from './sequence-progression.js';
 import {createSequenceBoard,sequenceMatches,sequenceExchange,settleSequence,sequenceTarget,sequencePalette,SEQUENCE_MOVES,boardFit} from './sequence-rules.js';
-import {SEQUENCE_V3_VERSION,v3Level,createV3Progress,createV3Board,v3Goals,v3AllGoals,v3Complete,v3Brief,v3Exchange,v3SwapKind,v3Move,v3Moves,planV3Wave,applyV3Wave,settleV3,v3BonusPick,v3RemainingSpecials,kindOf,colourOf,isSpecial,PLAIN,STRIPE_V,STRIPE_H,WRAP,BOMB} from './sequence-v3.js';
+import {SEQUENCE_V3_VERSION,SEQUENCE_V4_VERSION,SEQUENCE_LATEST_VERSION,SEQUENCE_TOOLS,SEQ_LOG,v3Level,createV3Progress,createV3Board,v3Goals,v3AllGoals,v3Complete,v3Brief,v3Exchange,v3SwapKind,v3Move,v3Moves,planV3Wave,applyV3Wave,settleV3,v3BonusPick,v3RemainingSpecials,kindOf,colourOf,isSpecial,PLAIN,STRIPE_V,STRIPE_H,WRAP,BOMB} from './sequence-v3.js';
 import {drawSprite,drawSequenceCrystal,drawBottleObstacle,vialSprites} from './gameplay-art.js';
 import {orbitVelocity,crossesHoop,ORBIT_GRAVITY} from './orbit-rules.js';
 import {reachStart,reachThroughGate,REACH} from './ridge-reach.js';
@@ -392,9 +392,12 @@ export class SequenceEngine extends MiniEngine{
   super(canvas,cb,options);
   // Every draw (the opening board, each refill, any reshuffle) comes from the seeded generator, in that order,
   // so the seed plus the logged swaps rebuild the run exactly.
-  this.rulesVersion=options?.rulesVersion===1?1:options?.rulesVersion===2?2:SEQUENCE_V3_VERSION;const v3=this.rulesVersion===3;
-  this.config=v3?v3Level(this.level):sequenceLevel(this.level);this.progress=v3?createV3Progress(this.config):createSequenceProgress(this.config);this.palette=v3?this.config.palette:sequencePalette(this.level);
+  const asked=options?.rulesVersion;this.rulesVersion=asked===1?1:asked===2?2:asked===3?3:SEQUENCE_LATEST_VERSION;const v3=this.rulesVersion>=3;
+  this.config=v3?v3Level(this.level,this.rulesVersion):sequenceLevel(this.level);this.progress=v3?createV3Progress(this.config):createSequenceProgress(this.config);this.palette=v3?this.config.palette:sequencePalette(this.level);
   this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):v3?createV3Board(this.config,this.random,this.progress):createProgressionBoard(this.config,this.random,this.progress);
+  // v4 only: two uses of each tool per run. Neither costs a move — a tool is the way out of a board that
+  // has stopped giving, and charging a move for one would make reaching for it feel like a punishment.
+  this.tools=this.rulesVersion>=SEQUENCE_V4_VERSION?{...SEQUENCE_TOOLS}:null;this.stuck=false;this.hammerArmed=false;
   this.inputs=[];this.movesTotal=v3?this.config.moves:SEQUENCE_MOVES;this.moves=this.movesTotal;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.creating=null;this.fallDur=0;this.popups=[];this.cracks=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
   // v3 only: what the current cascade is still owed. `again` is the wrapped crystals due a second blast,
   // `bonus` counts the end-of-level striped crystals still to fire, `blasts` are the effects being drawn.
@@ -408,7 +411,7 @@ export class SequenceEngine extends MiniEngine{
   this.onpointermove=e=>{if(!owns(e)||!this.pointerStart||this.pending)return;const [x,y]=this.pointer(e),dx=x-this.pointerStart[0],dy=y-this.pointerStart[1];if(Math.hypot(dx,dy)<this.geometry().cell*.3)return;const start=this.cellAt(...this.pointerStart);this.pointerStart=null;this.pressed=null;if(start!==null)swapFromGesture(start,dx,dy);};
   this.onpointerup=e=>{if(!owns(e))return;const origin=this.pointerStart,[x,y]=this.pointer(e);this.cancelPointer();if(!origin)return;const start=this.cellAt(...origin),dx=x-origin[0],dy=y-origin[1];if(start===null)return;if(Math.hypot(dx,dy)*this.scale<10)this.choose(start);else swapFromGesture(start,dx,dy);};
   this.onpointercancel=(e={})=>{if(owns(e))this.cancelPointer();};this.onlostpointercapture=this.onpointercancel;this.onblur=()=>this.cancelPointer();window.addEventListener?.('blur',this.onblur);
-  for(const name of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(this.rulesVersion===1?`Match three or more. Reach ${this.target} points in ${this.moves} moves.`:this.rulesVersion===3?v3Brief(this.level):sequenceBrief(this.level));this.reportGoals();
+  for(const name of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,this['on'+name]);cb.hud(0,this.moves,this.target);cb.message(this.rulesVersion===1?`Match three or more. Reach ${this.target} points in ${this.moves} moves.`:this.rulesVersion>=3?v3Brief(this.level,this.rulesVersion):sequenceBrief(this.level));this.reportGoals();
  }
  geometry(){
   let top=this.top+(this.rulesVersion>=2?38/this.scale:0),bottom=this.bottom+(this.rulesVersion>=2?36/this.scale:0);
@@ -418,15 +421,24 @@ export class SequenceEngine extends MiniEngine{
   return{x:(this.w-size)/2,y:top+Math.max(0,fit.slack/2),size,cell,slack:fit.slack,limitedBy:fit.limitedBy};
  }
 
- complete(){return this.rulesVersion===1?this.score>=this.target:this.rulesVersion===3?v3Complete(this.score,{...this.config,target:this.target},this.progress):sequenceComplete(this.score,{...this.config,target:this.target},this.progress);}
- reportGoals(){const goals=this.rulesVersion===1?[]:this.rulesVersion===3?v3AllGoals({...this.config,target:this.target},this.progress,this.score):sequenceGoals(this.config,this.progress);this.cb.goals?.({version:this.rulesVersion,level:this.level,target:this.target,moves:this.moves,goals});}
+ complete(){return this.rulesVersion===1?this.score>=this.target:this.rulesVersion>=3?v3Complete(this.score,{...this.config,target:this.target},this.progress):sequenceComplete(this.score,{...this.config,target:this.target},this.progress);}
+ reportGoals(){const goals=this.rulesVersion===1?[]:this.rulesVersion>=3?v3AllGoals({...this.config,target:this.target},this.progress,this.score):sequenceGoals(this.config,this.progress);this.cb.goals?.({version:this.rulesVersion,level:this.level,target:this.target,moves:this.moves,goals});}
  cellAt(x,y){const g=this.geometry();if(x<g.x||x>=g.x+g.size||y<g.y||y>=g.y+g.size)return null;return Math.floor((y-g.y)/g.cell)*7+Math.floor((x-g.x)/g.cell);}
  choose(index,swapWith=null){
   if(this.paused||this.ended||this.pending||!Number.isInteger(index)||index<0||index>=49)return;
+  // An armed hammer takes the next tap, wherever it lands. A tap it cannot break puts the hammer away
+  // without spending it, the way a Peak Blocks bomb dropped on empty squares is not spent.
+  if(this.hammerArmed){
+   this.hammerArmed=false;
+   if(this.useHammer(index))return;
+   this.reportTools();this.cb.sound("invalid");
+   this.cb.message(this.progress?.locks?.[index]?"That crystal is trapped. Free it with a match beside its padlock. No use spent.":"Nothing to break there. No use spent.");
+   return;
+  }
   if(this.rulesVersion>=2&&(this.progress.locks[index]||(swapWith!==null&&this.progress.locks[swapWith]))){this.selection=null;this.cb.sound('invalid');this.cb.message('This crystal is locked. Make a match beside its padlock to open it. No move used.');this.cb.effect?.('MATCH BESIDE THE LOCK','sequence');return;}if(swapWith!==null)this.selection=index;
   if(this.selection===null){this.selection=index;this.cursor=index;this.cb.sound('select');this.cb.message(`Row ${Math.floor(index/7)+1}, column ${index%7+1} selected. Choose a neighbour.`);return;}
   if(this.selection===index&&swapWith===null){this.selection=null;return;}
-  const from=this.selection,to=swapWith??index,v3=this.rulesVersion===3;
+  const from=this.selection,to=swapWith??index,v3=this.rulesVersion>=3;
   // In v3 a swap of two specials, or any swap involving a colour bomb, is a move even though it makes no
   // line. Validity is a pure function of the board and the pair, so a replay accepts exactly the same swaps.
   const trigger=v3?v3SwapKind(this.board,from,to,this.progress):null;
@@ -445,6 +457,50 @@ export class SequenceEngine extends MiniEngine{
   this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
   if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
+ // ---- v4 helper tools ----
+ // A tool is refused in exactly the places a swap is: mid-animation, paused, over, or during the
+ // end-of-level bonus. Refusing rather than queueing is what keeps a replay honest: the server runs the
+ // same check on the same tick and rejects a log that spends a tool it could not have spent.
+ canUseTool(name){
+  return Boolean(this.tools&&this.tools[name]>0&&this.alive&&!this.paused&&!this.ended&&!this.pending&&!this.bonus);
+ }
+ toolState(){return {...this.tools,stuck:this.stuck,armed:this.hammerArmed};}
+ // The hammer waits for a target: the next tap on the board breaks that crystal instead of selecting it.
+ // Arming is not a rule and is never logged; only the break itself goes in the replay.
+ armHammer(on=true){
+  if(!on){this.hammerArmed=false;this.reportTools();this.cb.message("Hammer put away. No use spent.");return true;}
+  if(!this.canUseTool("hammer"))return false;
+  this.hammerArmed=true;this.selection=null;this.reportTools();
+  this.cb.message("Hammer ready. Tap the crystal to break, or tap Hammer again to put it away.");
+  return true;
+ }
+ reportTools(){if(this.tools)this.cb.tools?.(this.toolState());}
+ // Shuffle: re-mix the board from the same seeded generator the free reshuffle uses, which is guaranteed
+ // to leave a valid move. The draw happens at a point the log pins down, so a replay re-mixes identically.
+ useShuffle(){
+  if(!this.canUseTool('shuffle'))return false;
+  this.tools.shuffle--;this.inputs.push([this.ticks,SEQ_LOG.shuffle,-1]);
+  this.board=createV3Board(this.config,this.random,this.progress,this.board);
+  this.selection=null;this.idle=0;this.hintPair=null;this.stuck=false;
+  this.cb.sound('shuffle');this.cb.effect?.('BOARD RE-MIXED','sequence');
+  this.cb.message('Fresh crystals. No move used.');this.reportTools();
+  return true;
+ }
+ // Hammer: break one crystal. It goes through the same wave a match does, so it scores, it sets off a
+ // special it lands on, and it counts toward ice, traps and collection exactly as a cleared crystal would.
+ useHammer(index){
+  if(!this.canUseTool('hammer'))return false;
+  if(!Number.isInteger(index)||index<0||index>=49)return false;
+  // An empty cell has nothing to break, and a trapped crystal is freed by a match beside its padlock.
+  if(this.board[index]<0)return false;
+  if(this.progress?.locks?.[index])return false;
+  this.tools.hammer--;this.inputs.push([this.ticks,SEQ_LOG.hammer,index]);
+  this.selection=null;this.idle=0;this.hintPair=null;this.stuck=false;this.chain=0;this.again=[];
+  this.trigger={type:'fire',cells:[index]};
+  this.cb.sound('tool');this.reportTools();
+  this.resolveV3();
+  return true;
+ }
  // Any swap that makes a line, for the idle hint.
  // One v3 wave: the blast goes off, the specials it earns are minted, the objectives take their hit, and
  // anything still owed (a wrapped crystal's second explosion) is held for after the board settles.
@@ -479,7 +535,7 @@ export class SequenceEngine extends MiniEngine{
  // run's own generator picks, and then anything still special on the board goes off. It is drawn from the
  // seeded generator at a fixed point in the run, so a replay reproduces every point of it.
  startBonus(){
-  if(this.rulesVersion!==3||this.bonusDone||!this.complete())return false;
+  if(this.rulesVersion<3||this.bonusDone||!this.complete())return false;
   if(!this.bonus){
    if(this.moves<=0&&!v3RemainingSpecials(this.board).length){this.bonusDone=true;return false;}
    this.bonus={left:Math.max(0,this.moves),sweeps:0};this.banner={text:'BONUS!',t:0};this.cb.effect?.('BONUS!','sequence');this.cb.message('Bonus! Every move you did not need fires a striped crystal.');
@@ -494,12 +550,15 @@ export class SequenceEngine extends MiniEngine{
   if(specials.length&&this.bonus.sweeps<12){this.bonus.sweeps++;this.chain=0;this.trigger={type:'fire',cells:specials};this.resolveV3();return true;}
   this.bonusDone=true;this.bonus=null;return false;
  }
- findMove(){if(this.rulesVersion===3)return v3Move(this.board,this.progress);if(this.rulesVersion===2)return progressionMove(this.board,this.progress);for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
+ findMove(){if(this.rulesVersion>=3)return v3Move(this.board,this.progress);if(this.rulesVersion===2)return progressionMove(this.board,this.progress);for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
  finishMove(){
-  this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.blasts=[];this.cb.hud(this.score,this.moves,this.target);
+  this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.blasts=[];this.stuck=false;this.reportTools();this.cb.hud(this.score,this.moves,this.target);
   if(this.startBonus())return;
   if(this.complete()||this.moves<=0){this.finish();return;}
-  if(!this.findMove()){this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):this.rulesVersion===3?createV3Board(this.config,this.random,this.progress,this.board):createProgressionBoard(this.config,this.random,this.progress,this.board);this.cb.message('Fresh crystals. No move used.');}else{const remaining=this.rulesVersion===1?[]:(this.rulesVersion===3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress)).filter(g=>g.left).map(g=>`${g.left} ${g.label.toLowerCase()}`);this.cb.message(`${this.moves} moves left. ${this.score<this.target?`${Math.max(0,this.target-this.score)} points to go.`:'Score goal reached.'}${remaining.length?' Still needed: '+remaining.join(', ')+'.':''}`);}
+  if(!this.findMove()){
+   const held=this.tools&&(this.tools.shuffle>0||this.tools.hammer>0);
+   if(held){this.stuck=true;this.reportTools();this.cb.message('No moves? Use a tool.');this.cb.effect?.('NO MOVES? USE A TOOL','sequence');return;}
+   this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):this.rulesVersion>=3?createV3Board(this.config,this.random,this.progress,this.board):createProgressionBoard(this.config,this.random,this.progress,this.board);this.cb.message('Fresh crystals. No move used.');}else{const remaining=this.rulesVersion===1?[]:(this.rulesVersion>=3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress)).filter(g=>g.left).map(g=>`${g.left} ${g.label.toLowerCase()}`);this.cb.message(`${this.moves} moves left. ${this.score<this.target?`${Math.max(0,this.target-this.score)} points to go.`:'Score goal reached.'}${remaining.length?' Still needed: '+remaining.join(', ')+'.':''}`);}
  }
  tickEffects(dt){for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.9);if(this.banner&&(this.banner.t+=dt)>1.1)this.banner=null;this.shake=Math.max(0,this.shake-dt*4);
   for(const b of this.blasts)b.t+=dt;this.blasts=this.blasts.filter(b=>b.t<.45);
@@ -507,9 +566,9 @@ export class SequenceEngine extends MiniEngine{
   if(!this.pending&&!this.ended&&!this.paused&&!this.hintPair&&(this.idle+=dt)>SEQ_HINT_AFTER)this.hintPair=this.findMove();}
  update(dt){
   this.tickEffects(dt);if(this.pending<=0)return;this.pending-=dt;if(this.pending>0)return;
-  if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=SEQ_SWAP;return;}this.swap=null;if(this.rulesVersion===3){this.resolveV3();return;}this.resolveMatches();return;}
+  if(this.phase==='swap'){this.board=this.swap.next;if(!this.swap.matched){this.phase='return';this.pending=SEQ_SWAP;return;}this.swap=null;if(this.rulesVersion>=3){this.resolveV3();return;}this.resolveMatches();return;}
   if(this.phase==='return'){this.board=this.swap.original;this.swap=null;this.phase=null;this.pending=0;this.cb.sound('undo');this.cb.message('Try another pair. No move used.');return;}
-  if(this.phase==='clear'&&this.rulesVersion===3){
+  if(this.phase==='clear'&&this.rulesVersion>=3){
    const gone=this.clearing,held=this.board.map((v,i)=>gone.has(i)?-1:v);
    for(const [at,cell] of this.creating??[])held[at]=cell;
    const settled=settleV3(held,this.random,this.palette,this.progress);
@@ -519,7 +578,7 @@ export class SequenceEngine extends MiniEngine{
   if(this.phase==='clear'){const gone=this.clearing;this.board=this.board.map((v,i)=>gone.has(i)?-1:v);this.clearing=null;this.falls.clear();for(let col=0;col<7;col++){let write=6;for(let row=6;row>=0;row--)if(this.board[row*7+col]>=0){this.falls.set(write*7+col,row-write);write--;}for(let row=write;row>=0;row--)this.falls.set(row*7+col,-write-1);}this.board=settleSequence(this.board,this.random,7,this.palette);this.phase='fall';
    // Crystals fall like they have weight: each one accelerates and takes longer the further it drops.
    this.fallDur=Math.max(.12,...[...this.falls.values()].map(d=>fallTime(d)));this.pending=this.fallDur;return;}
-  if(this.phase==='fall'){this.falls.clear();if(this.rulesVersion===3){this.resolveV3();return;}if(this.complete())this.finishMove();else this.resolveMatches();}
+  if(this.phase==='fall'){this.falls.clear();if(this.rulesVersion>=3){this.resolveV3();return;}if(this.complete())this.finishMove();else this.resolveMatches();}
  }
  moveSelection(key){this.keyboard=true;let r=Math.floor(this.cursor/7),c=this.cursor%7;if(key==='ArrowUp')r=(r+6)%7;if(key==='ArrowDown')r=(r+1)%7;if(key==='ArrowLeft')c=(c+6)%7;if(key==='ArrowRight')c=(c+1)%7;this.cursor=r*7+c;if(this.selection!==null)this.choose(this.cursor);else this.cb.message(`Row ${r+1}, column ${c+1}. Press Enter to select.`);}
  action(){if(this.paused||this.ended||this.pending)return;this.keyboard=true;this.choose(this.cursor);}
@@ -530,12 +589,12 @@ export class SequenceEngine extends MiniEngine{
    if(this.phase==='fall'){const d=this.falls.get(i)||0;if(d){const k=clamp((this.fallDur-this.pending)/fallTime(d),0,1);y+=d*g.cell*(1-k*k);}}
    let size=g.cell*.86;const held=this.pressed===i||(this.phase==='swap'&&this.swap&&i===this.swap.from);if(held){size*=1.1;c.save();c.shadowColor='#ffe77a';c.shadowBlur=18;c.fillStyle='#ffe77a33';rounded(c,g.x+col*g.cell+2,g.y+row*g.cell+2,g.cell-4,g.cell-4,9);c.fill();c.restore();}
    if(this.clearing?.has(i)){const p=1-clamp(this.pending/SEQ_CLEAR,0,1),s=1-p*p;size*=s;c.globalAlpha=s;}
-   const kind=this.rulesVersion===3?kindOf(v):PLAIN,colour=this.rulesVersion===3?colourOf(v):v;
+   const kind=this.rulesVersion>=3?kindOf(v):PLAIN,colour=this.rulesVersion>=3?colourOf(v):v;
    if(!drawSequenceCrystal(c,kind,colour,x,y,size))this.drawSpecial(kind,colour,x,y,size);
    c.globalAlpha=1;if(this.rulesVersion>=2)this.drawObstacle(i,g);
    if(this.selection===i||(this.keyboard&&this.cursor===i)){c.strokeStyle=this.selection===i?'#ffe77a':'#e6ffff';c.lineWidth=3;rounded(c,g.x+col*g.cell+3,g.y+row*g.cell+3,g.cell-6,g.cell-6,9);c.stroke();}
   }
-  if(this.rulesVersion===3&&this.blasts.length)this.drawBlasts(g);
+  if(this.rulesVersion>=3&&this.blasts.length)this.drawBlasts(g);
   // Idle hint: after a few seconds without a move, one swap that works pulses gently.
   if(this.hintPair&&!this.pending){const a=.45+.35*Math.sin(this.time*5);c.strokeStyle=`rgba(255,231,122,${a})`;c.lineWidth=3;for(const i of this.hintPair)rounded(c,g.x+i%7*g.cell+3,g.y+Math.floor(i/7)*g.cell+3,g.cell-6,g.cell-6,9),c.stroke();}
   c.restore();
@@ -649,6 +708,8 @@ export class SequenceEngine extends MiniEngine{
   }
  }
 
- finish(){this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,objectives:this.rulesVersion===1?[]:this.rulesVersion===3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}
+ finish(){this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,objectives:this.rulesVersion===1?[]:this.rulesVersion>=3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}
  replay(){return {v:this.rulesVersion,game:'sequence',seed:this.seed,level:this.level,step:SIM_STEP,moves:this.inputs.map(m=>[...m]),endTick:this.ticks};}
+ // How many of each tool the run has spent, for the result screen.
+ toolsUsed(){return this.tools?{shuffle:SEQUENCE_TOOLS.shuffle-this.tools.shuffle,hammer:SEQUENCE_TOOLS.hammer-this.tools.hammer}:null;}
 }

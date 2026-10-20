@@ -9,7 +9,9 @@
 // tests can run without the gameplay bundle and without a browser.
 
 // What a run with no ruleset of its own gets, matching the engine's own default.
-export const SEQUENCE_LATEST=3;
+export const SEQUENCE_LATEST=4;
+// The first ruleset with the helper tools, and how many uses each one gets.
+export const SEQUENCE_TOOLS_FROM=4;
 // v1 and v2 both ran on a fixed 25 moves. v3 sets its own per level.
 export const SEQUENCE_V2_MOVES=25;
 
@@ -19,20 +21,23 @@ export const SEQUENCE_V2_MOVES=25;
 export function sequenceRulesVersion(ranked){
   if(!ranked)return SEQUENCE_LATEST;
   const sent=ranked.rulesVersion??1;
-  return sent===1?1:sent===2?2:SEQUENCE_LATEST;
+  return sent===1?1:sent===2?2:sent===3?3:SEQUENCE_LATEST;
 }
 
-// One line, never two: a v3 run is told its v3 objective and nothing else.
+// One line, never two: a v3 run is told its v3 objective and nothing else. v3 and v4 share the brief,
+// which reads the numbers of whichever of the two the run is on.
 export function sequenceObjective(version,level,{v2,v3}){
-  return version===SEQUENCE_LATEST?v3(level):v2(level);
+  return version>=3?v3(level,version):v2(level);
 }
+// Whether this run has the helper tools at all. v1, v2 and v3 runs do not.
+export const sequenceHasTools=version=>version>=SEQUENCE_TOOLS_FROM;
 
 // The move count that belongs to the same ruleset, for the board's description and the opening HUD.
 export function sequenceMoves(version,level,{v3Level}){
-  return version===SEQUENCE_LATEST?v3Level(level).moves:SEQUENCE_V2_MOVES;
+  return version>=3?v3Level(level,version).moves:SEQUENCE_V2_MOVES;
 }
 
 // The score the run is aiming at, for the GOAL tile before the engine reports its own.
 export function sequenceTargetFor(version,level,{v2Level,v3Level}){
-  return version===SEQUENCE_LATEST?v3Level(level).target:v2Level(level).target;
+  return version>=3?v3Level(level,version).target:v2Level(level).target;
 }
