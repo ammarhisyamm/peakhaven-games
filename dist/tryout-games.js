@@ -111,7 +111,7 @@ class MiniEngine{
  }
  burst(x,y,color='#8fffff',count=24){if(!this.motion)return;this.shockwaves.push({x,y,color,start:this.time});for(let i=0;i<count;i++){const a=i/count*TAU,s=80+Math.random()*90;this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.6+Math.random()*.3,color});}}
  drawEffects(){const c=this.ctx;this.shockwaves=this.shockwaves.filter(p=>this.time-p.start<.55);c.save();for(const p of this.shockwaves){const t=(this.time-p.start)/.55;c.globalAlpha=1-t;c.strokeStyle=p.color;c.lineWidth=3*(1-t);c.beginPath();c.arc(p.x,p.y,10+t*65,0,TAU);c.stroke();}for(const p of this.particles){c.globalAlpha=clamp(p.life/.7,0,1);c.fillStyle=p.color;c.beginPath();c.arc(p.x,p.y,2.5,0,TAU);c.fill();}c.restore();}
- end(result){if(this.ended)return;this.ended=true;this.cb.end(result);}
+ end(result){if(this.ended)return;this.ended=true;this.reportTools?.();this.cb.end(result);}
  pause(value=true){this.cancelPointer?.();this.paused=value;this.last=0;this.acc=0;}
  destroy(){this.cancelPointer?.();if(this.onblur)window.removeEventListener?.('blur',this.onblur);this.alive=false;cancelAnimationFrame(this.raf);this.observer?.disconnect();for(const name of ['pointerdown','pointerup','pointercancel','pointermove','lostpointercapture']){const handler=this['on'+name];if(handler)this.canvas.removeEventListener(name,handler);}}
 }
@@ -494,13 +494,29 @@ export class SequenceEngine extends MiniEngine{
   if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
  // ---- v4 helper tools ----
+ // Whether the tools are live at all: this run is still going and still able to take one. Split out from
+ // canUseTool because the dock draws from this and the engine enforces with canUseTool, and the two must
+ // not be able to disagree — a button that says it can be pressed and a press that is refused is the bug
+ // this separates. What is deliberately NOT in here is `pending`: a cascade lasts a moment, and greying
+ // the buttons out for its length and back again is a flicker, so that part is left to the enforcing side.
+ toolsLive(){return Boolean(this.tools&&this.alive&&!this.paused&&!this.ended&&!this.bonus);}
  // A tool is refused in exactly the places a swap is: mid-animation, paused, over, or during the
  // end-of-level bonus. Refusing rather than queueing is what keeps a replay honest: the server runs the
  // same check on the same tick and rejects a log that spends a tool it could not have spent.
  canUseTool(name){
-  return Boolean(this.tools&&this.tools[name]>0&&this.alive&&!this.paused&&!this.ended&&!this.pending&&!this.bonus);
+  return Boolean(this.toolsLive()&&this.tools[name]>0&&!this.pending);
  }
- toolState(){return {...this.tools,stuck:this.stuck,armed:this.hammerArmed};}
+ // What the dock draws. `usable` is the answer to "may this button be pressed", worked out here rather
+ // than in the page, so the page cannot reach a different one. Once the run is over nothing is usable, the
+ // hammer is not armed, and nothing glows.
+ toolState(){
+  const live=this.toolsLive();
+  return {...this.tools,
+   stuck:live&&this.stuck,
+   armed:live&&this.hammerArmed,
+   over:!live,
+   usable:{shuffle:live&&this.tools.shuffle>0,hammer:live&&this.tools.hammer>0}};
+ }
  // The hammer waits for a target: the next tap on the board breaks that crystal instead of selecting it.
  // Arming is not a rule and is never logged; only the break itself goes in the replay.
  armHammer(on=true){
@@ -751,7 +767,7 @@ export class SequenceEngine extends MiniEngine{
   }
  }
 
- finish(){this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,stats:this.stats(),objectives:this.rulesVersion===1?[]:this.rulesVersion>=3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}
+ finish(){this.hammerArmed=false;this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,stats:this.stats(),objectives:this.rulesVersion===1?[]:this.rulesVersion>=3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}
  replay(){return {v:this.rulesVersion,game:'sequence',seed:this.seed,level:this.level,step:SIM_STEP,moves:this.inputs.map(m=>[...m]),endTick:this.ticks};}
  // How many of each tool the run has spent, for the result screen.
  toolsUsed(){return this.tools?{shuffle:SEQUENCE_TOOLS.shuffle-this.tools.shuffle,hammer:SEQUENCE_TOOLS.hammer-this.tools.hammer}:null;}

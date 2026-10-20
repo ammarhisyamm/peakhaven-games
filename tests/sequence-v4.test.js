@@ -180,7 +180,9 @@ test('Shuffle re-mixes the board, always leaves a move, and costs no move', () =
   assert.equal(e.useShuffle(), false, 'and that is the last of them');
   assert.equal(e.moves, moves);
   assert.deepEqual(e.toolsUsed(), {shuffle: 2, hammer: 0});
-  assert.deepEqual(tools.at(-1), {shuffle: 0, hammer: 2, stuck: false, armed: false});
+  // The dock is told what is left, and which buttons that makes pressable: out of shuffles, hammer still live.
+ assert.deepEqual(tools.at(-1), {shuffle: 0, hammer: 2, stuck: false, armed: false, over: false,
+   usable: {shuffle: false, hammer: true}});
   // Every use is in the log, as the documented triple, and nothing else is.
   assert.deepEqual(e.inputs.map(m => m.slice(1)), [[SEQ_LOG.shuffle, -1], [SEQ_LOG.shuffle, -1]]);
 });
@@ -260,6 +262,111 @@ test('an armed Hammer takes the next tap, and a tap it cannot break puts it away
   assert.equal(e.armHammer(false), true);
   assert.equal(e.hammerArmed, false);
   assert.equal(e.tools.hammer, 1);
+});
+
+test('the moment the moves run out, the dock is told the tools are dead', () => {
+ // The bug this covers: finishMove told the dock about the tools BEFORE it worked out whether that was the
+ // last move, and nothing told it again afterwards. The buttons were left drawn as pressable on a run that
+ // would refuse every press. The dock draws from `usable`, so that is what has to be false here.
+ const {e,tools}=engine({rulesVersion:4,level:2,seed:8});
+ const before=tools.at(-1)??e.toolState();
+ assert.equal(before.usable.shuffle,true,'while the run is going they are live');
+ assert.equal(before.usable.hammer,true);
+ const reportsBefore=tools.length;
+ // Out of moves, exactly as the last placement leaves it.
+ e.moves=0;
+ e.finishMove();
+ assert.equal(e.ended,true,'the run is over');
+ assert.ok(tools.length>reportsBefore,'the dock was told again after the run ended');
+ const after=tools.at(-1);
+ assert.equal(after.over,true);
+ assert.equal(after.usable.shuffle,false,'shuffle is drawn disabled');
+ assert.equal(after.usable.hammer,false,'and so is hammer');
+ assert.equal(after.stuck,false,'nothing glows on a finished run');
+ assert.equal(after.armed,false);
+ // The counts are untouched: the buttons are dead because the run is, not because the uses were spent.
+ assert.equal(after.shuffle,SEQUENCE_TOOLS.shuffle);
+ assert.equal(after.hammer,SEQUENCE_TOOLS.hammer);
+});
+
+test('what the dock draws and what a press does cannot disagree', () => {
+ // The two used to be worked out in different places from different things. Now there is one predicate,
+ // and this walks a run through every state it passes to check they never part company.
+ const {e}=engine({rulesVersion:4,level:3,seed:12});
+ const agree=where=>{
+  const state=e.toolState();
+  for(const name of ['shuffle','hammer']){
+   // Mid-cascade is the one allowed difference: the button stays lit for the moment an animation lasts,
+   // because greying it out and back is a flicker, and the press is refused by canUseTool anyway.
+   if(e.pending)continue;
+   assert.equal(state.usable[name],e.canUseTool(name),`${where}: ${name} drawn and enforced differently`);
+  }
+ };
+ agree('fresh run');
+ e.useShuffle();agree('after a shuffle');
+ e.armHammer();agree('hammer armed');
+ e.paused=true;agree('paused');
+ assert.equal(e.toolState().usable.shuffle,false,'a paused run draws them disabled');
+ e.paused=false;agree('resumed');
+ e.tools.shuffle=0;agree('out of shuffles');
+ assert.equal(e.toolState().usable.shuffle,false);
+ assert.equal(e.toolState().usable.hammer,true,'and the other one is still live');
+ e.finish();agree('finished');
+ assert.equal(e.toolState().over,true);
+});
+
+test('a late press cannot bring a finished run back', () => {
+ const {e,tools}=engine({rulesVersion:4,level:2,seed:4});
+ const cell=e.board.findIndex((v,i)=>v>=0&&!e.progress.locks[i]);
+ e.moves=0;
+ e.finishMove();
+ assert.equal(e.ended,true);
+ const score=e.score,moves=e.moves,logged=e.inputs.length,shuffles=e.tools.shuffle,reports=tools.length;
+ // Every way the dock can ask, after the run is over.
+ assert.equal(e.useShuffle(),false);
+ assert.equal(e.useHammer(cell),false);
+ assert.equal(e.armHammer(),false);
+ e.choose(cell);
+ assert.equal(e.score,score,'no score');
+ assert.equal(e.moves,moves,'no moves handed back');
+ assert.equal(e.tools.shuffle,shuffles,'no use spent');
+ assert.equal(e.inputs.length,logged,'and not one of them reached the replay');
+ assert.equal(e.ended,true,'still over');
+ assert.equal(tools.length,reports,'a refused press does not redraw the dock either');
+});
+
+test('a hammer in flight when the moves run out finishes before the run ends', () => {
+ // The other half of "never leaves the UI half-updated": the wave a hammer sets off has to settle, and only
+ // then can the run be judged over. finishMove is what ends it, and it only runs once nothing is pending.
+ const {e}=engine({rulesVersion:4,level:3,seed:21});
+ const cell=e.board.findIndex((v,i)=>v>=0&&!e.progress.locks[i]);
+ e.moves=1;
+ assert.equal(e.useHammer(cell),true);
+ assert.ok(e.pending>0,'the break is animating');
+ assert.equal(e.ended,false,'and the run is not over mid-animation');
+ e.moves=0;
+ settle(e);
+ assert.equal(e.pending,0,'the wave settled');
+ assert.equal(e.ended,true,'and then the run ended');
+ assert.equal(e.toolState().usable.hammer,false,'with the dock told');
+ assert.equal(e.board.every(v=>v>=0),true,'the board is whole, not left mid-clear');
+});
+
+test('a new run brings the tools back', () => {
+ const over=engine({rulesVersion:4,level:2,seed:8}).e;
+ over.moves=0;over.finishMove();
+ assert.equal(over.toolState().usable.shuffle,false);
+ // Starting again is a new engine, which is what the host does on restart.
+ const {e,tools}=engine({rulesVersion:4,level:2,seed:8});
+ const state=e.toolState();
+ assert.equal(state.over,false);
+ assert.equal(state.usable.shuffle,true,'the buttons come back');
+ assert.equal(state.usable.hammer,true);
+ assert.equal(state.armed,false,'and nothing is left pressed');
+ assert.equal(state.stuck,false);
+ assert.deepEqual({shuffle:state.shuffle,hammer:state.hammer},{...SEQUENCE_TOOLS});
+ assert.equal(e.useShuffle(),true,'and they work');
+ assert.ok(tools.length>0);
 });
 
 test('a tool is refused mid-animation, when paused, and once the level is over', () => {
