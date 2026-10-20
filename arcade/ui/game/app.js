@@ -9,6 +9,8 @@ import {BondEngine,OrbitEngine,RidgeEngine,SequenceEngine} from './tryout-games.
 import {showReferenceResults} from './reference-results.js';
 import {crystalSprites,sequenceSpecialSprites,vialSprites} from './gameplay-art.js';
 import {GameAudio} from './game-audio.js';
+import {statsFromRun,wouldEarn} from '../achievements.js';
+import {createAchievementPopup} from '../achievement-ui.js';
 import {renderSequenceGoals,renderRidgeCheckpoint,showRidgeRescue,openSequenceLevel,showObstacleIntro} from './feedback-ui.js';
 import {COLORS,COLOR_NAMES,createPuzzle,pour,canPour,isSolved,findHint} from './rules.js';
 
@@ -162,7 +164,7 @@ function mountGame(id,level=null){
  // below all come from that ruleset rather than from v2 as they used to.
  const seqVersion=sequenceRulesVersion(ranked),seqBriefs={v2:sequenceBrief,v3:v3Brief},seqLevels={v2Level:sequenceLevel,v3Level};
  runChallenge=['sort','mahjong'].includes(id)?gameChallenge(id,runningLevel):null;
- active=id;finishing=false;view='game';gameAudio.prepare();
+ active=id;finishing=false;view='game';gameAudio.prepare();startAchievements(id);
  const g=games[id],isPuzzle=id==='blocks'||id==='mahjong';
  const objectiveText=runChallenge?objective(runChallenge):id==='sequence'?sequenceObjective(seqVersion,runningLevel,seqBriefs):id==='orbit'?'Pull and release the ball. Score by dropping it into the hoop.':id==='ridge'?'Thread the mountain gates and keep a clean line.':id==='bond'?'Fire into a clear gap in the turning ring.':'Keep going and set a new personal best.';
  const canvasAlt={tower:'Vial Tower. Tap or press Space to drop the moving vial.',merge:'Vial Merge. Arrow keys position the vial. Space drops it. Matching tiers merge.',orbit:'Orbit. Pull the ball down and sideways, release to shoot into the hoop. Arrow keys aim. Space shoots.',ridge:'Ridge Run. Tap anywhere or press Space to fly through the open center of each gate.',bond:'Bond. Tap anywhere or press Space to attach a vial to the moving ring without hitting another.',sequence:`Sequence match three puzzle. Level ${runningLevel}, 7 by 7 board, ${sequenceMoves(seqVersion,runningLevel,seqLevels)} moves. Select neighbouring crystals to swap. Arrow keys move the selector and Enter selects.`};
@@ -171,7 +173,7 @@ function mountGame(id,level=null){
  shell(`<section class="game-world scene-${id}" data-motion="${motionAllowed()}"><h1 class="sr-only">${g.name}</h1><button class="icon-button game-back" id="game-back" aria-label="Pause game and open back menu">${icon('back')}</button><div class="hud"><div>${icon('star')}<span><small>SCORE</small><strong id="hud-score">0</strong></span></div><div>${icon(id==='blocks'?'games':id==='sequence'?'spark':'bottle')}<span><small>${detailLabel}</small><strong id="hud-detail">0</strong></span></div><div>${icon(id==='sort'?'trophy':'flame')}<span><small>${thirdLabel}</small><strong id="hud-combo">${id==='sequence'?fmt(runningLevel):'0'}</strong></span></div></div><p class="sr-only" id="game-objective">${objectiveText}</p>${id==='sequence'?'<section class="sequence-goals" id="sequence-goals" aria-label="Level objectives"></section><aside class="sequence-guide" aria-label="How obstacles work"></aside>':''}<div class="mission-progress" ${runChallenge?'':'hidden'}><i id="mission-fill"></i></div><section class="play-panel" aria-label="${g.name} game">${id==='sort'?'<div class="sort-board" id="sort-board" aria-label="Sorting tubes"></div><div class="sort-key" id="sort-key"></div><div class="sort-controls control-dock lab-console slim-console"><button class="button secondary" id="sort-undo">'+icon('undo')+'Undo</button><button class="button" id="sort-hint">'+icon('spark')+'Hint</button><button class="button secondary" id="sort-restart">'+icon('restart')+'Reset</button></div>':isPuzzle?`<div class="puzzle-stage ${id}">${id==='blocks'?'<div class="block-board" id="block-board" role="grid" aria-label="Block placement board, eight rows and eight columns"></div>':'<div class="mahjong-board" id="mahjong-board" aria-label="Layered matching tiles"></div>'}<div class="impact-label" id="impact-label" aria-hidden="true"></div></div>${id==='blocks'?'<div class="block-tray lab-console" id="block-tray" aria-label="Available pieces"></div>':''}${gameTools(id==='blocks'?[['bomb','Bomb','bomb'],['undo','Undo','undo'],['shuffle','Shuffle','shuffle'],['hint','Hint','help']]:[['hint','Hint','help'],['undo','Undo','undo'],['shuffle','Shuffle','restart']])}`:`<div class="canvas-wrap"><canvas id="game-canvas" tabindex="0" role="application" aria-label="${canvasAlt[id]}" aria-describedby="game-objective game-message"></canvas><div class="impact-label" id="impact-label" aria-hidden="true"></div><div class="alignment-cue" id="alignment-cue" aria-hidden="true"></div></div>`}<p class="game-message" id="game-message" role="status" aria-live="polite">Ready when you are.</p></section></section>`,'game',id);
  $('#game-back').onclick=()=>pauseGame();
  if(id==='sort'){setupSort(runningLevel);return;}
- const cb={haptic:(type,force)=>haptic(type,force),goals:payload=>{const world=$('.game-world');renderSequenceGoals(world,payload,()=>pauseGame(true),cards=>showObstacleIntro(world,cards));if(payload.version!==1&&payload.level!==sequenceOpened){sequenceOpened=payload.level;openSequenceLevel(world,payload,{motion:motionAllowed()});}},checkpoint:(checkpoint,gates)=>renderRidgeCheckpoint($('.game-world'),checkpoint,gates),revive:()=>showRidgeRescue($('.game-world'),engine),aligned:value=>{if($('#alignment-cue'))$('#alignment-cue').textContent=value?'Tap now!':'';},hud:(score,detail,combo)=>{hudValue('#hud-score',fmt(score));hudValue('#hud-detail',fmt(detail));hudValue('#hud-combo',id==='ridge'?fmt(Math.max(data.best.ridge||0,score)):id==='blocks'?String(parseInt(combo,10)||0):id==='sequence'?fmt(runningLevel):combo);},message:m=>{if($('#game-message'))$('#game-message').textContent=m;},sound,ready:()=>{},end:result=>finishGame(id,result),effect:(label,kind,meta)=>impact(label,kind,meta),place:height=>{if(height>=10){earn('tower10');if(!data.daily.includes(localDay())){data.daily.push(localDay());earn('daily');}save();}},topTier:()=>{earn('merge5');save();}};
+ const cb={haptic:(type,force)=>haptic(type,force),goals:payload=>{const world=$('.game-world');renderSequenceGoals(world,payload,()=>pauseGame(true),cards=>showObstacleIntro(world,cards));if(payload.version!==1&&payload.level!==sequenceOpened){sequenceOpened=payload.level;openSequenceLevel(world,payload,{motion:motionAllowed()});}},checkpoint:(checkpoint,gates)=>renderRidgeCheckpoint($('.game-world'),checkpoint,gates),revive:()=>showRidgeRescue($('.game-world'),engine),milestone:payload=>noteAchievement(id,payload),aligned:value=>{if($('#alignment-cue'))$('#alignment-cue').textContent=value?'Tap now!':'';},hud:(score,detail,combo)=>{hudValue('#hud-score',fmt(score));hudValue('#hud-detail',fmt(detail));hudValue('#hud-combo',id==='ridge'?fmt(Math.max(data.best.ridge||0,score)):id==='blocks'?String(parseInt(combo,10)||0):id==='sequence'?fmt(runningLevel):combo);},message:m=>{if($('#game-message'))$('#game-message').textContent=m;},sound,ready:()=>{},end:result=>finishGame(id,result),effect:(label,kind,meta)=>impact(label,kind,meta),place:height=>{if(height>=10){earn('tower10');if(!data.daily.includes(localDay())){data.daily.push(localDay());earn('daily');}save();}},topTier:()=>{earn('merge5');save();}};
  const options={motion:motionAllowed(),level:runningLevel,best:data.best[id]||0,skin:SKINS.findIndex(s=>s.id===data.skin),...(ranked?{seed:ranked.seed,rulesVersion:ranked.rulesVersion??1}:{})};
  engine=id==='blocks'?startBlocks($('.game-world'),cb,options):id==='mahjong'?startMahjong($('.game-world'),cb,options):id==='tower'?new TowerEngine($('#game-canvas'),cb,options):id==='merge'?new MergeEngine($('#game-canvas'),cb,options):id==='orbit'?new OrbitEngine($('#game-canvas'),cb,options):id==='ridge'?new RidgeEngine($('#game-canvas'),cb,options):id==='bond'?new BondEngine($('#game-canvas'),cb,options):new SequenceEngine($('#game-canvas'),cb,options);
  $('#game-canvas')?.focus({preventScroll:true});
@@ -180,6 +182,28 @@ function mountGame(id,level=null){
 }
 // Peak Blocks sends the combo and line count with each clear (see blast() in puzzle-games.js), which sets how hard the
 // board flashes and how strong the haptic is. The callout text itself comes from the game.
+// "Achievement unlocked!", the moment a run earns it.
+//
+// Only a ranked run can earn anything: it is tied to the signed-in account, and the saved totals ride in on
+// window.phRankedRun. Free play and guests get no popup, because there is nothing being earned. This is a
+// prediction either way — the server works the real numbers out from the replay it verifies, and a run that
+// fails to verify saves nothing, so the popup can be wrong in only one direction and only for a moment.
+let achievementPopup=null,runStats={},runTotals=null;
+function startAchievements(id){
+  const ranked=rankedRun(id);
+  runStats={};
+  runTotals=ranked?.achievements??null;
+  achievementPopup?.reset();
+  achievementPopup=runTotals?createAchievementPopup({host:$('.game-world')??document.body,motion:motionAllowed(),
+    onShow:()=>sound('win')}):null;
+}
+// Each game reports whatever it has just moved; this keeps the run's numbers and asks what they would earn.
+function noteAchievement(id,payload){
+  if(!achievementPopup||!runTotals||!payload)return;
+  runStats={...runStats,...payload};
+  const stats=statsFromRun(id,runStats);
+  if(stats)achievementPopup.offer(wouldEarn(runTotals,id,stats));
+}
 function blockImpactFeedback(label,meta){
  if(!meta)return label;
  const board=$('#block-board'),big=meta.perfect||meta.newBest||meta.combo>=3||meta.lines>=3;
