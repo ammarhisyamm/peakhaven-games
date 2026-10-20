@@ -12,13 +12,51 @@ export const BLOCK_SCORE=Object.freeze({cell:1,clearCell:10,lineMult:[0,1,3,6,10
 export function clearPoints(cells,lines,combo){const m=BLOCK_SCORE.lineMult[Math.min(lines,BLOCK_SCORE.lineMult.length-1)];return Math.round(cells*BLOCK_SCORE.clearCell*m*(1+BLOCK_SCORE.comboStep*Math.max(0,combo-1)));}
 const clone=value=>structuredClone(value);
 
-// Replay format. v1 dealt trays with no difficulty ramp and no near-clear assist; v2 adds both. Runs started
-// before the ramp shipped still carry v:1, so they keep being verified with the generator they were played on.
-export const BLOCKS_REPLAY_VERSION=2;
-const trayOpts=g=>({version:g.version,moves:g.state.moves,score:g.state.score});
+// Replay format. v1 dealt trays with no difficulty ramp and no near-clear assist; v2 adds both; v3 adds the
+// milestone reward below. Runs started before each of those shipped keep their own v, so they go on being
+// verified with the rules they were actually played on.
+export const BLOCKS_REPLAY_VERSION=3;
+// The tray generator has only two variants, and v3 deals exactly as v2 does. Capping it here keeps the
+// generator's contract to the two values it knows, so bumping the replay version cannot silently re-deal.
+const trayOpts=g=>({version:g.version===1?1:2,moves:g.state.moves,score:g.state.score});
+
+// Milestone reward (v3). Every MILESTONE.every lines cleared in a run hands the player one extra use of a
+// tool, rotating Bomb, then Undo, then Shuffle, so a long run keeps a way out of a board that blocks up.
+export const BLOCK_MILESTONE=Object.freeze({every:25,tools:Object.freeze(['bomb','undo','shuffle'])});
+// The nth milestone, counting from 1: which tool it gives and what the banner says.
+export function milestoneReward(n){
+  const tools=BLOCK_MILESTONE.tools,tool=tools[(n-1)%tools.length],lines=n*BLOCK_MILESTONE.every;
+  return {milestone:n,lines,tool,label:`Level ${lines}! Free ${tool[0].toUpperCase()+tool.slice(1)}`};
+}
+
+// How a clear should feel, as numbers. Pure, so the feel is covered by tests with no DOM at all.
+// The shake grows with the combo and stops at its cap; levels is how many combo steps have a feel of
+// their own, matching the clear sounds in game-audio.js. motion:false turns the shake off completely —
+// a shaking screen is the first thing a player who asked for less motion does not want.
+export const COMBO_FEEL=Object.freeze({base:3,step:2,max:9,ms:240,levels:5});
+export function comboFeedback(out,{motion=true}={}){
+  const lines=out?.lines||0;
+  if(!lines)return {lines:0,combo:0,level:0,big:false,shake:0,ms:0,label:''};
+  const combo=Math.max(1,Math.round(out.combo||1)),level=Math.min(combo,COMBO_FEEL.levels);
+  const big=lines>=2||Boolean(out.perfect);
+  // A single line with no combo behind it is a tap, not an event, so it gets no shake.
+  const strength=combo>1||big?Math.min(COMBO_FEEL.max,COMBO_FEEL.base+(level-1)*COMBO_FEEL.step+(big?COMBO_FEEL.step:0)):0;
+  return {lines,combo,level,big,shake:motion?strength:0,ms:motion?COMBO_FEEL.ms:0,label:combo>1?`COMBO x${combo}`:''};
+}
+// Which whole rows and columns a clear took out. placeBlock knows while it works and only hands back the
+// cells, and a burst that fires along the lines needs the lines themselves.
+export function clearedLines(cleared=[]){
+  const rows=new Map(),cols=new Map();
+  for(const [r,c] of cleared){rows.set(r,(rows.get(r)||0)+1);cols.set(c,(cols.get(c)||0)+1);}
+  const whole=map=>[...map].filter(([,n])=>n===8).map(([i])=>i).sort((a,b)=>a-b);
+  return {rows:whole(rows),cols:whole(cols)};
+}
 export function createBlocks(seed,version=BLOCKS_REPLAY_VERSION){
   const state={grid:emptyGrid(),tray:null,selected:0,score:0,lines:0,chain:0,sinceClear:0,bestChain:0,moves:0,rng:seed>>>0};
-  const g={seed:seed>>>0,state,history:[],tools:{...BLOCK_TOOLS},ended:false,log:[],version:version===1?1:2};
+  // The rewarded count tracks the milestones this run has already paid out. It sits on the run rather
+  // than in state, because Undo rewinds the lines but not the tools they bought: re-crossing a
+  // milestone must not pay twice.
+  const g={seed:seed>>>0,state,history:[],tools:{...BLOCK_TOOLS},ended:false,log:[],rewarded:0,version:version===1?1:version===2?2:3};
   // The generator state lives inside `state`, so Undo also rewinds it and replaying a move deals the same tray.
   state.tray=makeTray(state.grid,()=>nextRandom(state),trayOpts(g));
   return g;
@@ -42,6 +80,13 @@ export function blocksPlace(g,index,r,c){
   if(out.lines){s.chain=s.chain>0&&(s.sinceClear??0)<BLOCK_SCORE.comboGrace?s.chain+1:1;s.sinceClear=0;s.bestChain=Math.max(s.bestChain||0,s.chain);
     bonus=clearPoints(out.cleared.length,out.lines,s.chain);if(s.grid.every(row=>row.every(v=>!v))){out.perfect=true;bonus+=BLOCK_SCORE.perfect;}}
   else{s.sinceClear=(s.sinceClear??0)+1;if(s.sinceClear>=BLOCK_SCORE.comboGrace)s.chain=0;}
+  // Milestones are paid off the count of lines reached, so the only way to cross one twice is to clear
+  // the lines twice; `rewarded` never goes back down. Nothing here touches the score.
+  out.rewards=[];
+  if(g.version>=3){
+    const reached=Math.floor(s.lines/BLOCK_MILESTONE.every);
+    while(g.rewarded<reached){const reward=milestoneReward(++g.rewarded);g.tools[reward.tool]++;out.rewards.push(reward);}
+  }
   out.points=p.shape.length*BLOCK_SCORE.cell+bonus;out.clearPoints=bonus;out.combo=s.chain;
   s.score+=out.points;
   s.tray[index]=null;
@@ -106,7 +151,7 @@ export function blocksResult(g){const s=g.state;return {score:s.score,lines:s.li
 export function replayBlocks(replay){
   if(!replay||replay.game!=='blocks'||!Array.isArray(replay.log))throw new Error('Not a Peak Blocks replay');
   const version=replay.v===undefined?1:replay.v;
-  if(version!==1&&version!==2)throw new Error(`Unknown Peak Blocks replay version ${version}`);
+  if(![1,2,3].includes(version))throw new Error(`Unknown Peak Blocks replay version ${version}`);
   const g=createBlocks(replay.seed,version);
   for(const step of replay.log){
     const [kind,...a]=step;

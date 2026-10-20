@@ -1,9 +1,24 @@
-import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit,dragLanding,BLOCK_LIFT} from './blocks-core.js';
+import {createBlocks,blocksPlace,blocksBomb,blocksUndo,blocksShuffle,blocksHint,blocksResult,blocksAssist,anyFit,dragLanding,BLOCK_LIFT,comboFeedback,clearedLines} from './blocks-core.js';
+import {clearEvent} from './game-audio.js';
 import {makeSeed} from './rng.js';
 import {SHAPES,emptyGrid,tileLayout,tileRows,fits,placements,placeBlock,makeTray,bombGrid,dealTiles,freeTile,matchTiles,tileHint} from './puzzle-rules.js';
 const symbols=['Blue vial','Pink vial','Gold vial','Purple vial','Green vial','Blue crystal','Pink crystal','Gold crystal','Green crystal'];
 const tileArt=kind=>kind>=5?`<span class="tile-gem block-${kind-4}" aria-hidden="true"></span>`:`<span class="happy-vial happy-${kind}" aria-hidden="true"></span>`;
 const clone=value=>structuredClone(value);
+// Which cues a Peak Blocks line clear plays, and in what order. Pure and at module scope so the choice is
+// covered by tests with no DOM.
+// The cascade is never pitched by the combo. Each level is its own sample, already longer and higher than
+// the one below it, so pitching it as well would count the combo twice and make a long streak sound sharp
+// and short. The sparkle ticks on top keep the lift they always had.
+export function clearCues(out){
+ const feel=comboFeedback(out);
+ if(!feel.lines)return [{event:'drop'}];
+ const cues=[{event:clearEvent({combo:feel.combo,big:feel.big})}];
+ const lift=2**((Math.min(feel.combo,6)-1)/6);
+ for(let i=1;i<Math.min(feel.combo,5);i++)cues.push({event:'sparkle',opts:{rate:lift*2**((i*2)/12)*1.2,delay:.05+i*.045}});
+ cues.push({event:'drop'});
+ return cues;
+}
 function controls(root){return Object.fromEntries([...root.querySelectorAll('[data-tool]')].map(b=>[b.dataset.tool,b]));}
 export function startBlocks(root,cb,options={}){
  // Rules live in blocks-core.js. `state` mirrors g.state and is re-read after every rules call, since Undo swaps the object.
@@ -25,10 +40,22 @@ export function startBlocks(root,cb,options={}){
  // The first time a run passes the player's own best for Blocks: once per run, and only if they had a best to beat.
  // It waits for a clear's own label so COMBO and NEW BEST! never land on the same beat.
  const bestToBeat=Math.max(0,Number(options.best)||0);let newBestShown=false;
- function newBest(afterLabel){
+ function newBest(afterLabel,behind=0){
   if(newBestShown||!bestToBeat||state.score<=bestToBeat)return;
   newBestShown=true;
-  setTimeout(()=>{if(!alive)return;cb.effect('NEW BEST!','blocks',{newBest:true});cb.sound('big');},afterLabel?780:140);
+  setTimeout(()=>{if(!alive)return;cb.effect('NEW BEST!','blocks',{newBest:true});cb.sound('big');},(afterLabel?780:140)+behind);
+ }
+ // How long a milestone banner holds the stage before the next one, or NEW BEST!, takes it.
+ const BANNER_GAP=900;
+ // A milestone lands on the same placement as the clear that earned it, so it waits for the clear's own
+ // label. The tool itself was already granted by the rules; this only tells the player about it.
+ function milestones(rewards,afterLabel){
+  (rewards||[]).forEach((reward,i)=>setTimeout(()=>{
+   if(!alive)return;
+   cb.effect(reward.label,'blocks',{milestone:reward.milestone,tool:reward.tool,lines:reward.lines});
+   cb.sound('tool');
+   cb.message(`${reward.label}. One extra use, waiting for when you need it.`);
+  },(afterLabel?780:140)+i*BANNER_GAP));
  }
  function hud(){cb.hud(state.score,state.lines,state.chain?`${state.chain}×`:'0');for(const [key,b]of Object.entries(buttons)){b.querySelector('b').textContent=tools[key];b.disabled=locked()||tools[key]===0||(key==='undo'&&!g.history.length);b.classList.toggle('active',key==='bomb'&&bomb);}help();}
  function render(){const focused=document.activeElement?.dataset.cell;board.innerHTML=state.grid.flatMap((row,r)=>row.map((v,c)=>`<button class="block-cell ${v?'filled block-'+v:''} ${hintCells.some(([rr,cc])=>rr===r&&cc===c)?'suggested':''}" data-cell="${r*8+c}" role="gridcell" tabindex="${Number(focused||0)===r*8+c?0:-1}" aria-label="Row ${r+1}, column ${c+1}: ${v?'occupied':'empty'}"></button>`)).join('');tray.innerHTML=state.tray.map((p,i)=>`<button class="shape-slot ${state.selected===i?'selected':''} ${p&&!placements(state.grid,p.shape).length?'no-fit':''}" data-shape="${i}" ${!p?'disabled':''} aria-label="${p?`Piece ${i+1}, ${p.shape.length} blocks. Drag onto the board, or select then tap its top-left square.`:'Used piece'}" aria-pressed="${state.selected===i}">${p?`<span class="shape-preview" style="--cols:${Math.max(...p.shape.map(p=>p[0]))+1};--rows:${Math.max(...p.shape.map(p=>p[1]))+1}">${p.shape.map(([x,y])=>`<i class="block-${p.color}" style="grid-column:${x+1};grid-row:${y+1}"></i>`).join('')}</span>`:'<svg class="icon piece-done" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>'}</button>`).join('');board.querySelectorAll('[data-cell]').forEach(b=>{const index=Number(b.dataset.cell),r=Math.floor(index/8),c=index%8;b.onclick=()=>place(r,c);b.onpointerenter=()=>preview(r,c);b.onfocus=()=>preview(r,c);b.onkeydown=e=>{let next=index;if(e.key==='ArrowRight')next=Math.min(63,index+1);else if(e.key==='ArrowLeft')next=Math.max(0,index-1);else if(e.key==='ArrowDown')next=Math.min(63,index+8);else if(e.key==='ArrowUp')next=Math.max(0,index-8);else return;e.preventDefault();board.querySelectorAll('[data-cell]').forEach(x=>x.tabIndex=-1);const target=board.querySelector(`[data-cell="${next}"]`);target.tabIndex=0;target.focus();};});tray.querySelectorAll('[data-shape]').forEach(b=>b.onclick=e=>{if(locked())return;state.selected=Number(b.dataset.shape);bomb=false;hintCells=[];render();if(!e.detail)cb.sound('select');cb.message('Piece selected. Tap its top-left square on the board.');});hud();if(focused!==undefined)board.querySelector(`[data-cell="${focused}"]`)?.focus({preventScroll:true});}
@@ -40,11 +67,12 @@ const p=state.tray[state.selected];if(!p)return;const out=placeBlock(state.grid,
   for(const [x,y]of p.shape)board.querySelector(`[data-cell="${(r+y)*8+c+x}"]`)?.classList.add('ghost');
   for(const [rr,cc]of out.cleared)board.querySelector(`[data-cell="${rr*8+cc}"]`)?.classList.add('clear-preview');}
  function afterAction(){if(g.ended){finish();return;}hud();if(!anyFit(g))cb.message('No space left! Use one of the glowing tools to make room.');}
- // Block Blast style: every placement snaps; a clear pops on top, pitched up two semitones per combo step, with one more sparkle per step.
-function clearSound(out){if(out.lines){const rate=2**((Math.min(out.combo||1,6)-1)/6),big=out.lines>=2||out.perfect;cb.sound(big?'big':'perfect',{rate});for(let i=1;i<Math.min(out.combo||1,5);i++)cb.sound('sparkle',{rate:rate*2**((i*2)/12)*1.2,delay:.05+i*.045});}cb.sound('drop');}
-function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound('invalid');cb.message('Choose a square near filled blocks.');return;}state=g.state;bomb=false;cb.effect('SPACE CLEARED!','blocks');cb.sound('merge');render();afterAction();return;}const p=state.tray[state.selected];if(!p){cb.sound('invalid');cb.message('Select a piece from the tray first.');return;}const before=state.grid.map(row=>[...row]),out=blocksPlace(g,state.selected,r,c);if(!out){cb.sound('invalid');cb.message('That piece needs empty squares. Try another spot.');return;}state=g.state;hintCells=[];render();landed(p,r,c,out);blast(out,before,p.color,r,c);clearSound(out);cb.message(out.lines?`${out.lines} ${out.lines===1?'line':'lines'} cleared! +${out.points}${out.combo>1?` · combo ${out.combo}`:''}`:'Lovely fit. Keep a little space for the next piece.');let shown=false;if(out.lines){const praise=['','','GREAT!','EXCELLENT!','AMAZING!','UNBELIEVABLE!','UNBELIEVABLE!'][Math.min(out.lines,6)],label=out.perfect?'PERFECT CLEAR!':out.combo>1?`COMBO ${out.combo}${praise?` · ${praise}`:''}`:praise;if(label){cb.effect(label,'blocks',{lines:out.lines,combo:out.combo,perfect:out.perfect,points:out.points});shown=true;}}newBest(shown);cb.progress?.({lines:state.lines});
+ // Block Blast style: every placement snaps, and a clear pops on top with one more sparkle per combo step.
+function clearSound(out){for(const cue of clearCues(out))cb.sound(cue.event,cue.opts);}
+function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound('invalid');cb.message('Choose a square near filled blocks.');return;}state=g.state;bomb=false;cb.effect('SPACE CLEARED!','blocks');cb.sound('merge');render();afterAction();return;}const p=state.tray[state.selected];if(!p){cb.sound('invalid');cb.message('Select a piece from the tray first.');return;}const before=state.grid.map(row=>[...row]),out=blocksPlace(g,state.selected,r,c);if(!out){cb.sound('invalid');cb.message('That piece needs empty squares. Try another spot.');return;}state=g.state;hintCells=[];render();landed(p,r,c,out);blast(out,before,p.color,r,c);clearSound(out);cb.message(out.lines?`${out.lines} ${out.lines===1?'line':'lines'} cleared! +${out.points}${out.combo>1?` · combo ${out.combo}`:''}`:'Lovely fit. Keep a little space for the next piece.');let shown=false;if(out.lines){const praise=['','','GREAT!','EXCELLENT!','AMAZING!','UNBELIEVABLE!','UNBELIEVABLE!'][Math.min(out.lines,6)],label=out.perfect?'PERFECT CLEAR!':out.combo>1?`COMBO ${out.combo}${praise?` · ${praise}`:''}`:praise;if(label){cb.effect(label,'blocks',{lines:out.lines,combo:out.combo,perfect:out.perfect,points:out.points});shown=true;}}const feel=comboFeedback(out,{motion});shake(feel);comboCount(feel);lineBurst(out,p.color);
+  milestones(out.rewards,shown);newBest(shown,(out.rewards?.length||0)*BANNER_GAP);cb.progress?.({lines:state.lines});
   // The numbers the Blocks achievements count, as the run makes them. Raw: the host turns lines into
-  // levels, because the rule for that lives with the achievements rather than with the game.
+  // levels through the shared milestone constant, so the HUD, the banner and the achievement agree.
   cb.milestone?.({score:state.score,combo:out.combo,lines:state.lines});
   afterAction();}
  // Clear effects, modelled on Block Blast: every cleared block bursts (a flash, then it shrinks away and throws
@@ -53,6 +81,54 @@ function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound(
  const motion=options.motion!==false;
  function layer(){let el=root.querySelector('.blast-layer');if(!el){el=document.createElement('div');el.className='blast-layer';el.setAttribute('aria-hidden','true');root.append(el);}return el;}
  function landed(p,r,c,out){if(!motion)return;const gone=new Set(out.cleared.map(([rr,cc])=>rr*8+cc));for(const [x,y]of p.shape){const i=(r+y)*8+c+x;if(gone.has(i))continue;board.querySelector(`[data-cell="${i}"]`)?.animate([{transform:'scale(.82)'},{transform:'scale(1.06)',offset:.6},{transform:'scale(1)'}],{duration:220,easing:'ease-out'});}}
+ // A short shake of the board, stronger with the combo. comboFeedback decides how far and for how long,
+ // and returns 0 when motion is off, so there is one place to read the feel from.
+ function shake(feel){
+  if(!feel.shake)return;
+  const stage=root.querySelector('.puzzle-stage')||board;
+  const swing=feel.shake,steps=[0,-.7,.55,-.4,.25,0].map((k,i)=>({transform:`translate3d(${(swing*k).toFixed(2)}px, ${(swing*k*-.55).toFixed(2)}px, 0)`,offset:i/5}));
+  stage.animate?.(steps,{duration:feel.ms,easing:'ease-out'});
+ }
+ // The combo count, big and on its own, over the board. The praise label keeps its place above it.
+ function comboCount(feel){
+  if(!feel.label)return;
+  const host=layer(),el=document.createElement('b');
+  el.className='combo-count';el.textContent=feel.label;el.setAttribute('aria-hidden','true');
+  host.append(el);
+  if(!motion){el.animate([{opacity:1},{opacity:0}],{duration:520,fill:'both'}).onfinish=()=>el.remove();return;}
+  el.animate([
+   {opacity:0,transform:'translate(-50%,-50%) scale(.5)'},
+   {opacity:1,transform:'translate(-50%,-50%) scale(1.18)',offset:.28},
+   {opacity:1,transform:'translate(-50%,-50%) scale(1)',offset:.62},
+   {opacity:0,transform:'translate(-50%,-62%) scale(1)'},
+  ],{duration:760,easing:'cubic-bezier(.22,1,.3,1)',fill:'both'}).onfinish=()=>el.remove();
+ }
+ // A burst along each cleared line. The per-cell shards in blast() say "these blocks broke"; this says
+ // "this line went", fanning out from the middle of the line and along it, so four lines read as four events.
+ function lineBurst(out,color){
+  if(!motion||!out.lines)return;
+  const host=layer(),box=root.getBoundingClientRect(),{rows,cols}=clearedLines(out.cleared);
+  const centre=(r,c)=>{const cell=board.querySelector(`[data-cell="${r*8+c}"]`);if(!cell)return null;
+   const b=cell.getBoundingClientRect();return {x:b.left-box.left+b.width/2,y:b.top-box.top+b.height/2,size:b.width};};
+  const fan=(from,to,count)=>{
+   if(!from||!to)return;
+   const mid={x:(from.x+to.x)/2,y:(from.y+to.y)/2},span=Math.hypot(to.x-from.x,to.y-from.y)||1;
+   const ux=(to.x-from.x)/span,uy=(to.y-from.y)/span;
+   for(let i=0;i<count;i++){
+    const spark=document.createElement('i'),along=((i+.5)/count-.5)*2;
+    spark.className=`blast-spark block-${color}`;
+    spark.style.cssText=`left:${mid.x}px;top:${mid.y}px;width:${from.size*.3}px;height:${from.size*.3}px`;
+    host.append(spark);
+    const reach=span*.6*along,drift=(Math.random()-.5)*from.size*1.4;
+    spark.animate([
+     {transform:'translate(-50%,-50%) scale(1)',opacity:1},
+     {transform:`translate(calc(-50% + ${(ux*reach-uy*drift).toFixed(1)}px), calc(-50% + ${(uy*reach+ux*drift).toFixed(1)}px)) scale(.15)`,opacity:0},
+    ],{duration:420+Math.random()*260,easing:'cubic-bezier(.2,.7,.3,1)',fill:'both'}).onfinish=()=>spark.remove();
+   }
+  };
+  for(const r of rows)fan(centre(r,0),centre(r,7),10);
+  for(const c of cols)fan(centre(0,c),centre(7,c),10);
+ }
  function blast(out,before,color,r,c){
   if(!out.lines)return;const host=layer(),box=root.getBoundingClientRect();
   const origin=[r+1,c+1];let sx=0,sy=0;
