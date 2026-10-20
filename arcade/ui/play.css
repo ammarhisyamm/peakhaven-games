@@ -20,7 +20,7 @@ body[data-page="play"] .rule-note{font-size:clamp(14px,1.8vw,14px);margin:7px 0 
 .play-wallet .wallet-balance{padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:#f4fbff}
 .play-signin{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:#eafaff;font-size:14px}
 .play-signin>span{flex:1;min-width:180px}
-.play-signin .primary{min-height:38px;font-size:14px;padding-inline:18px;white-space:nowrap}
+.play-signin .primary{min-height:44px;font-size:14px;padding-inline:18px;white-space:nowrap}
 .daily-intro h2{font-size:clamp(20px,4.35vw,32px);font-weight:780;letter-spacing:-.035em;line-height:1.2;text-wrap:balance}
 .daily-intro p{font-size:clamp(14px,2.9vw,21px);color:#475c69;line-height:1.35;margin-top:5px}
 .daily-games{display:grid;gap:8px}
