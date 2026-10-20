@@ -40,6 +40,9 @@ const ridgeCourse=(RAMP)=>Object.freeze({...RIDGE_V4,RAMP,
  MOVE_SPEED:.85,MOVE_SPEED_TO:1.6,STEP_MAX:80,MOVE_SHARE:.25,MOVE_SHARE_TO:.95,
  ORB_START:4,ORB_CHANCE:.2,ORB_GAP:2,ORB_OFFSET_END:Math.round(RAMP*4/3)});
 const RIDGE=ridgeCourse(30);
+// How fast the drawn tilt chases the simulated one, in seconds. Short enough to still read as a reaction
+// to the tap, long enough that a single step's change in vy is not a visible snap.
+const RIDGE_TILT_EASE=.07;
 // The vial profile in pixels down from the crimp cap: cap 0-16 at half-width 22, neck 16-24 at 15,
 // shoulder 24-38 ramping 15 to 30, body 30 beyond. The drawing and the collision read the same numbers.
 export const RIDGE_VIAL=Object.freeze({cap:16,neck:24,shoulder:38,capW:22,neckW:15,bodyW:30});
@@ -81,7 +84,7 @@ function ring(c,x,y,r,rotation=0){
 // Uniform logical pixels keep round objects round on every viewport.
 class MiniEngine{
  constructor(canvas,cb,options={}){
-  this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=cb;this.level=options.level||1;this.motion=options.motion!==false;this.time=0;this.last=0;this.acc=0;this.ticks=0;this.seed=(options.seed??makeSeed())>>>0;this.random=createRandom(this.seed);this.paused=false;this.ended=false;this.alive=true;this.score=0;this.particles=[];this.shockwaves=[];
+  this.canvas=canvas;this.ctx=canvas.getContext('2d');this.cb=cb;this.level=options.level||1;this.motion=options.motion!==false;this.time=0;this.last=0;this.acc=0;this.alpha=0;this.realDt=0;this.ticks=0;this.seed=(options.seed??makeSeed())>>>0;this.random=createRandom(this.seed);this.paused=false;this.ended=false;this.alive=true;this.score=0;this.particles=[];this.shockwaves=[];
   this.resize();this.observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(()=>this.resize());this.observer?.observe(canvas);
   this.pointer=e=>{const r=canvas.getBoundingClientRect();return[(e.clientX-r.left)/this.scale,(e.clientY-r.top)/this.scale];};
   this.frame=this.frame.bind(this);this.raf=requestAnimationFrame(this.frame);
@@ -100,6 +103,10 @@ class MiniEngine{
   // no longer slows the game down (below ~10 fps it still drops time rather than spiralling).
   if(!this.paused&&!this.ended){this.acc+=real;let n=0;while(this.acc>=SIM_STEP-1e-9&&n<MAX_STEPS_PER_FRAME&&!this.ended&&this.alive){this.step(SIM_STEP);this.acc-=SIM_STEP;n++;}if(n===MAX_STEPS_PER_FRAME)this.acc=0;}
   if(!this.alive)return;
+  // How far past the last fixed state this frame sits, as a fraction of one step. A renderer draws between
+  // the last two states with it, which is the whole fix for motion that steps at 120 Hz onto a 60 Hz screen.
+  // Read only: the simulation never sees it, so a replay still reproduces the same run byte for byte.
+  this.realDt=real;this.alpha=this.paused||this.ended?0:clamp(this.acc/SIM_STEP,0,1);
   this.ctx.clearRect(0,0,this.w,this.h);this.draw();this.drawEffects();this.raf=requestAnimationFrame(this.frame);
  }
  burst(x,y,color='#8fffff',count=24){if(!this.motion)return;this.shockwaves.push({x,y,color,start:this.time});for(let i=0;i<count;i++){const a=i/count*TAU,s=80+Math.random()*90;this.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.6+Math.random()*.3,color});}}
@@ -151,8 +158,23 @@ export class RidgeEngine extends MiniEngine{
  // gate 60, openings 150 shrinking to 118 between gates 10 and 50, and each opening a random step of up to
  // 120 (rising to 220 by gate 40) from the last. The ceiling stops you instead of ending the run.
  constructor(canvas,cb,options){super(canvas,cb,options);const version=options?.version??options?.rulesVersion;this.courseV=version===4?4:version===5?5:RIDGE_LATEST;this.C=this.courseV===4?RIDGE_V4:RIDGE;this.lastOrbI=-99;this.flapAt=-9;this.bursts=[];this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.lastAmp=0;this.trail=[];this.tilt=0;this.gatesPassed=0;this.orbs=[];this.orbsTaken=0;this.runTime=0;this.popups=[];
-  this.inputs=[];this.resumes=[];this.revives=[];this.rescueOffered=false;this.reviveReady=false;this.shield=0;this.regionStage=0;this.skyChangedAt=0;this.nextX=this.C.FIRST_X;this.nextT=(this.C.FIRST_X-this.px)/this.speedFor(0);this.reach=this.C.RAMP===undefined?null:reachStart(this.C);this.reachT=0;for(let i=0;i<4;i++)this.addGate();this.fillGates();
+  this.inputs=[];this.resumes=[];this.revives=[];this.rescueOffered=false;this.reviveReady=false;this.shield=0;this.regionStage=0;this.skyChangedAt=0;this.nextX=this.C.FIRST_X;this.nextT=(this.C.FIRST_X-this.px)/this.speedFor(0);this.reach=this.C.RAMP===undefined?null:reachStart(this.C);this.reachT=0;
+  // Render-only state: the position the last fixed step started from, and the eased tilt. Neither is read
+  // by update(), hits() or replay(), so v4/v5/v6 replays are untouched by any of it.
+  this.prevPy=this.py;this.drawY=this.py;this.drawTilt=0;for(let i=0;i<4;i++)this.addGate();this.fillGates();
   this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message(this.courseV>=6?'Tap anywhere to lift your crystal. Fly through the open gates.':'Tap anywhere to lift your vial. Fly through the open gates.');this.cb.checkpoint?.(ridgeCheckpoint(0),0);}
+ // Remembers where the last fixed step started, so a frame can draw between the two states.
+ step(dt){this.prevPy=this.py;super.step(dt);}
+ // True while the course is scrolling. When it is not (before the first tap, after a crash, holding for a
+ // tap after a pause) there is nothing to interpolate and the frame draws the state as it stands.
+ get scrolling(){return Boolean(this.started&&!this.dead&&!this.waiting&&!this.rescueOffered&&!this.paused&&!this.ended);}
+ // The drawn state for this frame: one simulation step behind real time, interpolated across the leftover.
+ // That costs a fixed ~8 ms of latency and removes all of the stepping, instead of the other way round.
+ renderState(){
+  const a=this.scrolling?clamp(this.alpha??0,0,1):1,back=this.scrolling?SIM_STEP*(1-a):0;
+  const prev=this.prevPy===undefined?this.py:this.prevPy;
+  return {y:prev+(this.py-prev)*a,shift:this.speed*back,alpha:a};
+ }
  // The course (sky to ground, 0 to GROUND in world units) fills the space between the bottom of the HUD and the
  // bottom of the screen, so no vial hides under the score boxes and the ground sits on the screen's bottom edge.
  // Only drawing changes with the screen; the course and physics stay in world units.
@@ -258,17 +280,20 @@ export class RidgeEngine extends MiniEngine{
  revive(){
   if(this.courseV<6||!this.alive||this.ended||!this.dead||!this.rescueOffered||this.revives.length)return false;
   this.revives.push(this.ticks);this.rescueOffered=false;this.dead=false;this.deadT=0;this.paused=false;this.waiting=true;this.reviveReady=true;this.last=0;this.acc=0;this.vy=0;this.tilt=0;this.trail=[];this.shield=1.25;
-  const next=this.gates.find(g=>!g.passed&&g.x+this.C.PW>=this.px-this.C.R);this.py=clamp(next?.cy??300,this.C.R+20,this.C.GROUND-this.C.R-20);
+  const next=this.gates.find(g=>!g.passed&&g.x+this.C.PW>=this.px-this.C.R);this.py=clamp(next?.cy??300,this.C.R+20,this.C.GROUND-this.C.R-20);this.prevPy=this.py;this.drawTilt=0;
   this.cb.message('Shield ready. Tap to keep flying.');this.cb.sound('hint');return true;
  }
  // After a pause the vial (and the course) hold still until a tap, so the run never resumes before the player is
  // ready. Its velocity is kept: the tap continues the same flight, as if the pause never happened.
  pause(value=true){super.pause(value||this.rescueOffered);if(!value&&!this.rescueOffered&&this.started&&!this.dead&&!this.ended){this.resumes.push(this.ticks);this.waiting=true;this.cb.message('Tap to keep flying.');}}
  draw(){if(this.hudAt===undefined||this.time-this.hudAt>1||this.time<this.hudAt)this.measureHud();const c=this.ctx,k=this.ws;if(this.courseV>=6)this.drawSky();c.save();
+  // One render state for the whole frame: the gates, orbs, trail and the crystal all move together, so a
+  // sub-step shift can never show up as the player sliding against the course.
+  const render=this.renderState(),py=this.drawY=render.y,shift=render.shift;
   // Crash shake: about 6px for a quarter second, and only when motion is allowed.
   const shake=this.dead&&this.motion?Math.max(0,1-this.deadT/.25):0;
   if(shake)c.translate(Math.sin(this.deadT*64)*6*shake,Math.cos(this.deadT*51)*6*shake);
-  c.translate(0,this.oy);c.scale(k,k);
+  c.translate(0,this.oy);c.scale(k,k);c.translate(shift,0);
   if(this.motion)for(let i=0;i<this.trail.length;i++){c.globalAlpha=i/this.trail.length*.3;c.fillStyle='#8fffff';c.beginPath();c.arc(this.trail[i].x,this.trail[i].y,2+i*.25,0,TAU);c.fill();}
   c.globalAlpha=1;c.shadowColor='#03cfff';c.shadowBlur=10;
   // Pickups: a mini gold vial bobbing in the gap, with a soft glow behind it and a glint every couple of seconds.
@@ -293,12 +318,18 @@ export class RidgeEngine extends MiniEngine{
    // A tick of light on the glass of a gate just cleared.
    const fl=g.flashAt===undefined?9:this.time-g.flashAt;if(fl<.28){c.save();c.globalAlpha=(1-fl/.28)*.85;c.strokeStyle='#eaffff';c.lineWidth=3;c.shadowColor='#8fffff';c.shadowBlur=12;
     c.beginPath();c.moveTo(cx-this.C.PW/2,top);c.lineTo(cx+this.C.PW/2,top);c.moveTo(cx-this.C.PW/2,bottom);c.lineTo(cx+this.C.PW/2,bottom);c.stroke();c.restore();}}
-  c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(0,this.C.GROUND);c.lineTo(this.worldW,this.C.GROUND);c.stroke();
+  c.shadowBlur=14;c.strokeStyle='#8fffffaa';c.lineWidth=2;c.beginPath();c.moveTo(-shift-4,this.C.GROUND);c.lineTo(this.worldW+shift+4,this.C.GROUND);c.stroke();
   c.shadowColor='#8fffff';c.shadowBlur=16;
   // A flap squashes the vial for about 120ms and kicks its nose up; a dead vial tumbles as it falls.
   const fl=this.motion?clamp(1-(this.time-this.flapAt)/.12,0,1):0;
-  const tilt=this.dead?this.tilt+this.deadT*7:this.tilt-.5*fl;
-  if(this.courseV>=6)this.drawPlayer();else drawSprite(c,'vial-cyan',this.px,this.py,this.C.R*2*(1-.2*fl),this.C.R*2.6*(1+.26*fl),tilt);
+  const want=this.dead?this.tilt+this.deadT*7:this.tilt-.5*fl;
+  // Exponential easing off the real frame time, so the feel is the same at 60 and 120 Hz.
+  this.drawTilt=this.motion?this.drawTilt+(want-this.drawTilt)*(1-Math.exp(-(this.realDt||SIM_STEP)/RIDGE_TILT_EASE)):want;
+  const tilt=this.drawTilt;
+  // The crystal keeps its own screen x; only the course behind it was shifted.
+  c.save();c.translate(-shift,0);
+  if(this.courseV>=6)this.drawPlayer(this.px,py,tilt);else drawSprite(c,'vial-cyan',this.px,py,this.C.R*2*(1-.2*fl),this.C.R*2.6*(1+.26*fl),tilt);
+  c.restore();
   c.restore();
   // Crash flash: about 80ms of white over the whole screen, motion permitting.
   if(this.dead&&this.motion&&this.deadT<.08){c.save();c.globalAlpha=(1-this.deadT/.08)*.7;c.fillStyle='#ffffff';c.fillRect(0,0,this.w,this.h);c.restore();}
@@ -311,12 +342,12 @@ export class RidgeEngine extends MiniEngine{
   for(let i=0;i<5;i++){const span=this.w+260,x=(i*173-(this.motion?this.runTime*25:0))%span;const mist=c.createLinearGradient(x-150,0,x+span*.15,0);mist.addColorStop(0,'#d1f8ff00');mist.addColorStop(.5,'#d1f8ff');mist.addColorStop(1,'#d1f8ff00');c.strokeStyle=mist;c.beginPath();c.moveTo(x+span*.15,this.h*.12+i*this.h*.19);c.lineTo(x-150,this.h*.19+i*this.h*.19);c.stroke();}
   c.restore();
  }
- drawPlayer(){
-  const c=this.ctx,r=this.C.R;c.save();c.translate(this.px,this.py);
+ drawPlayer(x=this.px,y=this.py,tilt=0){
+  const c=this.ctx,r=this.C.R;c.save();c.translate(x,y);
   if(this.shield){c.strokeStyle='#fff3b0';c.lineWidth=2;c.shadowColor='#ffe47c';c.shadowBlur=10;c.beginPath();c.arc(0,0,r+6,0,TAU);c.stroke();}
   c.shadowColor='#73e9ff';c.shadowBlur=7;const glass=c.createRadialGradient(-r*.3,-r*.4,1,0,0,r);glass.addColorStop(0,'#f2ffff');glass.addColorStop(.35,'#76edff');glass.addColorStop(.75,'#0c9ce8');glass.addColorStop(1,'#0750a3');
   c.fillStyle=glass;c.strokeStyle='#d1faff';c.lineWidth=1.5;c.beginPath();c.arc(0,0,r,0,TAU);c.fill();c.stroke();c.shadowBlur=0;
-  c.strokeStyle='#ffffff';c.lineWidth=2.5;c.lineCap='round';c.lineJoin='round';c.beginPath();c.moveTo(-3,-5);c.lineTo(2,-5);c.lineTo(6,0);c.lineTo(2,5);c.moveTo(0,0);c.lineTo(-4,3);c.stroke();c.fillStyle='#fff';c.beginPath();c.arc(-4,3,2,0,TAU);c.fill();c.restore();
+  c.rotate(tilt);c.strokeStyle='#ffffff';c.lineWidth=2.5;c.lineCap='round';c.lineJoin='round';c.beginPath();c.moveTo(-3,-5);c.lineTo(2,-5);c.lineTo(6,0);c.lineTo(2,5);c.moveTo(0,0);c.lineTo(-4,3);c.stroke();c.fillStyle='#fff';c.beginPath();c.arc(-4,3,2,0,TAU);c.fill();c.restore();
  }
  finish(){if(!this.ended)this.end(this.result());}
 }
