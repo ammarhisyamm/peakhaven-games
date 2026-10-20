@@ -186,3 +186,31 @@ body[data-page="play"] .rule-note{font-size:clamp(10px,1.8vw,13px);margin:7px 0 
 .achievement-collapse[open]>summary .achievement-collapse-mark{transform:rotate(90deg)}
 .achievement-collapse .achievement-shelf{margin-top:0;padding-bottom:8px}
 @media(prefers-reduced-motion:reduce){.achievement-collapse-mark{transition:none}}
+/* ---- Below the three-across breakpoint: the compact card ---- */
+@media(max-width:999px){
+ .daily-game{
+  grid-row:auto;
+  grid-template-columns:clamp(96px,26vw,112px) minmax(0,1fr);
+  grid-template-rows:auto auto auto auto;
+  align-items:center;
+  gap:3px 10px;
+  padding:8px;
+ }
+ .daily-game-image{grid-column:1;grid-row:1/4;aspect-ratio:1;align-self:center}
+ .daily-game-title{grid-column:2;grid-row:1;align-self:end;font-size:clamp(16px,4.4vw,20px)}
+ .daily-game-tagline{grid-column:2;grid-row:2;font-size:clamp(11px,3vw,14px);align-self:center}
+ .daily-game-blurb{display:none}
+ .daily-game .plays-left{grid-column:2;grid-row:3;align-self:center}
+ .daily-game .daily-play-button{grid-column:2;grid-row:4;width:100%;min-height:40px}
+ .daily-game .achievement-collapse{grid-column:1/-1;grid-row:5;margin-top:4px}
+ .achievement-collapse>summary{padding:7px 2px 5px}
+}
+/* A phone has room for the name, the plays and the button, and not for a tagline as well. */
+@media(max-width:620px){
+ .daily-game{grid-template-rows:auto auto auto;gap:2px 9px}
+ .daily-game-image{grid-row:1/4}
+ .daily-game-tagline{display:none}
+ .daily-game .plays-left{grid-row:2}
+ .daily-game .daily-play-button{grid-row:3}
+ .daily-game .achievement-collapse{grid-row:4}
+}
