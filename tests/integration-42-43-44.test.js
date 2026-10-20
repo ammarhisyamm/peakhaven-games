@@ -198,10 +198,19 @@ test('every older ruleset still verifies and still produces its achievement numb
     const out = blocksResult(g);
     assert.equal(out.replay.v, version);
     assert.equal(g.rewarded, 0, `v${version} grants no milestone`);
-    const checked = await verifySegment({game: 'blocks', replay: out.replay, seed: out.replay.seed, elapsedSeconds: 99999});
-    assert.equal(checked.score, out.score, `v${version} score`);
-    assert.deepEqual(checked.stats, {score: out.score, combo: out.bestCombo, levels: Math.floor(out.lines / BLOCK_MILESTONE.every)},
+    // The engine still plays v1 and v2 back, and their numbers still come out. That is what this has
+    // always been here to prove and is still worth proving: a run archived on an older ruleset can be
+    // read again, score and achievements and all.
+    const played = replayBlocks(out.replay);
+    assert.equal(played.score, out.score, `v${version} score`);
+    assert.deepEqual(statsFromRun('blocks', {score: played.score, bestCombo: played.bestCombo, lines: played.lines}),
+      {score: out.score, combo: out.bestCombo, levels: Math.floor(out.lines / BLOCK_MILESTONE.every)},
       `v${version} still reports its achievement numbers`);
+    // The competition no longer takes them, though. The Blocks version is pinned to the one the client
+    // ships, because v1 deals an easier tray on the same seed and nothing stopped a browser asking for it.
+    await assert.rejects(
+      verifySegment({game: 'blocks', replay: out.replay, seed: out.replay.seed, elapsedSeconds: 99999}),
+      /different board rules/, `v${version} is not accepted into the competition`);
   }
 
   // Sequence v1, v2 and v3.

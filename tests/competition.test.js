@@ -5,11 +5,12 @@ import assert from 'node:assert/strict';
 import {installStubs,stubCanvas,stubCallbacks,createPlanner} from './ridge-planner.mjs';
 installStubs();
 const {RidgeEngine,RIDGE,hitsVial,SequenceEngine}=await import('../dist/tryout-games.js');
-const {createBlocks,blocksPlace,blocksResult,placements}=await import('../dist/blocks-core.js');
+const {createBlocks,blocksPlace,blocksResult,placements,BLOCKS_REPLAY_VERSION}=await import('../dist/blocks-core.js');
 const {SIM_STEP}=await import('../dist/rng.js');
 const {greedyMove,driveSequence}=await import('../tools/sequence-bot.mjs');
 const {COMPETITION,dayKey,monthKey,seedFor,cleanName,cleanCode,monthlyStandings,yearlyStandings,pointsForRank,podiumMonths}=await import('../arcade/server/competition.mjs');
 const {createHandlers}=await import('../arcade/server/handlers.mjs');
+const {MIN_BLOCKS_MOVE_SECONDS}=await import('../arcade/server/verify.mjs');
 const {createMemoryStore,createMemoryAuth}=await import('../arcade/server/memory-store.mjs');
 
 const SECRET='test-secret';
@@ -22,10 +23,14 @@ function ridgeReplay(seed,gates=4){
   e.finish();e.destroy();
   return {replay:out.result.replay,score:out.result.score,seconds:e.ticks*SIM_STEP};
 }
-function blocksReplay(seed,moves=6){
-  const g=createBlocks(seed);
+function blocksReplay(seed,moves=6,version){
+  const g=createBlocks(seed,version);
   for(let m=0;m<moves&&!g.ended;m++){const i=g.state.tray.findIndex(p=>p&&placements(g.state.grid,p.shape).length);if(i<0)break;const [r,c]=placements(g.state.grid,g.state.tray[i].shape)[0];blocksPlace(g,i,r,c);}
-  const res=blocksResult(g);return {replay:res.replay,score:res.score,seconds:0};
+  const res=blocksResult(g);
+  // The server will not take a Blocks run that came in faster than its placements could have been made, so
+  // this is the clock a test has to let pass before submitting it. Worked out from the shipped floor rather
+  // than a copy of the number, so the two cannot drift apart.
+  return {replay:res.replay,score:res.score,seconds:res.moves*MIN_BLOCKS_MOVE_SECONDS};
 }
 function sequenceReplay(seed,level,rulesVersion=4){
   const out=stubCallbacks(),e=new SequenceEngine(stubCanvas(),out.cb,{seed,level,motion:false,rulesVersion});
@@ -142,7 +147,7 @@ test('A Ridge Run score counts only after the server replays it',async()=>{
   w.advance(run.seconds+2);
   const f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay,claimed:run.score}});
   assert.equal(f.status,200,JSON.stringify(f.body));assert.equal(f.body.score,run.score);assert.equal(f.body.done,true);
-  assert.equal((await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay}})).status,200,'identical retries return the verified result without counting it twice');
+  assert.equal((await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay,claimed:run.score}})).status,200,'identical retries return the verified result without counting it twice');
   const stored=w.store.runs.get(s.body.runId);assert.equal(stored.status,'closed');assert.equal(stored.flagged,false);
 });
 
@@ -151,20 +156,20 @@ test('Cheating attempts are rejected and the play is spent',async()=>{
   // A run recorded on a different course.
   let s=await w.api.start({token:t,body:{game:'ridge'}});
   let run=ridgeReplay(s.body.seed+1);w.advance(run.seconds+2);
-  let f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay}});
+  let f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay,claimed:run.score}});
   assert.equal(f.status,422);assert.match(f.body.reason,/different course/);
   assert.equal(w.store.runs.get(s.body.runId).status,'rejected');
   // A run submitted faster than it could have been played (a bot playing ahead of real time).
   s=await w.api.start({token:t,body:{game:'ridge'}});run=ridgeReplay(s.body.seed,25);assert.ok(run.seconds>20);w.advance(1);
-  f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay}});
+  f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:run.replay,claimed:run.score}});
   assert.equal(f.status,422);assert.match(f.body.reason,/real time/);
   // A doctored Blocks log and a claimed score that doesn't match get caught.
   s=await w.api.start({token:t,body:{game:'blocks'}});
-  const b=blocksReplay(s.body.seed);b.replay.log.push(['p',0,99,99]);
-  f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay}});
+  const b=blocksReplay(s.body.seed);b.replay.log.push(['p',0,99,99]);w.advance(b.seconds+2);
+  f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay,claimed:b.score}});
   assert.equal(f.status,422);
   s=await w.api.start({token:t,body:{game:'blocks'}});
-  const b2=blocksReplay(s.body.seed);
+  const b2=blocksReplay(s.body.seed);w.advance(b2.seconds+2);
   f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b2.replay,claimed:b2.score*10}});
   assert.equal(f.status,200);assert.equal(f.body.score,b2.score,'the stored score is the replayed one');
   assert.equal(w.store.runs.get(s.body.runId).flagged,true,'a false claim marks the run for review');
@@ -174,26 +179,101 @@ test('Cheating attempts are rejected and the play is spent',async()=>{
   assert.equal((await w.api.finish({token:t2,body:{runId:s.body.runId,replay:{}}})).status,404);
 });
 
+test('A Peak Blocks run cannot pick its own board rules',async()=>{
+  const w=world(),t=await w.join('pin@x.com','Pin');
+  // v1 deals trays with no difficulty ramp, so the same seed plays easier and scores higher. These are
+  // genuine runs on the older rules — legal logs, correctly labelled, just not the rules anybody is
+  // playing on — which is the whole of what was being got away with.
+  for(const version of [1,2]){
+    const s=await w.api.start({token:t,body:{game:'blocks'}});
+    assert.equal(s.body.rulesVersion,BLOCKS_REPLAY_VERSION,'start reports the version it will pin to');
+    const b=blocksReplay(s.body.seed,6,version);
+    assert.equal(b.replay.v,version,'a real run on the older rules, not a relabelled one');
+    w.advance(b.seconds+2);
+    const f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay,claimed:b.score}});
+    assert.equal(f.status,422,`v${version} is refused`);
+    assert.match(f.body.reason,/different board rules/);
+    assert.equal(w.store.runs.get(s.body.runId).status,'rejected');
+  }
+  // The version the client ships is taken, as it always was.
+  const s=await w.api.start({token:t,body:{game:'blocks'}});
+  const b=blocksReplay(s.body.seed);
+  assert.equal(b.replay.v,BLOCKS_REPLAY_VERSION);
+  w.advance(b.seconds+2);
+  const f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay,claimed:b.score}});
+  assert.equal(f.status,200);assert.equal(f.body.score,b.score);
+});
+
+test('A Peak Blocks run that arrives faster than its placements could be made is refused',async()=>{
+  const w=world(),t=await w.join('fast@x.com','Fast');
+  // Peak Blocks is the one game whose replay has no clock in it, so its placements are the clock.
+  const s=await w.api.start({token:t,body:{game:'blocks'}});
+  const b=blocksReplay(s.body.seed,40);
+  const moves=b.replay.log.length;
+  assert.ok(moves>=20,`a run long enough to measure: ${moves} placements`);
+  assert.equal(b.seconds,moves*MIN_BLOCKS_MOVE_SECONDS,'the floor is a quarter-second a placement');
+  w.advance(b.seconds-.5);
+  const fast=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay,claimed:b.score}});
+  assert.equal(fast.status,422);
+  assert.match(fast.body.reason,/faster than real time/);
+  assert.equal(w.store.runs.get(s.body.runId).status,'rejected');
+  // The same run, given the time it actually takes to play.
+  const s2=await w.api.start({token:t,body:{game:'blocks'}});
+  const b2=blocksReplay(s2.body.seed,40);w.advance(b2.seconds+1);
+  const ok=await w.api.finish({token:t,body:{runId:s2.body.runId,replay:b2.replay,claimed:b2.score}});
+  assert.equal(ok.status,200);assert.equal(ok.body.score,b2.score);
+});
+
+test('A score has to be claimed, so a run cannot dodge the claimed-against-verified check',async()=>{
+  const w=world(),t=await w.join('claim@x.com','Claim');
+  const s=await w.api.start({token:t,body:{game:'blocks'}});
+  const b=blocksReplay(s.body.seed);w.advance(b.seconds+2);
+  // Leaving the field out was the one way to play a doctored run and never reach the review page: the
+  // flag is the claim compared with the replay, and there is nothing to compare without a claim.
+  const missing=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay}});
+  assert.equal(missing.status,400);
+  assert.equal(w.store.runs.get(s.body.runId).status,'open','the run is left to be submitted properly');
+  for(const claimed of [null,'1200',NaN,{}])
+    assert.equal((await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay,claimed}})).status,400,
+      `claimed: ${JSON.stringify(claimed)??String(claimed)}`);
+  // The same submission with its claim is taken, and an honest claim is not flagged.
+  const ok=await w.api.finish({token:t,body:{runId:s.body.runId,replay:b.replay,claimed:b.score}});
+  assert.equal(ok.status,200);assert.equal(ok.body.score,b.score);
+  assert.equal(w.store.runs.get(s.body.runId).flagged,false);
+  // A Sequence run submits a level at a time, and every one of those segments needs its own claim.
+  const seq=await w.api.start({token:t,body:{game:'sequence'}});
+  const l1=sequenceReplay(seq.body.seed,1);
+  assert.equal(l1.won,true,'the greedy bot clears level 1');
+  w.advance(l1.seconds+2);
+  assert.equal((await w.api.finish({token:t,body:{runId:seq.body.runId,replay:l1.replay}})).status,400);
+  const after=await w.api.finish({token:t,body:{runId:seq.body.runId,replay:l1.replay,claimed:l1.score}});
+  assert.equal(after.status,200);assert.equal(after.body.done,false);
+  const l2=sequenceReplay(after.body.nextSeed,after.body.nextLevel);w.advance(l2.seconds+2);
+  assert.equal((await w.api.finish({token:t,body:{runId:seq.body.runId,replay:l2.replay}})).status,400,
+    'a Sequence segment needs its claim too');
+  assert.equal((await w.api.finish({token:t,body:{runId:seq.body.runId,replay:l2.replay,claimed:l2.score}})).status,200);
+});
+
 test('Sequence runs go level by level; each cleared level unlocks the next board',async()=>{
   const w=world(),t=await w.join('a@x.com','Ann');
   const s=await w.api.start({token:t,body:{game:'sequence'}});
   const l1=sequenceReplay(s.body.seed,1);assert.equal(l1.won,true,'the greedy bot clears level 1');
   w.advance(l1.seconds+1);
-  let f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:l1.replay}});
+  let f=await w.api.finish({token:t,body:{runId:s.body.runId,replay:l1.replay,claimed:l1.score}});
   assert.equal(f.status,200);assert.equal(f.body.done,false);assert.equal(f.body.nextLevel,2);
   const day=dayKey(w.now());assert.equal(f.body.nextSeed,seedFor(SECRET,'sequence-v4',day,2));
   // Replaying level 1's board as level 2 doesn't work.
   const wrong=sequenceReplay(s.body.seed,2);w.advance(wrong.seconds+1);
-  const bad=await w.api.finish({token:t,body:{runId:s.body.runId,replay:wrong.replay}});
+  const bad=await w.api.finish({token:t,body:{runId:s.body.runId,replay:wrong.replay,claimed:wrong.score}});
   assert.equal(bad.status,422);
   // A fresh run: clear level 1, then lose level 2 on purpose by finishing at once; the total is both levels.
   const s2=await w.api.start({token:t,body:{game:'sequence'}});
   const a=sequenceReplay(s2.body.seed,1);w.advance(a.seconds+1);
-  f=await w.api.finish({token:t,body:{runId:s2.body.runId,replay:a.replay}});
+  f=await w.api.finish({token:t,body:{runId:s2.body.runId,replay:a.replay,claimed:a.score}});
   const out=stubCallbacks(),e=new SequenceEngine(stubCanvas(),out.cb,{seed:f.body.nextSeed,level:2,motion:false});
   for(let i=0;i<60;i++)e.step(SIM_STEP);e.finish();e.destroy();
   w.advance(2);
-  f=await w.api.finish({token:t,body:{runId:s2.body.runId,replay:out.result.replay}});
+  f=await w.api.finish({token:t,body:{runId:s2.body.runId,replay:out.result.replay,claimed:out.result.score}});
   assert.equal(f.status,200);assert.equal(f.body.done,true);assert.equal(f.body.score,a.score+out.result.score);
 });
 
@@ -201,7 +281,7 @@ test('Starting a new run closes an unfinished one, keeping any levels already ve
   const w=world(),t=await w.join('a@x.com','Ann');
   const s=await w.api.start({token:t,body:{game:'sequence'}});
   const l1=sequenceReplay(s.body.seed,1);w.advance(l1.seconds+1);
-  await w.api.finish({token:t,body:{runId:s.body.runId,replay:l1.replay}});
+  await w.api.finish({token:t,body:{runId:s.body.runId,replay:l1.replay,claimed:l1.score}});
   await w.api.start({token:t,body:{game:'sequence'}});
   const old=w.store.runs.get(s.body.runId);assert.equal(old.status,'closed');assert.equal(old.score,l1.score);
 });
@@ -210,10 +290,10 @@ test('Leaderboard shows verified scores as rank points, with your own row',async
   const w=world(),ann=await w.join('a@x.com','Ann'),ben=await w.join('b@x.com','Ben');
   for(const [token,gates] of [[ann,6],[ben,3]]){
     const s=await w.api.start({token,body:{game:'ridge'}});const r=ridgeReplay(s.body.seed,gates);w.advance(r.seconds+2);
-    assert.equal((await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay}})).status,200);
+    assert.equal((await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay,claimed:r.score}})).status,200);
   }
-  const s=await w.api.start({token:ben,body:{game:'blocks'}});const b=blocksReplay(s.body.seed);
-  await w.api.finish({token:ben,body:{runId:s.body.runId,replay:b.replay}});
+  const s=await w.api.start({token:ben,body:{game:'blocks'}});const b=blocksReplay(s.body.seed);w.advance(b.seconds+2);
+  await w.api.finish({token:ben,body:{runId:s.body.runId,replay:b.replay,claimed:b.score}});
   assert.equal((await w.api.profile({token:ann,body:{name:'Ann Peak',bottle:'golden-peak'}})).status,403);
   assert.equal((await w.api.profile({token:ann,body:{name:'Ann Peak'}})).status,200);
   const lb=(await w.api.leaderboard({token:ann,query:{period:'monthly'}})).body;
@@ -231,10 +311,10 @@ test('Each game has its own board of best scores, monthly and yearly',async()=>{
   const scores={};
   for(const [token,gates] of [[ann,6],[ben,3]]){
     const s=await w.api.start({token,body:{game:'ridge'}});const r=ridgeReplay(s.body.seed,gates);w.advance(r.seconds+2);
-    scores[token]=(await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay}})).body.score;
+    scores[token]=(await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay,claimed:r.score}})).body.score;
   }
-  const s=await w.api.start({token:ben,body:{game:'blocks'}});const b=blocksReplay(s.body.seed);
-  await w.api.finish({token:ben,body:{runId:s.body.runId,replay:b.replay}});
+  const s=await w.api.start({token:ben,body:{game:'blocks'}});const b=blocksReplay(s.body.seed);w.advance(b.seconds+2);
+  await w.api.finish({token:ben,body:{runId:s.body.runId,replay:b.replay,claimed:b.score}});
   const ridge=(await w.api.leaderboard({token:ben,query:{period:'monthly',game:'ridge'}})).body;
   assert.equal(ridge.game,'ridge');assert.equal(ridge.players,2);
   assert.deepEqual(ridge.top.map(r=>[r.rank,r.name,r.points]),[[1,'Ann',scores[ann]],[2,'Ben',scores[ben]]]);
@@ -267,7 +347,7 @@ test('A top-three monthly finish is found for Golden Peak',()=>{
 
 test('A finished run reports its place on this month\'s board, a new best, and plays left',async()=>{
   const w=world(),ann=await w.join('a@x.com','Ann'),ben=await w.join('b@x.com','Ben');
-  const play=async(token,gates)=>{const s=await w.api.start({token,body:{game:'ridge'}});const r=ridgeReplay(s.body.seed,gates);w.advance(r.seconds+2);return (await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay}})).body;};
+  const play=async(token,gates)=>{const s=await w.api.start({token,body:{game:'ridge'}});const r=ridgeReplay(s.body.seed,gates);w.advance(r.seconds+2);return (await w.api.finish({token,body:{runId:s.body.runId,replay:r.replay,claimed:r.score}})).body;};
   let f=await play(ben,6);
   assert.equal(f.board.rank,1);assert.equal(f.board.players,1);assert.equal(f.board.newBest,true);assert.equal(f.board.previousBest,0);assert.equal(f.plays.ridge,2);
   f=await play(ann,3);
@@ -290,8 +370,8 @@ test('Retrying a cleared Sequence level cannot reject the run or add its score t
 });
 test('Concurrent identical finish requests count once and both receive verification',async()=>{
  const w=world(),token=await w.join('double@x.com','Double');
- const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);
- const replies=await Promise.all([1,2].map(()=>w.api.finish({token,body:{runId:start.runId,replay:r.replay}})));
+ const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);w.advance(r.seconds+2);
+ const replies=await Promise.all([1,2].map(()=>w.api.finish({token,body:{runId:start.runId,replay:r.replay,claimed:r.score}})));
  assert.deepEqual(replies.map(r=>r.status),[200,200]);assert.equal(w.store.runs.get(start.runId).score,r.score);assert.equal(w.store.runs.get(start.runId).segments,1);
 });
 
@@ -301,7 +381,7 @@ test('A lost start response can be retried after the last play without spending 
  const requestId='4f372615-a2cd-46e2-93cc-c91e113be4b8',body={game:'blocks',requestId};
  const [a,b]=await Promise.all([w.api.start({token,body}),w.api.start({token,body})]);
  assert.equal(a.status,200);assert.equal(b.status,200);assert.equal(a.body.runId,b.body.runId);assert.equal(b.body.plays.blocks,0);assert.equal(w.store.runs.size,3);
- const r=blocksReplay(a.body.seed);await w.api.finish({token,body:{runId:a.body.runId,replay:r.replay}});
+ const r=blocksReplay(a.body.seed);w.advance(r.seconds+2);await w.api.finish({token,body:{runId:a.body.runId,replay:r.replay,claimed:r.score}});
  assert.equal((await w.api.start({token,body})).status,409,'a completed run cannot be reopened');
  assert.equal((await w.api.start({token,body:{game:'blocks',requestId:'invalid'}})).status,400);
 });
@@ -309,8 +389,8 @@ test('A lost start response can be retried after the last play without spending 
 
 test('Retry comparison tolerates Postgres jsonb object key order',async()=>{
  const w=world(),token=await w.join('jsonb-retry@x.com','JSON Retry');
- const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);
- const body={runId:start.runId,replay:r.replay};assert.equal((await w.api.finish({token,body})).status,200);
+ const start=(await w.api.start({token,body:{game:'blocks'}})).body,r=blocksReplay(start.seed);w.advance(r.seconds+2);
+ const body={runId:start.runId,replay:r.replay,claimed:r.score};assert.equal((await w.api.finish({token,body})).status,200);
  const stored=w.store.runs.get(start.runId),rep=stored.replays[0];stored.replays=[Object.fromEntries(Object.entries(rep).reverse())];
  assert.equal((await w.api.finish({token,body})).status,200,'jsonb reorders object keys without changing the replay');assert.equal(stored.segments,1);
 });
@@ -320,19 +400,19 @@ test('New Sequence competition runs cannot downgrade to v1 or v2, while older ru
  const w=world(),token=await w.join('sequence-version@x.com','Version Check');
  const start=await w.api.start({token,body:{game:'sequence'}});assert.equal(start.body.rulesVersion,4);
  const oldReplay=sequenceReplay(start.body.seed,1,1);w.advance(oldReplay.seconds+1);
- const downgrade=await w.api.finish({token,body:{runId:start.body.runId,replay:oldReplay.replay}});assert.equal(downgrade.status,422);assert.match(downgrade.body.reason,/different level rules/);
+ const downgrade=await w.api.finish({token,body:{runId:start.body.runId,replay:oldReplay.replay,claimed:oldReplay.score}});assert.equal(downgrade.status,422);assert.match(downgrade.body.reason,/different level rules/);
  // A run already on the v3 course keeps v3: its own engine, its own next course, and a v3 replay verifies.
  const player=await w.auth.userFromToken(token),day=dayKey(w.now());
  const v3Seed=seedFor(SECRET,'sequence-v3',day,1);
  const v3Run=await w.store.startRun({playerId:player.id,game:'sequence',day,seed:v3Seed,limit:3});
  const v3Replay=sequenceReplay(v3Seed,1,3);assert.ok(v3Replay.won,'the bot clears v3 level 1');w.advance(v3Replay.seconds+1);
- const v3Finish=await w.api.finish({token,body:{runId:v3Run.id,replay:v3Replay.replay}});
+ const v3Finish=await w.api.finish({token,body:{runId:v3Run.id,replay:v3Replay.replay,claimed:v3Replay.score}});
  assert.equal(v3Finish.status,200,JSON.stringify(v3Finish.body));
  assert.equal(v3Finish.body.nextSeed,seedFor(SECRET,'sequence-v3',day,2),'a v3 run stays on the v3 course');
  const seed=seedFor(SECRET,'sequence',day,1);
  const legacy=await w.store.startRun({playerId:player.id,game:'sequence',day,seed,limit:3});
  const replay=sequenceReplay(seed,1,1);assert.ok(replay.won);w.advance(replay.seconds+1);
- const finish=await w.api.finish({token,body:{runId:legacy.id,replay:replay.replay}});assert.equal(finish.status,200);assert.equal(finish.body.done,false);assert.equal(finish.body.nextSeed,seedFor(SECRET,'sequence',day,2));
+ const finish=await w.api.finish({token,body:{runId:legacy.id,replay:replay.replay,claimed:replay.score}});assert.equal(finish.status,200);assert.equal(finish.body.done,false);assert.equal(finish.body.nextSeed,seedFor(SECRET,'sequence',day,2));
 });
 
 // Three plays a day, so the v2 half of the story needs its own player.
@@ -343,12 +423,12 @@ test('A Sequence run already on the v2 course keeps the v2 engine, and a v3 run 
  const v2Seed=seedFor(SECRET,'sequence-v2',day,1);
  const v2Run=await w.store.startRun({playerId:player.id,game:'sequence',day,seed:v2Seed,limit:3});
  const v2Replay=sequenceReplay(v2Seed,1,2);assert.ok(v2Replay.won,'the bot clears v2 level 1');w.advance(v2Replay.seconds+1);
- const v2Finish=await w.api.finish({token,body:{runId:v2Run.id,replay:v2Replay.replay}});
+ const v2Finish=await w.api.finish({token,body:{runId:v2Run.id,replay:v2Replay.replay,claimed:v2Replay.score}});
  assert.equal(v2Finish.status,200,JSON.stringify(v2Finish.body));assert.equal(v2Finish.body.done,false);
  assert.equal(v2Finish.body.nextSeed,seedFor(SECRET,'sequence-v2',day,2));
  // A new run is on v3, and a v2 replay of its board is refused for using the wrong rules.
  const fresh=await w.api.start({token,body:{game:'sequence'}});assert.equal(fresh.body.rulesVersion,4);
  const stale=sequenceReplay(fresh.body.seed,1,2);w.advance(stale.seconds+1);
- const refused=await w.api.finish({token,body:{runId:fresh.body.runId,replay:stale.replay}});
+ const refused=await w.api.finish({token,body:{runId:fresh.body.runId,replay:stale.replay,claimed:stale.score}});
  assert.equal(refused.status,422);assert.match(refused.body.reason,/different level rules/);
 });
