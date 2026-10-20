@@ -99,6 +99,14 @@ body.game-open #app{position:fixed;inset:0;width:min(100%,480px);height:100dvh;m
 .blast-points{position:absolute;transform:translate(-50%,-50%);font:900 26px/1 Anybody,Inter,sans-serif;color:#fff;-webkit-text-stroke:1px #0070af;paint-order:stroke fill;text-shadow:0 3px 0 #0063a1,0 0 14px #40ecffaa;white-space:nowrap}
 .blast-points.big{font-size:34px}
 .blast-points.combo{color:#fff3aa;-webkit-text-stroke-color:#86501b;text-shadow:0 3px 0 #906321,0 0 16px #ffcf49}
+/* The burst along a cleared line: the block colours already carry the gradient, this only rounds it. */
+.blast-spark{position:absolute;display:block;border-radius:50%;will-change:transform,opacity;box-shadow:0 0 10px 2px #ffffff7a}
+.scene-blocks .blast-spark{border-radius:50%}
+/* The combo count, big over the middle of the board. The praise label keeps its own place above it. */
+.combo-count{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);white-space:nowrap;letter-spacing:.02em;
+ font:900 clamp(34px,11vw,62px)/1 Anybody,Inter,sans-serif;color:#fff3aa;-webkit-text-stroke:2px #86501b;paint-order:stroke fill;
+ text-shadow:0 4px 0 #906321,0 0 22px #ffcf49}
+@media(prefers-reduced-motion:reduce){.combo-count{text-shadow:0 4px 0 #906321}}
 
 /* Peak Blocks blocks are plain shapes: no emblem or tile artwork, so every block reads the same at a
    glance and the six colours do all the telling-apart. The hues are the ones the tinted sprite showed

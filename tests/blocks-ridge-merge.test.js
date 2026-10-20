@@ -472,8 +472,8 @@ test('A v2 tray is still never dead on arrival',()=>{
   }
 });
 
-test('Both v1 and v2 Blocks replays verify, each with the generator it was played on',()=>{
-  for(const version of [1,2]){
+test('v1, v2 and v3 Blocks replays all verify, each with the rules it was played on',()=>{
+  for(const version of [1,2,3]){
     const g=createBlocks(31337,version);
     for(let i=0;i<40;i++){const move=firstLegal(g);if(!move)break;blocksPlace(g,...move);}
     const result=blocksResult(g);
@@ -485,8 +485,13 @@ test('Both v1 and v2 Blocks replays verify, each with the generator it was playe
   assert.notEqual(
     createBlocks(31337,1).state.tray.map(p=>p.shape.length).join(','),
     createBlocks(31337,2).state.tray.map(p=>p.shape.length).join(','));
+  // v3 only adds the milestone reward: it must deal exactly as v2 does, or every v2 best would move.
+  assert.equal(
+    createBlocks(31337,3).state.tray.map(p=>p.shape.length).join(','),
+    createBlocks(31337,2).state.tray.map(p=>p.shape.length).join(','),
+    'v3 deals the same trays as v2');
   const rep=blocksResult(createBlocks(5,2)).replay;
-  assert.throws(()=>replayBlocks({...rep,v:3}),/Unknown Peak Blocks replay version/);
+  assert.throws(()=>replayBlocks({...rep,v:4}),/Unknown Peak Blocks replay version/);
 });
 
 // --- Ridge Run difficulty curve (v5) -----------------------------------------------------------------------
