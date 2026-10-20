@@ -241,9 +241,12 @@ function sequenceToolState(state){
  const assist=$('.sequence-assist');
  for(const [name,button] of Object.entries(sequenceToolButtons())){
   const left=state[name]??0;
+  // The engine says whether a button may be pressed. Older payloads had no `usable`, so the count is the
+  // fallback; anything newer cannot disagree with what a press will actually do.
+  const usable=state.usable?state.usable[name]:left>0;
   button.querySelector('b').textContent=left;
-  button.disabled=left===0;
-  button.classList.toggle('tool-suggested',state.stuck&&left>0);
+  button.disabled=!usable;
+  button.classList.toggle('tool-suggested',Boolean(state.stuck&&usable));
   button.classList.toggle('active',name==='hammer'&&Boolean(state.armed));
   button.setAttribute('aria-pressed',String(name==='hammer'&&Boolean(state.armed)));
   button.setAttribute('aria-label',`${name[0].toUpperCase()+name.slice(1)}. ${left} uses left. ${name==='shuffle'?'Re-mix the board. It always leaves a move.':'Break one crystal. It counts toward the goals.'}`);

@@ -102,9 +102,11 @@ function sequenceToolState(state){
  const assist=$('.sequence-assist');
  for(const button of document.querySelectorAll('.game-tools [data-tool]')){
   const name=button.dataset.tool,left=state[name]??0;
+  // The engine decides whether a button may be pressed; the count is only the fallback for an older payload.
+  const usable=state.usable?state.usable[name]:left>0;
   button.querySelector('b').textContent=left;
-  button.disabled=left===0;
-  button.classList.toggle('tool-suggested',Boolean(state.stuck)&&left>0);
+  button.disabled=!usable;
+  button.classList.toggle('tool-suggested',Boolean(state.stuck&&usable));
   button.classList.toggle('active',name==='hammer'&&Boolean(state.armed));
   button.setAttribute('aria-pressed',String(name==='hammer'&&Boolean(state.armed)));
   button.setAttribute('aria-label',`${name[0].toUpperCase()+name.slice(1)}. ${left} uses left.`);
