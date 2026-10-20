@@ -3,6 +3,7 @@
 import {SIM_STEP} from '../../dist/rng.js';
 import {replayRidge,replaySequence,replayBlocks} from '../../tools/replay.mjs';
 import {BLOCKS_REPLAY_VERSION} from '../../dist/blocks-core.js';
+import {medianGapSeconds} from './flags.mjs';
 import {statsFromRun} from '../../dist/achievements.js';
 
 export class RejectedRun extends Error{}
@@ -22,6 +23,26 @@ const MAX_REPLAY_BYTES=400_000;
 // run to fall under this. Tool uses (bomb, undo, shuffle, hint) are deliberately not counted, which only
 // makes the floor more generous.
 export const MIN_BLOCKS_MOVE_SECONDS=.25;
+
+// What this segment looked like, as numbers, for the flags in flags.mjs to judge and for the admin page to
+// show beside a winner's run. Read off the replay that was just played here, so none of it is anything the
+// browser asserted about itself.
+//
+// `moves` is the count of real inputs: taps in Ridge, moves and tool uses in Sequence, placements and tool
+// uses in Peak Blocks. `medianGapSeconds` is the median gap between them, and is null wherever the replay
+// has no clock in it (Peak Blocks) or has too few inputs for a median to say anything.
+function signalsFrom(game,replay,result){
+  if(game==='ridge'){
+    const taps=Array.isArray(replay.taps)?replay.taps:[];
+    return {moves:taps.length,medianGapSeconds:medianGapSeconds(taps)};
+  }
+  if(game==='sequence'){
+    const moves=Array.isArray(replay.moves)?replay.moves:[];
+    return {moves:moves.length,medianGapSeconds:medianGapSeconds(moves.map(m=>m[0]))};
+  }
+  // Peak Blocks logs no tick, so its only clock is the run's own wall time, which the caller holds.
+  return {moves:Math.max(0,Number(result.detail?.moves)||0),medianGapSeconds:null};
+}
 
 export async function verifySegment({game,replay,seed,level,elapsedSeconds,rulesVersion}){
   if(!replay||typeof replay!=='object')reject('Missing replay');
@@ -72,5 +93,5 @@ export async function verifySegment({game,replay,seed,level,elapsedSeconds,rules
   // The achievement numbers, worked out from the replay that was just played here and nowhere else. A
   // browser can claim any score and any combo; it cannot make this replay produce them.
   return {score:result.score,won:Boolean(result.won),gameSeconds,detail:result.detail??null,
-    stats:statsFromRun(game,result.stats??{})};
+    stats:statsFromRun(game,result.stats??{}),signals:signalsFrom(game,replay,result)};
 }

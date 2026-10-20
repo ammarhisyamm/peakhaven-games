@@ -594,6 +594,65 @@ try {
     check(`${what} is reported missing in the way the store expects`, code === '42P01' || code === '42703', `code ${code}`);
   }
   await unmigrated.db.end();
+
+  // ---------------------------------------------------------------- flag reasons
+  // Why a run was flagged, kept on the run as a list so more than one check can have caught it. Nothing
+  // here changes a score: the column is written by the verifier and read by the admin page, and a
+  // deployment without it still flags, still lists and still reviews.
+  section('flag-reasons.sql');
+  const flagReasons = await readFile(join(root, 'arcade/supabase/flag-reasons.sql'), 'utf8');
+  const beforeFlags = await build(server.url, 'ph_flags_before', {migrations: [migration, achievements]});
+  const noColumn = await refused(beforeFlags.db.query('select flag_reasons from public.runs'));
+  check('without the migration the column is reported missing the way the store expects',
+    noColumn === '42703', `code ${noColumn}`);
+  const printFlags = (await beforeFlags.db.query(FINGERPRINT)).rows[0].fingerprint;
+  let flagsApplied = null;
+  try {await beforeFlags.db.query(flagReasons); flagsApplied = true;} catch (error) {flagsApplied = error.message;}
+  check('flag-reasons.sql applies', flagsApplied === true, flagsApplied === true ? '' : String(flagsApplied));
+  const flagsOnce = (await beforeFlags.db.query(FINGERPRINT)).rows[0].fingerprint;
+  let flagsAgain = null;
+  try {await beforeFlags.db.query(flagReasons); flagsAgain = true;} catch (error) {flagsAgain = error.message;}
+  check('and applies a second time', flagsAgain === true, flagsAgain === true ? '' : String(flagsAgain));
+  check('a second run changes nothing',
+    JSON.stringify(flagsOnce) === JSON.stringify((await beforeFlags.db.query(FINGERPRINT)).rows[0].fingerprint));
+  check('it did add something the first time', JSON.stringify(printFlags) !== JSON.stringify(flagsOnce));
+
+  const flagCol = (await beforeFlags.db.query(`select data_type, is_nullable, column_default
+    from information_schema.columns where table_schema='public' and table_name='runs' and column_name='flag_reasons'`)).rows[0];
+  check('flag_reasons is jsonb, not null, defaulting to an empty list',
+    flagCol?.data_type === 'jsonb' && flagCol?.is_nullable === 'NO' && String(flagCol?.column_default).includes('[]'),
+    JSON.stringify(flagCol));
+
+  const flagPlayer = await newPlayer(beforeFlags.db, 'Flo', 3);
+  const flagRun = (await beforeFlags.db.query('select * from public.start_run($1,$2,$3,$4,$5)',
+    [flagPlayer, 'blocks', DAY, 777777, 3])).rows[0];
+  check('an existing run arrives with an empty list rather than a null',
+    Array.isArray(flagRun.flag_reasons) && flagRun.flag_reasons.length === 0, JSON.stringify(flagRun.flag_reasons));
+  check('a list of reasons can be written and read back',
+    await (async () => {
+      const reasons = [{code: 'long-open', openSeconds: 8040, text: 'Submitted 2 h 14 min after starting.'},
+        {code: 'score-outlier', score: 48200, previousBest: 9850, priorRuns: 7, text: 'Scored 48,200.'}];
+      await beforeFlags.db.query('update public.runs set flag_reasons = $2 where id = $1', [flagRun.id, JSON.stringify(reasons)]);
+      const back = (await beforeFlags.db.query('select flag_reasons from public.runs where id = $1', [flagRun.id])).rows[0].flag_reasons;
+      return back.length === 2 && back[0].code === 'long-open' && back[1].priorRuns === 7;
+    })());
+  // The constraint is what lets the admin page iterate the column without checking its shape first.
+  for (const [what, value] of [['an object', '{"code":"x"}'], ['a string', '"nope"'], ['a number', '7']]) {
+    const code = await refused(beforeFlags.db.query('update public.runs set flag_reasons = $2 where id = $1', [flagRun.id, value]));
+    check(`${what} is refused, so the column is always a list`, code === '23514', `code ${code}`);
+  }
+  const flagGrants = (await beforeFlags.db.query(`select grantee, privilege_type from information_schema.role_table_grants
+    where table_schema='public' and table_name='runs' and grantee in ('anon','authenticated','PUBLIC')`)).rows;
+  check('no browser key holds anything on runs, the new column included',
+    flagGrants.length === 0, JSON.stringify(flagGrants));
+  await beforeFlags.db.end();
+
+  // And on the schema as it is live now, which is where it will actually be run.
+  const liveFlags = await build(server.url, 'ph_flags_live', {migrations: [migration, achievements, flagReasons], twice: true});
+  check('it also applies, twice, to the live schema with every other migration on it',
+    (await liveFlags.db.query(`select count(*)::int as n from information_schema.columns
+      where table_schema='public' and table_name='runs' and column_name='flag_reasons'`)).rows[0].n === 1);
+  await liveFlags.db.end();
 } finally {
   await migrated?.db?.end().catch(() => {});
   await server.stop();

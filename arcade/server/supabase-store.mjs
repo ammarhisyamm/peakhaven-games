@@ -36,10 +36,46 @@ export function createSupabaseBackend(env=supabaseEnv()){
     async updatePlayer(id,patch){return must(await admin.from('players').update(patch).eq('id',id).select('id,name,bottle').single());},
     async playersByIds(ids){if(!ids.length)return [];return must(await admin.from('players').select('id,name,bottle').in('id',ids));},
     // Admin only, for handing out coins by hand. The balance is 0 everywhere until the paid-tries migration runs.
+    // The invite code and the signup time ride along because the admin page's duplicate check is made of
+    // them. Both have been on the table since schema.sql; nothing had asked for them before.
     async allPlayers(){
-      const rows=coinsOptional(await admin.from('players').select('id,name,bottle,coins').order('name'),null);
+      const fields='id,name,bottle,invite_code,created_at';
+      const rows=coinsOptional(await admin.from('players').select(`${fields},coins`).order('name'),null);
       if(rows)return rows.map(p=>({...p,coins:Number(p.coins)||0}));
-      return must(await admin.from('players').select('id,name,bottle').order('name')).map(p=>({...p,coins:0}));
+      return must(await admin.from('players').select(fields).order('name')).map(p=>({...p,coins:0}));
+    },
+    // Several runs at once, for the admin page's look at a month's winners. The replays come with them,
+    // because re-verifying a winner's run is the point of asking.
+    async runsByIds(ids){
+      if(!ids.length)return [];
+      const fields=(await this.flagReasonsReady())?`${RUN_FIELDS},flag_reasons`:RUN_FIELDS;
+      return must(await admin.from('runs').select(fields).in('id',ids)).map(run);
+    },
+    // A player's earlier verified scores in one game, for the personal-best flag. Rejected runs are not
+    // history, and a run that never had a segment verified never happened.
+    async playerGameScores(playerId,game,excludeRunId=null){
+      const out=[];
+      for(let page=0;;page++){
+        const rows=must(await admin.from('runs').select('id,score').eq('player_id',playerId).eq('game',game)
+          .neq('status','rejected').gt('segments',0).order('id').range(page*1000,page*1000+999));
+        out.push(...rows.filter(r=>r.id!==excludeRunId).map(r=>Number(r.score)||0));
+        if(rows.length<1000)return out;
+      }
+    },
+    // How many verified runs each player has per game, and their best. Folded down here rather than in the
+    // handler so what crosses the wire is one row per player and game, not one per run.
+    async runTotalsByPlayer(){
+      const out=new Map();
+      for(let page=0;;page++){
+        const rows=must(await admin.from('runs').select('player_id,game,score').neq('status','rejected')
+          .gt('segments',0).order('id').range(page*1000,page*1000+999));
+        for(const r of rows){
+          const key=`${r.player_id}|${r.game}`,row=out.get(key)??{player_id:r.player_id,game:r.game,runs:0,best:0};
+          row.runs++;row.best=Math.max(row.best,Number(r.score)||0);
+          out.set(key,row);
+        }
+        if(rows.length<1000)return [...out.values()];
+      }
     },
     // Today's free tries only: a paid run must not use one of the three free tries up. Before the migration
     // there is no `paid` column and every run is a free one.
@@ -182,9 +218,17 @@ export function createSupabaseBackend(env=supabaseEnv()){
       if(error){if(columnMissing(error))return false;throw new Error(error.message);}
       return true;
     },
+    // Whether flag-reasons.sql has run. Without it the column is neither written nor read, and the admin
+    // page falls back to the one sentence it showed when there was one way to be flagged.
+    async flagReasonsReady(){
+      const {error}=await admin.from('runs').select('flag_reasons',{head:true,count:'exact'});
+      if(error){if(columnMissing(error))return false;throw new Error(error.message);}
+      return true;
+    },
     async runsToReview({from,to,game=null,state=null}){
-      // The two flag-detail columns can only be selected once their migration has run.
-      const fields=(await this.flagDetailsReady())?`${RUN_FIELDS},claimed_score,verified_score`:RUN_FIELDS;
+      // Each column can only be selected once its own migration has run.
+      let fields=(await this.flagDetailsReady())?`${RUN_FIELDS},claimed_score,verified_score`:RUN_FIELDS;
+      if(await this.flagReasonsReady())fields=`${fields},flag_reasons`;
       let query=admin.from('runs').select(fields).gte('day',from).lte('day',to);
       if(game)query=query.eq('game',game);
       // Flagged or rejected, which PostgREST cannot express as two filters, so it goes as one or().
@@ -263,9 +307,35 @@ export function createSupabaseBackend(env=supabaseEnv()){
     async deleteUser(id){await admin.auth.admin.deleteUser(id);},
     async sendLink(email,redirectTo){must(await pub.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirectTo}}));},
     // Admin only: the addresses the prizes are sent to. Emails live in auth, not in the players table.
+    //
+    // This used to be one getUserById per id, in sequence, which the admin page already called with every
+    // player it knew about — fifty players meant fifty round trips inside one Vercel function, and the
+    // duplicate-accounts panel wants every address there is. listUsers hands back a page of a thousand in
+    // one call, so the whole directory is one request (two or three for a club that ever gets that big),
+    // and the ids asked for are picked out of it.
+    //
+    // It falls back to the old way if listUsers is refused, so a key without that permission still gets
+    // the addresses it needs for a podium of three.
     async emailsByIds(ids){
+      const wanted=new Set(ids);
+      if(!wanted.size)return [];
+      const all=await this.allEmails();
+      if(all)return all.filter(row=>wanted.has(row.id));
       const out=[];
       for(const id of ids){const {data,error}=await admin.auth.admin.getUserById(id);if(!error&&data?.user?.email)out.push({id,email:data.user.email});}
+      return out;
+    },
+    // Every address on the project, or null if the directory cannot be listed. Paged, so a club bigger than
+    // one page still comes back whole.
+    async allEmails(){
+      const out=[];
+      for(let page=1;page<=20;page++){
+        const {data,error}=await admin.auth.admin.listUsers({page,perPage:1000});
+        if(error)return null;
+        const users=data?.users??[];
+        for(const user of users)if(user?.id&&user?.email)out.push({id:user.id,email:user.email});
+        if(users.length<1000)return out;
+      }
       return out;
     },
   };

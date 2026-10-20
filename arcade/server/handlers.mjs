@@ -7,6 +7,8 @@ import {AdminLogNotReady,MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
+import {runFlags,mergeReasons,formatDuration,summariseReplays,LEGACY_FLAG_REASON} from './flags.mjs';
+import {duplicateGroups,totalsIndex} from './duplicates.mjs';
 import {BLOCKS_REPLAY_VERSION} from '../../dist/blocks-core.js';
 import {addRun,totalsFrom,achievementState,newlyEarned} from '../../dist/achievements.js';
 import {COIN_CURRENCY,CoinsNotReady,MAX_PENDING_PURCHASES,cleanDelta,cleanNote,cleanPackCoins,formatAmount,newReference,packFor,packList} from './coins.mjs';
@@ -102,6 +104,9 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   const adminLogReady=async()=>Boolean(await store.adminLogReady?.());
   // Whether flag-details.sql has run. Without it a flagged run shows the fixed sentence, as it always did.
   const flagDetailsReady=async()=>Boolean(await store.flagDetailsReady?.());
+  // Whether flag-reasons.sql has run. Without it a flagged run has nowhere to keep why, so it shows the
+  // one sentence the page showed when there was one way to be flagged.
+  const flagReasonsReady=async()=>Boolean(await store.flagReasonsReady?.());
   const achievementsReady=async()=>Boolean(await store.achievementsReady?.());
   // Every achievement number a player has, from the runs the server itself verified. Rejected and refunded
   // runs are not here to be counted: a run rejected at verification never got a row, and one rejected later
@@ -125,9 +130,15 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     const n=Number(value);
     return Number.isSafeInteger(n)&&n>=1&&n<=10000?n:null;
   };
-  // Why a run was flagged. Nothing stores a sentence: verify.mjs sets the flag when the score a browser sent
-  // does not match the score its replay produces, which is the only thing that sets it.
-  const FLAG_REASON='The score sent did not match its replay.';
+  // Why a run was flagged, in the words the flag was written in. Several reasons can sit on one run, so
+  // this is a list; on a deployment that has not had flag-reasons.sql it is empty and the page falls back
+  // to the single sentence that was true when there was only one way to be flagged.
+  const flagReasonsOf=run=>{
+    const rows=Array.isArray(run.flag_reasons)?run.flag_reasons:[];
+    const clean=rows.filter(r=>r&&typeof r==='object'&&typeof r.text==='string'&&r.text)
+      .map(r=>({code:String(r.code??'flag'),text:r.text}));
+    return clean.length?clean:(run.flagged?[{code:'legacy',text:LEGACY_FLAG_REASON}]:[]);
+  };
 
   // The runs worth a second look in one month: flagged, rejected, or both, with whoever played them.
   async function reviewRows({month,game,state}){
@@ -139,7 +150,9 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     return rows.map(r=>({id:r.id,game:r.game,gameLabel:gameLabel(r.game),day:r.day,score:Math.max(0,Number(r.score)||0),
       name:people.get(r.player_id)?.name??'Player',email:emails.get(r.player_id)??null,
       flagged:Boolean(r.flagged),status:r.status,counts:r.status!=='rejected',
-      reason:r.status==='rejected'?(r.reject_reason||'Rejected.'):FLAG_REASON,
+      reason:r.status==='rejected'?(r.reject_reason||'Rejected.'):(flagReasonsOf(r)[0]?.text??LEGACY_FLAG_REASON),
+      // Every reason, so a run caught by two of them says both rather than only the first.
+      reasons:r.status==='rejected'?[]:flagReasonsOf(r),
       claimedScore:r.claimed_score==null?null:Number(r.claimed_score),
       verifiedScore:r.verified_score==null?null:Number(r.verified_score),
       updatedAt:r.updated_at??null}));
@@ -209,6 +222,125 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     return out.sort((a,b)=>a.month.localeCompare(b.month)||a.game.localeCompare(b.game));
   }
 
+  // Accounts that might be the same person twice: same invite code minutes apart, or the same mailbox
+  // under different spellings. Display only — nothing here blocks a signup or touches a run.
+  async function duplicatesView(){
+    const players=await store.allPlayers();
+    const directory=(await auth.allEmails?.())??(await auth.emailsByIds?.(players.map(p=>p.id)))??[];
+    const emails=new Map(directory.map(e=>[e.id,e.email]));
+    const totals=totalsIndex((await store.runTotalsByPlayer?.())??[]);
+    return {players:players.length,groups:duplicateGroups({players,emails,totals})};
+  }
+
+  // Re-plays a stored run through the same verifier that let it in, and says whether it still produces the
+  // score on the board. Nothing is written: this answers a question, it does not act on the answer.
+  //
+  // A Sequence run is a replay per level, so they go back through in the order they arrived, against the
+  // seed each level was handed, and the scores add up the way the run's own total did.
+  async function reverifyRun(run){
+    const replays=Array.isArray(run.replays)?run.replays:[];
+    if(!replays.length)return {ok:false,reason:'This run has no stored replay to check.',segments:[]};
+    const segments=[];let replayed=0;
+    for(let i=0;i<replays.length;i++){
+      const level=i+1;
+      try{
+        // No elapsedSeconds: the clock checks belong to the moment of submission, and re-running them
+        // against today's clock would say nothing. This asks the one question worth asking again — does
+        // this replay still produce that score.
+        const out=await verifySegment({game:run.game,replay:replays[i],level,
+          seed:seedFor(secret,courseGame(run),run.day,level),rulesVersion:runVersion(run)});
+        replayed+=out.score;
+        segments.push({level,ok:true,score:out.score,moves:out.signals?.moves??null,
+          gameSeconds:Math.round((out.gameSeconds??0)*10)/10});
+      }catch(error){
+        if(!(error instanceof RejectedRun))throw error;
+        segments.push({level,ok:false,reason:error.message});
+        return {ok:false,score:run.score,replayed,segments,reason:error.message};
+      }
+    }
+    return {ok:replayed===run.score,score:run.score,replayed,segments};
+  }
+
+  // What to check before telling somebody they have won, with the status the stored run can already answer.
+  // `action` means the only way to know is to press the button; nothing here is a verdict, it is a prompt.
+  const CHECKLIST=[
+    ['reverified','The run replays to the score on the board'],
+    ['timing','The timing looks human'],
+    ['flags','No open flags, or a flag cleared with a note'],
+    ['history','The score is in line with the player&rsquo;s own history'],
+    ['duplicate','The account is not a likely duplicate'],
+    ['backups','2nd and 3rd are archived as backups'],
+  ];
+  function winnerChecklist({reasons,podiumSize,duplicate,wallSeconds}){
+    const has=code=>reasons.some(r=>r.code===code);
+    const state={
+      reverified:{status:'action',detail:'Press Re-verify to check.'},
+      timing:has('long-open')||has('fast-moves')
+        ?{status:'warn',detail:reasons.filter(r=>['long-open','fast-moves'].includes(r.code)).map(r=>r.text).join(' ')}
+        :{status:'ok',detail:Number.isFinite(wallSeconds)?`Played over ${formatDuration(wallSeconds)}.`:'No timing flag.'},
+      flags:reasons.length?{status:'warn',detail:`${reasons.length} open flag${reasons.length===1?'':'s'}.`}
+        :{status:'ok',detail:'Nothing flagged.'},
+      history:has('score-outlier')
+        ?{status:'warn',detail:reasons.find(r=>r.code==='score-outlier').text}
+        :{status:'ok',detail:'No outlier against their own best.'},
+      duplicate:duplicate?{status:'warn',detail:duplicate}:{status:'ok',detail:'No duplicate signal.'},
+      backups:podiumSize>=3?{status:'ok',detail:'2nd and 3rd are on record.'}
+        :{status:'warn',detail:`Only ${podiumSize} on the podium, so there is less to fall back on.`},
+    };
+    return CHECKLIST.map(([key,label])=>({key,label,...state[key]}));
+  }
+
+  // The month's podium with enough of each run beside it to judge before a prize goes out: the verified
+  // score, how many inputs it took, how long it ran by the server's clock and in game time, and any flag.
+  async function winnersView(month){
+    const range=monthRange(month);
+    const scored=await store.scoredRuns(range.from,range.to);
+    const archived=await store.monthResults(month);
+    const rows=archived.length?archived:monthResults(scored,month);
+    if(!rows.length)return {month,ready:true,games:[]};
+    // Which run each podium row stands on: that player's best in the month and game, earliest on a tie,
+    // which is how the standings ranked them in the first place.
+    const runFor=row=>scored
+      .filter(r=>r.player_id===row.player_id&&r.game===row.game&&String(r.day??'').slice(0,7)===month)
+      .sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0)||String(a.updated_at).localeCompare(String(b.updated_at)))[0]??null;
+    const picked=new Map(rows.map(row=>[`${row.game}|${row.player_id}`,runFor(row)?.id??null]));
+    const full=new Map(((await store.runsByIds?.([...picked.values()].filter(Boolean)))??[]).map(r=>[r.id,r]));
+    const ids=[...new Set(rows.map(r=>r.player_id))];
+    const people=new Map((await store.playersByIds(ids)).map(p=>[p.id,p]));
+    const emails=new Map(((await auth.emailsByIds?.(ids))||[]).map(e=>[e.id,e.email]));
+    // One duplicate read for the whole page, so each winner can be told whether they are in a cluster.
+    const clusters=(await duplicatesView()).groups;
+    const clusterFor=playerId=>{
+      const hit=clusters.find(g=>g.members.some(m=>m.player_id===playerId));
+      if(!hit)return null;
+      const others=hit.members.filter(m=>m.player_id!==playerId).map(m=>m.name).join(', ');
+      return hit.kind==='invite-code'
+        ?`Signed up on ${hit.code} within ${formatDuration(hit.spanSeconds)} of ${others}.`
+        :`Shares a mailbox with ${others}.`;
+    };
+    const view=row=>{
+      const run=full.get(picked.get(`${row.game}|${row.player_id}`))??null;
+      const summary=run?summariseReplays(row.game,run.replays):{segments:0,moves:0,gameSeconds:null};
+      const started=run?Date.parse(run.started_at??''):NaN,finished=run?Date.parse(run.finished_at??run.updated_at??''):NaN;
+      const wallSeconds=Number.isFinite(started)&&Number.isFinite(finished)?Math.max(0,(finished-started)/1000):null;
+      const reasons=run?flagReasonsOf(run):[];
+      const duplicate=clusterFor(row.player_id);
+      return {game:row.game,rank:row.rank,winner:Boolean(row.winner),player_id:row.player_id,
+        name:people.get(row.player_id)?.name??'Player',email:emails.get(row.player_id)??null,
+        score:Number(row.score)||0,runId:run?.id??null,status:run?.status??null,
+        moves:summary.moves,segments:summary.segments,gameSeconds:summary.gameSeconds,
+        wallSeconds,wallClock:Number.isFinite(wallSeconds)?formatDuration(wallSeconds):null,
+        startedAt:run?.started_at??null,finishedAt:run?.finished_at??null,
+        reasons,duplicate,
+        checklist:row.winner?winnerChecklist({reasons,podiumSize:rows.filter(r=>r.game===row.game).length,
+          duplicate,wallSeconds}):null};
+    };
+    const all=rows.map(view);
+    return {month,ready:true,finalised:archived.length>0,
+      games:COMPETITION.games.map(game=>({game,label:gameLabel(game),
+        podium:all.filter(r=>r.game===game).sort((a,b)=>a.rank-b.rank)}))};
+  }
+
   // The whole admin page in one object: the money, the runs to review, the invite codes and the admin log.
   async function adminViewBody(query,session){
     const month=cleanMonth(query?.month)??monthKey(now());
@@ -219,8 +351,11 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       you:String(session?.user?.email||'').toLowerCase(),
       review:{ready,month,game,state,games:COMPETITION.games.map(g=>({game:g,label:gameLabel(g)})),
         details:await flagDetailsReady(),
+        reasons:await flagReasonsReady(),
         stale:await staleFinalised(),
         runs:await reviewRows({month,game,state})},
+      duplicates:await duplicatesView(),
+      winners:await winnersView(month),
       invites:{ready,list:await store.listInvites()},
       actions:ready?await store.adminActions({limit:20}):[]};
   }
@@ -386,14 +521,33 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       }
       const done=run.game!=='sequence'||!result.won,score=run.score+result.score;
       const claimed=body.claimed,mismatch=claimed!==result.score;
-      const flagged=run.flagged||mismatch;
+      // Everything about this run that is worth a person's attention, worked out from the replay just
+      // played and from the server's own clock. A reason never rejects the run, never changes the score
+      // and never moves it on a board: the score below is the verified one either way, and the run goes on
+      // counting until an admin decides otherwise. All a reason does is put the run in Runs to review with
+      // a sentence saying what looked odd.
+      const reasons=mergeReasons(run.flag_reasons,runFlags({
+        game:run.game,claimed,verified:result.score,done,
+        openSeconds:(at-Date.parse(run.started_at??run.updated_at))/1000,
+        history:await store.playerGameScores?.(s.player.id,run.game,run.id),
+        moves:result.signals?.moves,
+        medianGapSeconds:result.signals?.medianGapSeconds,
+        // Peak Blocks logs no tick, so its pace is the run's own wall time over its placements. Anything
+        // under a quarter-second a placement was already refused at verification; this is the band above it.
+        wallSecondsPerMove:run.game==='blocks'&&result.signals?.moves>0
+          ?((at-Date.parse(run.started_at??run.updated_at))/1000)/result.signals.moves:undefined,
+      }));
+      const flagged=run.flagged||reasons.length>0;
       // What the browser claimed against what the replay produced, both as the run's running total so they
       // compare with each other and with the score on the board. Only written once flag-details.sql has run;
       // claimed_score only when a claim disagreed, so an honest later segment cannot wipe an earlier gap.
       const detail=(await flagDetailsReady())
         ?{verified_score:score,...(mismatch?{claimed_score:run.score+claimed}:{})}
         :{};
-      const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,...detail,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
+      // The reasons need their own migration, and until it has run there is nowhere to put them: the run is
+      // still flagged, still listed and still reviewable, and the page says the one sentence it always did.
+      const reasonPatch=(await flagReasonsReady())?{flag_reasons:reasons}:{};
+      const updated=await store.updateRunIf(run.id,run.segments,{segments:level,score,level,status:done?'closed':'open',flagged,...detail,...reasonPatch,updated_at:at.toISOString(),finished_at:done?at.toISOString():null,replays:[...(run.replays||[]),body.replay]});
       if(!updated){
         const latest=await store.getRun(run.id);
         if(latest?.status!=='rejected'&&(latest?.replays||[]).some(rep=>isDeepStrictEqual(rep,body.replay)))return ok(await finishView(latest,s.player.id));
@@ -506,7 +660,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       if(String(method??'POST').toUpperCase()!=='POST')return this.adminView({token,query});
       const action=String(body?.action??'');
       if(!action)return fail(400,'Unknown action.');
-      const out=['clear-flag','reject'].includes(action)?await this.review({token,body})
+      const out=['clear-flag','reject','re-verify'].includes(action)?await this.review({token,body})
         :['invite-create','invite-max-uses'].includes(action)?await this.invites({token,body})
         :action==='adjust'?await this.coins({token,body})
         :await this.purchase({token,body});
@@ -531,9 +685,17 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     async review({token,body}){
       const s=await adminIn(token);if(s.error)return s.error;
       const action=String(body?.action??'');
-      if(!['clear-flag','reject'].includes(action))return fail(400,'Unknown action.');
+      if(!['clear-flag','reject','re-verify'].includes(action))return fail(400,'Unknown action.');
       const id=String(body?.id??'');
       if(!id)return fail(400,'Which run?');
+      // Re-verify changes nothing, so it needs no note and no admin log: it re-plays the stored replay and
+      // reports whether it still produces the score on the board. It sits here because it is the same
+      // question the review page exists to ask.
+      if(action==='re-verify'){
+        const run=await store.getRun(id);
+        if(!run)return fail(404,'That run is not there.');
+        return ok({action,result:{id,...await reverifyRun(run)}});
+      }
       const note=cleanNote(body?.note);
       if(action==='reject'&&!note)return fail(400,'Write a short note saying why it was rejected.');
       if(!(await adminLogReady()))return fail(503,new AdminLogNotReady().message);

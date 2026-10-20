@@ -12,6 +12,9 @@ const fmt=n=>Math.max(0,Number(n)||0).toLocaleString('en-AU');
 
 export const ACTION_LABELS={run_clear_flag:'Flag cleared',run_reject:'Run rejected',
   invite_create:'Code created',invite_max_uses:'Uses changed'};
+// What each check is called, for the panel's own explanation of what it is showing.
+export const FLAG_LABELS={'claim-mismatch':'Score did not match its replay','long-open':'Finished long after starting',
+  'score-outlier':'Far above their own best','fast-moves':'Inputs faster than a hand moves',legacy:'Flagged'};
 export const actionLabel=action=>ACTION_LABELS[action]??String(action??'');
 
 export const STATE_FILTERS=[['','Flagged and rejected'],['flagged','Flagged only'],['rejected','Rejected only']];
@@ -23,6 +26,13 @@ function migrationNotice(ready){
   return `<p class="admin-note bad">Reviewing runs and changing invite codes is not set up on this deployment yet. Run <b>arcade/supabase/admin-log.sql</b> in the Supabase SQL editor, then reload this page. Until then everything below is read-only, because an action that cannot be logged is not worth doing.</p>`;
 }
 
+// The reasons have their own migration. Without it a run is still flagged, still listed and still
+// reviewable, and the line under it is the one sentence that was true when there was one way to be flagged.
+function reasonsNotice(ready){
+  if(ready!==false)return '';
+  return `<p class="admin-note">Why a run was flagged is not being kept on this deployment yet. Run <b>arcade/supabase/flag-reasons.sql</b> in the Supabase SQL editor to start recording it. Flagging, listing and reviewing all work without it; until then each run shows the one sentence the page always showed.</p>`;
+}
+
 function filters(review,busy){
   const games=[['','Every game'],...review.games.map(g=>[g.game,g.label])];
   const option=([value,label],selected)=>`<option value="${escape(value)}"${value===(selected??'')?' selected':''}>${escape(label)}</option>`;
@@ -32,12 +42,30 @@ function filters(review,busy){
   </div>`;
 }
 
-// A flagged run says what was claimed against what the replay produced, once flag-details.sql has run. On a
-// deployment it has not reached, both are null and the fixed sentence is shown exactly as before.
+// Why a run is worth a look, in the words the flag was written in. A run can be caught by more than one
+// check at once, so this is the first of them for the one-line case and reasonsMarkup below lists them all.
+//
+// Three fallbacks, in order, because a deployment can be at any of three points: flag-reasons.sql has run
+// and the run carries its own sentences; only flag-details.sql has run, so there is a pair of numbers but
+// no sentence; or neither, and there is the one sentence the page showed when there was one way to be
+// flagged. A run flagged before the reasons were kept stays readable in all three.
 export function reasonLine(run){
   if(run.status==='rejected')return escape(run.reason);
-  if(run.claimedScore==null||run.verifiedScore==null)return escape(run.reason);
-  return `Claimed ${fmt(run.claimedScore)} · Verified ${fmt(run.verifiedScore)}`;
+  const texts=(run.reasons??[]).filter(r=>r?.text).map(r=>r.text);
+  if(texts.length)return texts.map(escape).join(' ');
+  if(run.claimedScore!=null&&run.verifiedScore!=null)
+    return `Claimed ${fmt(run.claimedScore)} · Verified ${fmt(run.verifiedScore)}`;
+  return escape(run.reason);
+}
+
+// Every reason on one run. One reads as a sentence; several read as a list, because two checks catching the
+// same run is the most interesting thing the page can tell an admin and running them together hides it.
+export function reasonsMarkup(run){
+  if(run.status==='rejected')return `<small class="admin-reason">${escape(run.reason)}</small>`;
+  const texts=(run.reasons??[]).filter(r=>r?.text);
+  if(texts.length>1)
+    return `<ul class="admin-reasons">${texts.map(r=>`<li data-flag="${escape(r.code)}">${escape(r.text)}</li>`).join('')}</ul>`;
+  return `<small class="admin-reason">${reasonLine(run)}</small>`;
 }
 
 // A month that was finalised before one of its runs was rejected. The podium everybody can see is left as it
@@ -60,9 +88,10 @@ function runRows(review,busy){
     <span class="admin-score">${fmt(r.score)}</span>
     <span class="admin-day">${escape(r.day)}</span>
     <span class="admin-status ${r.status==='rejected'?'rejected':'flagged'}">${r.status==='rejected'?'Rejected · not counting':'Flagged · still counting'}</span>
-    <small class="admin-reason">${reasonLine(r)}</small>
+    ${reasonsMarkup(r)}
     ${r.status==='rejected'?'':`<span class="admin-row-actions">
       <input type="text" class="review-note" data-note="${escape(r.id)}" maxlength="200" placeholder="Why, if rejecting"${off?' disabled':''}>
+      <button class="secondary" data-review="${escape(r.id)}" data-action="re-verify"${busy?' disabled':''}>Re-verify</button>
       ${r.flagged?`<button class="secondary" data-review="${escape(r.id)}" data-action="clear-flag"${off?' disabled':''}>Clear flag</button>`:''}
       <button class="primary" data-review="${escape(r.id)}" data-action="reject"${off?' disabled':''}>Reject</button>
     </span>`}
@@ -108,8 +137,9 @@ function actionRows(actions){
 export function reviewPanels(view,busy=false){
   if(!view?.review)return '';
   return `<section class="panel admin-review"><h2>Runs to review</h2>
-      <p>A run is flagged when the score a browser sent does not match the score its replay produces. It keeps counting until somebody decides otherwise.</p>
+      <p>A run is flagged when something about it is worth a second look: the score sent did not match its replay, it was finished long after it was started, it is far above the player&rsquo;s own best, or its inputs came faster than a hand moves. A flag never changes a score — the run keeps counting until somebody decides otherwise.</p>
       ${migrationNotice(view.review.ready)}
+      ${reasonsNotice(view.review.reasons)}
       ${staleBanner(view.review)}
       ${filters(view.review,busy)}
       ${runRows(view.review,busy)}
@@ -148,6 +178,13 @@ export function bindReview(root,{act,filter}){
 // What to say once an action has gone through, so the page reports what actually happened rather than just
 // "done": a second click on Reject changes nothing, and a rejection says whether a podium was rewritten.
 export function reviewMessage(action,result){
+  // Re-verify changes nothing: it says whether the stored replay still produces the score on the board.
+  if(action==='re-verify'){
+    if(!result)return 'That run could not be checked.';
+    if(result.ok)return `Re-verified: the replay still produces ${fmt(result.score)}.`;
+    if(result.reason)return `Re-verify failed: ${result.reason}`;
+    return `Re-verify disagrees: the board says ${fmt(result.score)}, the replay produces ${fmt(result.replayed)}.`;
+  }
   if(action==='clear-flag')return result?.changed?'Flag cleared. The score keeps counting.':'That run was not flagged.';
   if(action==='reject'){
     if(!result?.changed)return 'That run was already rejected.';
