@@ -14,12 +14,17 @@ import {TIERS, achievementsFor, achievementState} from './achievements.js';
 const MEDAL = Object.freeze({bronze: '#cd7f32', silver: '#c8d4dd', gold: '#ffc63a'});
 const escape = value => String(value).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
-// A medal, filled to the tier earned. Three rings so the ones still to come are visible rather than absent:
-// an empty shelf should read as "here is what there is to get", not as "there is nothing here".
+// A medal that is actually there. The first version drew three tiny pips on a near-transparent disc,
+// which read as an empty gap to the left of the text rather than as a badge. Now an earned one is a filled
+// disc in its tier's colour with a tick, and an unearned one is a dashed ring with a padlock: either way
+// something is drawn, and which of the two it is can be seen at a glance.
+const TICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L19 7"/></svg>';
+const LOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 function medal(tier) {
-  return `<span class="achievement-medal ${tier ? 'earned tier-' + tier : 'unearned'}" aria-hidden="true"
-    style="--medal:${tier ? MEDAL[tier] : 'transparent'}">${TIERS.map(t =>
-      `<i class="${tier === t ? 'now' : TIERS.indexOf(t) <= TIERS.indexOf(tier ?? '') ? 'past' : ''}" style="--pip:${MEDAL[t]}"></i>`).join('')}</span>`;
+  const earned = Boolean(tier);
+  return `<span class="achievement-medal ${earned ? 'earned tier-' + tier : 'locked'}"
+    style="--medal:${earned ? MEDAL[tier] : '#9fb3c2'}" role="img"
+    aria-label="${earned ? tier + ' earned' : 'not earned yet'}">${earned ? TICK : LOCK}</span>`;
 }
 
 // One row: the medal, what it is, and how far along. `Gold vials 140 / 250` comes from the shelf itself, so
@@ -52,6 +57,18 @@ export function achievementShelf(shelf, {game = null, signedIn = true, heading =
     <ul class="achievement-list">${entries.map(row).join('')}</ul>
     ${signedIn ? '' : '<p class="achievement-guest">Sign in to earn achievements. Only runs the arcade has checked count.</p>'}
   </section>`;
+}
+
+// A game's achievements as one row that opens on tap: "Achievements 0/3". The count is the tiers earned
+// out of that game's achievements. <details> because it is a disclosure: it opens with a tap, with a click,
+// with the keyboard, and it tells a screen reader which of those it is without any of it being written here.
+export function achievementCollapse(shelf, game, {open = false} = {}) {
+  const {earned, total} = achievementSummary(shelf, game);
+  return `<details class="achievement-collapse" data-achievements="${escape(game)}"${open ? ' open' : ''}>
+    <summary><span class="achievement-collapse-label">Achievements</span>
+      <b>${earned}/${total}</b><i class="achievement-collapse-mark" aria-hidden="true">▸</i></summary>
+    ${achievementShelf(shelf, {game})}
+  </details>`;
 }
 
 // How many of a game's achievements are earned, for a one-line summary beside a game.

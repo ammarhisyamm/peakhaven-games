@@ -45,7 +45,7 @@ export const ACHIEVEMENTS = Object.freeze([
     // Measured: an ordinary run clears about 49 lines, so just under two levels a run.
     tiers: {bronze: 1, silver: 10, gold: 30},
     // "Passed", not "reached": clearing 25 lines passes level 1 and puts the HUD on level 2.
-    describe: n => `Pass ${n} ${n === 1 ? 'level' : 'levels'} — ${BLOCKS_LINES_PER_LEVEL} cleared lines each`,
+    describe: n => `Pass ${n} ${n === 1 ? 'level' : 'levels'} (${BLOCKS_LINES_PER_LEVEL} cleared lines each)`,
   },
   // --- Sequence ----------------------------------------------------------------------------------------
   {
