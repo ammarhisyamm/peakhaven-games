@@ -2,6 +2,7 @@
 // This is the server half of anti-cheat: a client can claim any score, but it can't fake a seed and
 // input log that replays to that score. Runs headless in Node (or Deno) with tiny canvas stubs.
 import {SIM_STEP} from '../dist/rng.js';
+import {SEQ_LOG} from '../dist/sequence-v3.js';
 
 function installStubs(){
   globalThis.window??={devicePixelRatio:1};
@@ -80,11 +81,22 @@ export async function replayMerge(rep){
   return {score:e.score,ended:true,ticks:e.ticks,unusedInputs:drops.length+rejected};
 }
 
+// One entry of a Sequence move log. A swap is two cells on the board; from v4 a negative `from` is a
+// tool, which no swap can produce. Anything else is a log this build cannot have written.
+function validSequenceEntry(entry,version){
+  if(!Array.isArray(entry)||entry.length!==3||!entry.every(Number.isInteger))return false;
+  const [,from,to]=entry;
+  if(from>=0)return from<49&&to>=0&&to<49;
+  if(version<4)return false;
+  if(from===SEQ_LOG.hammer)return to>=0&&to<49;
+  if(from===SEQ_LOG.shuffle)return to===-1;
+  return false;
+}
 export async function replaySequence(rep){
   installStubs();
-  if(rep?.game!=='sequence'||![1,2,3].includes(rep.v)||rep.step!==SIM_STEP)throw new Error('Not a Sequence replay for this build');
+  if(rep?.game!=='sequence'||![1,2,3,4].includes(rep.v)||rep.step!==SIM_STEP)throw new Error('Not a Sequence replay for this build');
   const level=rep.level;if(!Number.isInteger(level)||level<1)throw new Error('Bad Sequence level');
-  if(!Array.isArray(rep.moves)||!rep.moves.every(m=>Array.isArray(m)&&m.length===3&&m.every(Number.isInteger)))throw new Error('Bad Sequence move log');
+  if(!Array.isArray(rep.moves)||!rep.moves.every(m=>validSequenceEntry(m,rep.v)))throw new Error('Bad Sequence move log');
   replayClock(rep,rep.moves.map(m=>m[0]));
   for(let i=1;i<rep.moves.length;i++)if(rep.moves[i][0]<rep.moves[i-1][0])throw new Error('Moves out of order');
   const {SequenceEngine}=await import('../dist/tryout-games.js');
@@ -93,7 +105,15 @@ export async function replaySequence(rep){
   const moves=rep.moves.map(m=>[...m]);let rejected=0;
   const stop=Math.min(MAX_TICKS,rep.endTick??MAX_TICKS);
   while(!e.ended){
-    while(moves.length&&moves[0][0]===e.ticks){const [,from,to]=moves.shift();const before=e.inputs.length;e.choose(from,to);if(e.inputs.length===before)rejected++;}
+    while(moves.length&&moves[0][0]===e.ticks){
+      const [,from,to]=moves.shift(),before=e.inputs.length;
+      // The engine's own guards do the verifying: a tool it cannot spend on this tick logs nothing, and an
+      // unlogged entry is counted as unused, which rejects the whole run.
+      if(from===SEQ_LOG.hammer)e.useHammer(to);
+      else if(from===SEQ_LOG.shuffle)e.useShuffle();
+      else e.choose(from,to);
+      if(e.inputs.length===before)rejected++;
+    }
     if(e.ticks>=stop)break;
     e.step(SIM_STEP);
   }

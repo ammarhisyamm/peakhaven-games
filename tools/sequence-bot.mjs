@@ -83,10 +83,21 @@ export function playSequence({level=1,seed=1,pick=greedyMove,target=sequenceTarg
 export function driveSequence(e,pick,{think=()=>0,onStep,maxTicks=120*60*30,step=SIM_STEP}={}){
   let wait=null;
   while(!e.ended&&e.ticks<maxTicks){
-    if(!e.pending&&!e.paused){wait??=think(e);if(wait<=0){wait=null;const pair=pick(e.board,e);if(!pair)throw new Error("Sequence bot found no legal move");const [a,b]=pair;e.choose(a,b);}else wait--;}
+    if(!e.pending&&!e.paused){wait??=think(e);if(wait<=0){wait=null;const pair=pick(e.board,e);if(!pair){if(!useToolWhenStuck(e))throw new Error("Sequence bot found no legal move");}else{const [a,b]=pair;e.choose(a,b);}}else wait--;}
     e.step(step);onStep?.(e);
   }
   return e.ticks;
+}
+
+// From v4 a board with no move is held for a tool instead of re-mixing itself for free, so a bot that is
+// stuck has to reach for one the way a player does: Shuffle first, since it is the one made for this, then
+// Hammer, whose refill can open the board too. With neither left the engine re-mixes for free.
+export function useToolWhenStuck(e){
+ if(!e.tools)return false;
+ if(e.useShuffle?.())return true;
+ // Break something low on the board, where the refill above it has the most room to make a new line.
+ for(let i=e.board.length-1;i>=0;i--)if(e.useHammer?.(i))return true;
+ return false;
 }
 
 // Prioritise visible objectives; the bot cannot inspect the refill RNG.

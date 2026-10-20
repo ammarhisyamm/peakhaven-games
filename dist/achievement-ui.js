@@ -1,3 +1,8 @@
+// Lives beside achievements.js and blocks-core.js rather than in ui/, because build.mjs copies dist/ to
+// build/game/ while it flattens ui/ to the build root: this is the only arrangement in which the shelf, the
+// achievement rules and the milestone constant can all reach each other by one path that works both in the
+// browser and when the server imports them.
+//
 // How an achievement is drawn, in one place, so the shelf on a game's page, the shelf in the profile and the
 // popup in the game cannot word the same thing three ways.
 //

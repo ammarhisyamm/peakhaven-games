@@ -417,7 +417,7 @@ test('Winning with moves to spare out-scores spending them, which is what the bo
 });
 
 test('A v3 run keeps every rule the leaderboard depends on', () => {
-  const {e, result} = engine({level: 6, seed: 31337});
+  const {e, result} = engine({level: 6, seed: 31337, rulesVersion: 3});
   assert.equal(e.rulesVersion, 3);
   assert.equal(e.board.length, 49, 'still seven by seven');
   let guard = 0;
@@ -440,9 +440,9 @@ test('A v3 run keeps every rule the leaderboard depends on', () => {
   assert.equal(e.score % 50, 0);
 });
 
-test('v1, v2 and v3 replays all verify from the seed and the move log alone', async () => {
+test('v1, v2, v3 and v4 replays all verify from the seed and the move log alone', async () => {
   const {greedyMove, driveSequence} = await import('../tools/sequence-bot.mjs');
-  for (const version of [1, 2, 3]) {
+  for (const version of [1, 2, 3, 4]) {
     for (let s = 0; s < 12; s++) {
       const level = 1 + (s * 5) % 24, seed = (s * 2654435761 + version) >>> 0;
       const {e, result} = engine({level, seed, rulesVersion: version});
@@ -459,7 +459,7 @@ test('v1, v2 and v3 replays all verify from the seed and the move log alone', as
   // A replay claiming a version this build does not play is refused.
   const {e, result} = engine({level: 1, seed: 1});
   e.finish();
-  await assert.rejects(() => replaySequence({...result().replay, v: 4}), /Not a Sequence replay/);
+  await assert.rejects(() => replaySequence({...result().replay, v: 5}), /Not a Sequence replay/);
 });
 
 test('Fuzz: 500 v3 seeds stay playable, end once, and replay with no refused inputs', async () => {

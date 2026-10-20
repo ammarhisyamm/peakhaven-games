@@ -2,7 +2,7 @@
 // The client's claimed score is never trusted; it is only kept to flag runs worth a closer look.
 import {SIM_STEP} from '../../dist/rng.js';
 import {replayRidge,replaySequence,replayBlocks} from '../../tools/replay.mjs';
-import {statsFromRun} from '../ui/achievements.js';
+import {statsFromRun} from '../../dist/achievements.js';
 
 export class RejectedRun extends Error{}
 const reject=reason=>{throw new RejectedRun(reason);};

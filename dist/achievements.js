@@ -14,12 +14,14 @@
 // ordinary player meets in their first runs, silver is what practice brings, gold needs real skill or real
 // persistence. The measured medians are in the comment on each tier.
 
+import {BLOCK_MILESTONE} from './blocks-core.js';
+
 export const TIERS = Object.freeze(['bronze', 'silver', 'gold']);
 
-// Peak Blocks has no levels of its own: it is endless, and its HUD counts cleared lines. A "level" here is
-// 25 cleared lines, the same milestone the game calls "Level 25!", so the achievement counts the same thing
-// a player sees called a level.
-export const BLOCKS_LINES_PER_LEVEL = 25;
+// Peak Blocks has no levels of its own: it is endless, and its HUD counts cleared lines. A "level" is a
+// milestone's worth of them, read straight from the rules so that the HUD, the milestone banner and this
+// achievement can never drift apart: there is one number and blocks-core.js owns it.
+export const BLOCKS_LINES_PER_LEVEL = BLOCK_MILESTONE.every;
 
 export const ACHIEVEMENTS = Object.freeze([
   // --- Peak Blocks -------------------------------------------------------------------------------------

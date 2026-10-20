@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import {
   ACHIEVEMENTS, TIERS, BLOCKS_LINES_PER_LEVEL, GAMES_WITH_ACHIEVEMENTS, achievementsFor, achievementById,
   statsFromRun, cleanStats, addRun, totalsFrom, totalsFromShelf, tierFor, achievementState, newlyEarned, wouldEarn,
-} from '../arcade/ui/achievements.js';
-import {achievementShelf, achievementSummary, createAchievementPopup} from '../arcade/ui/achievement-ui.js';
+} from '../dist/achievements.js';
+import {achievementShelf, achievementSummary, createAchievementPopup} from '../dist/achievement-ui.js';
 import {createMemoryStore, createMemoryAuth} from '../arcade/server/memory-store.mjs';
 import {createHandlers} from '../arcade/server/handlers.mjs';
 import {verifySegment} from '../arcade/server/verify.mjs';
@@ -182,13 +182,13 @@ test('the verifier works the stats out from the replay, for all three games', as
   const seqCb = stubCallbacks().cb;
   seqCb.end = r => {seqResult ??= r;};
   seqCb.goals = () => {};
-  const s = new SequenceEngine(stubCanvas(), seqCb, {seed: 909, level: 4, motion: false});
+  const s = new SequenceEngine(stubCanvas(), seqCb, {seed: 909, level: 4, motion: false, rulesVersion: 4});
   driveSequence(s, greedyMove);
   const seqStats = s.stats();
   s.destroy();
   assert.ok(seqStats.cascade > 0, 'the run cascaded at least once');
   const seqChecked = await verifySegment({game: 'sequence', replay: seqResult.replay, seed: seqResult.replay.seed,
-    level: 4, elapsedSeconds: 99999, rulesVersion: 3});
+    level: 4, elapsedSeconds: 99999, rulesVersion: 4});
   assert.deepEqual(seqChecked.stats, seqStats);
 });
 

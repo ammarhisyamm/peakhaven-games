@@ -7,7 +7,7 @@ import {AdminLogNotReady,MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
-import {addRun,totalsFrom,achievementState,newlyEarned} from '../ui/achievements.js';
+import {addRun,totalsFrom,achievementState,newlyEarned} from '../../dist/achievements.js';
 import {COIN_CURRENCY,CoinsNotReady,MAX_PENDING_PURCHASES,cleanDelta,cleanNote,cleanPackCoins,formatAmount,newReference,packFor,packList} from './coins.mjs';
 import {createPaymentProvider} from './payments.mjs';
 
@@ -262,6 +262,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   // in flight keeps the engine it began on and a new run cannot submit an easier older replay.
   const sequenceVersion=run=>{
    if(run.game!=='sequence')return 1;
+   if(run.seed===seedFor(secret,'sequence-v4',run.day,1))return 4;
    if(run.seed===seedFor(secret,'sequence-v3',run.day,1))return 3;
    if(run.seed===seedFor(secret,'sequence-v2',run.day,1))return 2;
    return 1;
@@ -341,7 +342,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       const game=body?.game;if(!COMPETITION.games.includes(game))return fail(400,'That game is not in the competition.');
       const requestId=body?.requestId??null;
       if(requestId!==null&&(typeof requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)))return fail(400,'Invalid start request. Please reopen the game.');
-      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v3':game==='ridge'?'ridge-v6':game,day,1);
+      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v4':game==='ridge'?'ridge-v6':game,day,1);
       // Free tries first, then a coin if there is one. The store spends the coin and creates the run in one
       // step, so two taps with one coin left can only make one run.
       const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId,allowPaid:await coinsReady()});
