@@ -23,10 +23,23 @@ const trayOpts=g=>({version:g.version===1?1:2,moves:g.state.moves,score:g.state.
 // Milestone reward (v3). Every MILESTONE.every lines cleared in a run hands the player one extra use of a
 // tool, rotating Bomb, then Undo, then Shuffle, so a long run keeps a way out of a board that blocks up.
 export const BLOCK_MILESTONE=Object.freeze({every:25,tools:Object.freeze(['bomb','undo','shuffle'])});
-// The nth milestone, counting from 1: which tool it gives and what the banner says.
+// The level a run is on, from the lines it has cleared. Peak Blocks is endless and has no levels of its
+// own, but players and testers talk about them, so the milestone is shown as one: level 1 from the first
+// piece, level 2 once 25 lines are gone, and so on. Display only — nothing in the rules reads it.
+//
+// Two numbers come out of the same milestone and they differ by one on purpose:
+//   blocksLevel(lines)   the level the player is ON    — starts at 1
+//   levelsPassed(lines)  the levels they have PASSED   — starts at 0, and is what the achievement counts
+// So the run that earns the first reward is on level 2 and has passed one level.
+export const blocksLevel=lines=>levelsPassed(lines)+1;
+export const levelsPassed=lines=>Math.floor(Math.max(0,Math.floor(Number(lines)||0))/BLOCK_MILESTONE.every);
+
+// The nth milestone, counting from 1: which tool it gives and what the banner says. The banner names the
+// level the player has just reached, which is the number the HUD is showing them.
 export function milestoneReward(n){
   const tools=BLOCK_MILESTONE.tools,tool=tools[(n-1)%tools.length],lines=n*BLOCK_MILESTONE.every;
-  return {milestone:n,lines,tool,label:`Level ${lines}! Free ${tool[0].toUpperCase()+tool.slice(1)}`};
+  return {milestone:n,lines,level:n+1,tool,
+    label:`Level ${n+1}! Free ${tool[0].toUpperCase()+tool.slice(1)}`};
 }
 
 // How a clear should feel, as numbers. Pure, so the feel is covered by tests with no DOM at all.

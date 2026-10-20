@@ -14,7 +14,7 @@
 // ordinary player meets in their first runs, silver is what practice brings, gold needs real skill or real
 // persistence. The measured medians are in the comment on each tier.
 
-import {BLOCK_MILESTONE} from './blocks-core.js';
+import {BLOCK_MILESTONE,levelsPassed} from './blocks-core.js';
 
 export const TIERS = Object.freeze(['bronze', 'silver', 'gold']);
 
@@ -44,7 +44,8 @@ export const ACHIEVEMENTS = Object.freeze([
     name: 'Climbing the Peak', unit: 'levels', label: 'Levels passed',
     // Measured: an ordinary run clears about 49 lines, so just under two levels a run.
     tiers: {bronze: 1, silver: 10, gold: 30},
-    describe: n => `Pass ${n} ${n === 1 ? 'level' : 'levels'} (${BLOCKS_LINES_PER_LEVEL} lines each)`,
+    // "Passed", not "reached": clearing 25 lines passes level 1 and puts the HUD on level 2.
+    describe: n => `Pass ${n} ${n === 1 ? 'level' : 'levels'} — ${BLOCKS_LINES_PER_LEVEL} cleared lines each`,
   },
   // --- Sequence ----------------------------------------------------------------------------------------
   {
@@ -107,7 +108,8 @@ export function statsFromRun(game, run = {}) {
     return {
       score: whole(run.score),
       combo: whole(run.bestCombo ?? run.combo),
-      levels: Math.floor(whole(run.lines) / BLOCKS_LINES_PER_LEVEL),
+      // Levels *passed*, which is one less than the level the HUD shows: see blocksLevel in blocks-core.js.
+      levels: levelsPassed(whole(run.lines)),
     };
   }
   if (game === 'sequence') return {cascade: whole(run.cascade), powerups: whole(run.powerups)};
