@@ -151,6 +151,8 @@ export class RidgeEngine extends MiniEngine{
  // gate 60, openings 150 shrinking to 118 between gates 10 and 50, and each opening a random step of up to
  // 120 (rising to 220 by gate 40) from the last. The ceiling stops you instead of ending the run.
  constructor(canvas,cb,options){super(canvas,cb,options);const version=options?.version??options?.rulesVersion;this.courseV=version===4?4:version===5?5:RIDGE_LATEST;this.C=this.courseV===4?RIDGE_V4:RIDGE;this.lastOrbI=-99;this.flapAt=-9;this.bursts=[];this.px=100;this.py=300;this.vy=0;this.started=false;this.dead=false;this.deadT=0;this.gates=[];this.index=0;this.nextX=0;this.lastGy=300;this.lastAmp=0;this.trail=[];this.tilt=0;this.gatesPassed=0;this.orbs=[];this.orbsTaken=0;this.runTime=0;this.popups=[];
+  // Achievement counters. Derived from the run as it happens, so the server gets them by replaying it.
+  this.closeCalls=0;this.zonesCleared=0;
   this.inputs=[];this.resumes=[];this.revives=[];this.rescueOffered=false;this.reviveReady=false;this.shield=0;this.regionStage=0;this.skyChangedAt=0;this.nextX=this.C.FIRST_X;this.nextT=(this.C.FIRST_X-this.px)/this.speedFor(0);this.reach=this.C.RAMP===undefined?null:reachStart(this.C);this.reachT=0;for(let i=0;i<4;i++)this.addGate();this.fillGates();
   this.onpointerdown=()=>this.action();canvas.addEventListener('pointerdown',this.onpointerdown);cb.hud(0,0,'1×');cb.message(this.courseV>=6?'Tap anywhere to lift your crystal. Fly through the open gates.':'Tap anywhere to lift your vial. Fly through the open gates.');this.cb.checkpoint?.(ridgeCheckpoint(0),0);}
  // The course (sky to ground, 0 to GROUND in world units) fills the space between the bottom of the HUD and the
@@ -241,10 +243,10 @@ export class RidgeEngine extends MiniEngine{
   if(this.dead){this.deadT+=dt;if(this.py>this.C.GROUND-this.C.R)this.py=this.C.GROUND-this.C.R;if(this.deadT>.8){if(this.courseV>=6&&!this.revives.length&&this.cb.revive){this.rescueOffered=true;this.paused=true;this.cb.revive();}else this.end(this.result());}return;}
   const sp=this.speed;this.runTime+=dt;this.shield=Math.max(0,this.shield-dt);for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<.8);
   for(const g of this.gates)g.cy=g.gy+g.amp*Math.sin(g.phase+g.rate*this.runTime);
-  for(const o of this.orbs){o.x-=sp*dt;if(!o.taken&&Math.hypot(o.x-this.px,o.y-this.py)<this.C.R+this.C.ORB_R){o.taken=true;this.orbsTaken++;this.score+=this.C.ORB_POINTS;this.popups.push({x:o.x,y:o.y,t:0});this.bursts.push({x:o.x,y:o.y,t:0});this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('bond');this.burst(o.x*this.ws,this.sy(o.y),'#ffd24d',14);}}
+  for(const o of this.orbs){o.x-=sp*dt;if(!o.taken&&Math.hypot(o.x-this.px,o.y-this.py)<this.C.R+this.C.ORB_R){o.taken=true;this.orbsTaken++;this.cb.milestone?.({vials:this.orbsTaken});this.score+=this.C.ORB_POINTS;this.popups.push({x:o.x,y:o.y,t:0});this.bursts.push({x:o.x,y:o.y,t:0});this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('bond');this.burst(o.x*this.ws,this.sy(o.y),'#ffd24d',14);}}
   this.orbs=this.orbs.filter(o=>o.x>-this.C.ORB_R*2);
   for(const b of this.bursts){b.x-=sp*dt;b.t+=dt;}this.bursts=this.bursts.filter(b=>b.t<.7);
-  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+this.C.PW<this.px-this.C.R){g.passed=true;this.gatesPassed++;this.score++;g.flashAt=this.time;if(g.minClear<this.C.CLOSE){this.popups.push({x:this.px+18,y:this.py-22,t:0,text:'CLOSE!'});this.cb.haptic?.('close');}if(this.courseV>=6){const checkpoint=ridgeCheckpoint(this.gatesPassed);this.cb.checkpoint?.(checkpoint,this.gatesPassed);if(checkpoint.stage!==this.regionStage){this.regionStage=checkpoint.stage;this.skyChangedAt=this.time;this.cb.effect?.(`ZONE ${checkpoint.stage+1}!`,'ridge',{zone:checkpoint.stage+1,name:checkpoint.name});this.cb.sound('win');this.cb.haptic?.('win',true);}}else if(RIDGE_MILESTONES.includes(this.gatesPassed))this.cb.effect?.(`${this.gatesPassed} GATES!`,'ridge');this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.sy(this.py),'#8fffff',12);}}
+  for(const g of this.gates){g.x-=sp*dt;if(!g.passed&&g.x+this.C.PW<this.px-this.C.R){g.passed=true;this.gatesPassed++;this.score++;g.flashAt=this.time;if(g.minClear<this.C.CLOSE){this.closeCalls++;this.popups.push({x:this.px+18,y:this.py-22,t:0,text:'CLOSE!'});this.cb.haptic?.('close');this.cb.milestone?.({close:this.closeCalls});}if(this.courseV>=6){const checkpoint=ridgeCheckpoint(this.gatesPassed);this.cb.checkpoint?.(checkpoint,this.gatesPassed);if(checkpoint.stage!==this.regionStage){this.zonesCleared=Math.max(this.zonesCleared,checkpoint.stage);this.cb.milestone?.({zones:this.zonesCleared});this.regionStage=checkpoint.stage;this.skyChangedAt=this.time;this.cb.effect?.(`ZONE ${checkpoint.stage+1}!`,'ridge',{zone:checkpoint.stage+1,name:checkpoint.name});this.cb.sound('win');this.cb.haptic?.('win',true);}}else if(RIDGE_MILESTONES.includes(this.gatesPassed))this.cb.effect?.(`${this.gatesPassed} GATES!`,'ridge');this.cb.hud(this.score,this.gatesPassed,`${Math.min(9,1+Math.floor(this.gatesPassed/5))}×`);this.cb.sound('perfect');this.burst(this.px*this.ws,this.sy(this.py),'#8fffff',12);}}
   this.nextX-=sp*dt;while(this.gates.length&&this.gates[0].x<-this.C.PW)this.gates.shift();if(this.gates.length<4)this.addGate();this.fillGates();
   if(this.py<this.C.R){this.py=this.C.R;this.vy=0;}
   if(this.py+this.C.R>this.C.GROUND){this.py=this.C.GROUND-this.C.R;if(!this.shield)this.crash();}else if(!this.shield&&this.gates.some(g=>this.hits(g)))this.crash();
@@ -253,7 +255,8 @@ export class RidgeEngine extends MiniEngine{
   if(this.motion){this.trail.push({x:this.px,y:this.py});for(const p of this.trail)p.x-=sp*dt;if(this.trail.length>14)this.trail.shift();}
  }
  crash(){if(this.dead||this.ended)return;this.dead=true;this.vy=Math.max(this.vy,0);this.burst(this.px*this.ws,this.sy(this.py),'#ffd383');this.cb.sound('miss');}
- result(){return {score:this.score,gates:this.gatesPassed,orbs:this.orbsTaken,replay:this.replay()};}
+ stats(){return {zones:this.zonesCleared,close:this.closeCalls,vials:this.orbsTaken,gates:this.gatesPassed};}
+ result(){return {score:this.score,gates:this.gatesPassed,orbs:this.orbsTaken,stats:this.stats(),replay:this.replay()};}
  replay(){return {v:this.courseV,game:'ridge',seed:this.seed,step:SIM_STEP,taps:[...this.inputs],resumes:[...this.resumes],...(this.courseV>=6?{revives:[...this.revives]}:{}),endTick:this.ticks};}
  revive(){
   if(this.courseV<6||!this.alive||this.ended||!this.dead||!this.rescueOffered||this.revives.length)return false;
@@ -396,6 +399,8 @@ export class SequenceEngine extends MiniEngine{
   this.config=v3?v3Level(this.level):sequenceLevel(this.level);this.progress=v3?createV3Progress(this.config):createSequenceProgress(this.config);this.palette=v3?this.config.palette:sequencePalette(this.level);
   this.board=this.rulesVersion===1?createSequenceBoard(this.level,this.random):v3?createV3Board(this.config,this.random,this.progress):createProgressionBoard(this.config,this.random,this.progress);
   this.inputs=[];this.movesTotal=v3?this.config.moves:SEQUENCE_MOVES;this.moves=this.movesTotal;this.target=this.rulesVersion===1?sequenceTarget(this.level):this.config.target;this.selection=null;this.cursor=24;this.keyboard=false;this.chain=0;this.pending=0;this.phase=null;this.swap=null;this.falls=new Map();this.pointerStart=null;this.clearing=null;this.creating=null;this.fallDur=0;this.popups=[];this.cracks=[];this.banner=null;this.shake=0;this.idle=0;this.hintPair=null;
+  // Achievement counters, derived as the run plays and read back by the server when it replays it.
+  this.maxChain=0;this.specialsMade=0;
   // v3 only: what the current cascade is still owed. `again` is the wrapped crystals due a second blast,
   // `bonus` counts the end-of-level striped crystals still to fire, `blasts` are the effects being drawn.
   this.trigger=null;this.again=[];this.blasts=[];this.bonus=null;this.bonusDone=false;this.lastCombo=null;this.warned=false;
@@ -441,7 +446,7 @@ export class SequenceEngine extends MiniEngine{
  // Matched crystals now shrink out over 0.18 s with a "+points" popup, and cascades announce "Chain ×n".
  resolveMatches(){const matches=sequenceMatches(this.board);if(!matches.size){this.finishMove();return;}const g=this.geometry();let sx=0,sy=0;
   for(const i of matches){this.burst(g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell,colors[this.board[i]],6);sx+=i%7;sy+=Math.floor(i/7);}
-  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.clearing=matches;if(this.rulesVersion===2){const was=this.progress;this.progress=applySequenceWave(this.config,this.progress,this.board,matches);this.noteBreaks(was,this.progress);this.reportGoals();}
+  const gained=matches.size*50*(1+this.chain);this.score+=gained;this.chain++;this.noteRun(0);this.clearing=matches;if(this.rulesVersion===2){const was=this.progress;this.progress=applySequenceWave(this.config,this.progress,this.board,matches);this.noteBreaks(was,this.progress);this.reportGoals();}
   this.popups.push({text:`+${gained}`,x:g.x+(sx/matches.size+.5)*g.cell,y:g.y+(sy/matches.size+.5)*g.cell,t:0});
   if(this.chain>1){const n=this.chain,word=n>=5?'Amazing!':n>=4?'Great!':n>=3?'Nice!':'';this.banner={text:word?`Chain ×${n} ${word}`:`Chain ×${n}`,t:0};if(n>=4){this.cb.effect?.(n>=5?'AMAZING CHAIN!':'GREAT CHAIN!','sequence');if(this.motion)this.shake=1;}}if(matches.size>=8&&this.motion)this.shake=1;
   this.cb.sound(this.chain>1?'perfect':'crystal');this.cb.hud(this.score,this.moves,this.target);this.phase='clear';this.pending=SEQ_CLEAR;}
@@ -455,6 +460,7 @@ export class SequenceEngine extends MiniEngine{
   const g=this.geometry(),cellAt=i=>[g.x+(i%7+.5)*g.cell,g.y+(Math.floor(i/7)+.5)*g.cell];
   for(const i of plan.clear){const [x,y]=cellAt(i),colour=colourOf(this.board[i]);this.burst(x,y,colors[colour<0||colour>6?6:colour],5);}
   this.score+=plan.gained;this.chain++;this.clearing=plan.clear;this.creating=plan.create;this.again=plan.againAt;
+  this.noteRun(plan.create.size);
   const wasV3=this.progress;this.progress=applyV3Wave(this.config,this.progress,this.board,plan.clear);this.noteBreaks(wasV3,this.progress);this.reportGoals();
   // Points popup over the middle of whatever went off.
   const spots=plan.clear.size?[...plan.clear]:[...plan.create.keys()];
@@ -494,6 +500,12 @@ export class SequenceEngine extends MiniEngine{
   if(specials.length&&this.bonus.sweeps<12){this.bonus.sweeps++;this.chain=0;this.trigger={type:'fire',cells:specials};this.resolveV3();return true;}
   this.bonusDone=true;this.bonus=null;return false;
  }
+ // One cascade step: the longest chain a run reaches, and the specials it has minted.
+ noteRun(made=0){
+  if(this.chain>this.maxChain){this.maxChain=this.chain;this.cb.milestone?.({cascade:this.maxChain});}
+  if(made>0){this.specialsMade+=made;this.cb.milestone?.({powerups:this.specialsMade});}
+ }
+ stats(){return {cascade:this.maxChain,powerups:this.specialsMade};}
  findMove(){if(this.rulesVersion===3)return v3Move(this.board,this.progress);if(this.rulesVersion===2)return progressionMove(this.board,this.progress);for(let i=0;i<49;i++)for(const to of [i%7<6?i+1:-1,i+7]){if(to<0||to>48)continue;const next=sequenceExchange(this.board,i,to);if(next&&sequenceMatches(next).size)return [i,to];}return null;}
  finishMove(){
   this.phase=null;this.pending=0;this.falls.clear();this.idle=0;this.hintPair=null;this.blasts=[];this.cb.hud(this.score,this.moves,this.target);
@@ -649,6 +661,6 @@ export class SequenceEngine extends MiniEngine{
   }
  }
 
- finish(){this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,objectives:this.rulesVersion===1?[]:this.rulesVersion===3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}
+ finish(){this.end({score:this.score,moves:this.movesTotal-this.moves,movesTotal:this.movesTotal,won:this.complete(),target:this.target,stats:this.stats(),objectives:this.rulesVersion===1?[]:this.rulesVersion===3?v3Goals(this.config,this.progress):sequenceGoals(this.config,this.progress),replay:this.replay()});}
  replay(){return {v:this.rulesVersion,game:'sequence',seed:this.seed,level:this.level,step:SIM_STEP,moves:this.inputs.map(m=>[...m]),endTick:this.ticks};}
 }
