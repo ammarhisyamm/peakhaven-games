@@ -1,6 +1,7 @@
 import {sequenceLevel,sequenceBrief} from './sequence-progression.js';
 import {v3Brief,v3Level} from './sequence-v3.js';
-import {sequenceRulesVersion,sequenceObjective,sequenceMoves,sequenceTargetFor} from './sequence-objective.js';
+import {sequenceRulesVersion,sequenceObjective,sequenceMoves,sequenceTargetFor,sequenceHasTools} from './sequence-objective.js';
+import {SEQUENCE_TOOLS} from './sequence-v3.js';
 import {startBlocks,startMahjong} from './puzzle-games.js';
 import {SKINS,normalizeCollection,claimDaily,claimSpin,buySkin,skinUnlocked,runLoot,boostCost} from './collection.js';
 import {gameChallenge,objective} from './progression.js';
@@ -9,6 +10,10 @@ import {BondEngine,OrbitEngine,RidgeEngine,SequenceEngine} from './tryout-games.
 import {showReferenceResults} from './reference-results.js';
 import {crystalSprites,sequenceSpecialSprites,vialSprites} from './gameplay-art.js';
 import {GameAudio} from './game-audio.js';
+import {audioSession} from './audio-session.js';
+import {statsFromRun,wouldEarn} from './achievements.js';
+import {blocksLevel} from './blocks-core.js';
+import {createAchievementPopup} from './achievement-ui.js';
 import {renderSequenceGoals,renderRidgeCheckpoint,showRidgeRescue,openSequenceLevel,showObstacleIntro} from './feedback-ui.js';
 import {COLORS,COLOR_NAMES,createPuzzle,pour,canPour,isSolved,findHint} from './rules.js';
 
@@ -16,6 +21,7 @@ const $=s=>document.querySelector(s), app=$('#app'), dialog=$('#dialog'), sceneB
 const paths={bottle:'<path d="M9 3h6v4l3 4v10H6V11l3-4zM8 3h8M6 15h12"/>',gift:'<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8C4 8 5 1 9 3l3 5c8 0 7-7 3-5z"/>',gem:'<path d="m3 8 4-5h10l4 5-9 13zM3 8h18M7 3l5 18L17 3"/>',user:'<circle cx="12" cy="7" r="4"/><path d="M3 21c0-10 18-10 18 0z"/>',coin:'<circle cx="12" cy="12" r="9"/><path d="m12 6 1.8 3.6 4 .6-2.9 2.8.7 4-3.6-1.9-3.6 1.9.7-4L6.2 10.2l4-.6z"/>',home:'<path d="m3 10 9-7 9 7v10H3z"/><path d="M9 20v-7h6v7"/>',play:'<path d="m8 5 11 7-11 7z"/>',games:'<path d="M7 7h10c4 0 6 11 3 12-2 1-4-3-5-3H9c-1 0-3 4-5 3C1 18 3 7 7 7Z"/><path d="M7 10v4m-2-2h4m7-1h.01m2 3h.01"/>',trophy:'<path d="M8 3h8v7a4 4 0 0 1-8 0zM8 5H4v3q0 4 5 4m7-7h4v3q0 4-5 4M12 14v6m-4 1h8"/>',help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 8a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 4h.01"/>',settings:'<path d="m9 3-.5 3-2 1-3-.5-1.5 3 2.5 2v2L2 15l1.5 3 3-.5 2 1 .5 3h4l.5-3 2-1 3 .5 1.5-3-2.5-1.5v-2L22 9.5l-1.5-3-3 .5-2-1-.5-3z"/><circle cx="12" cy="12" r="3"/>',arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',external:'<path d="M14 4h6v6m0-6L10 14m0-10H4v16h16v-6"/>',back:'<path d="M20 12H4m6-6-6 6 6 6"/>',pause:'<path d="M8 5v14M16 5v14"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',star:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>',flame:'<path d="M12 3c1 5 7 6 7 12a7 7 0 1 1-14 0c0-3 2-6 4-8 0 4 1 5 2 5 2-2 1-5 1-9Z"/>',check:'<path d="m5 12 4 4L19 6"/>',leaf:'<path d="M20 4C8 2 2 8 5 15s15 4 15-11Z"/><path d="m4 20 11-11"/>',undo:'<path d="M8 5 3 10l5 5m-5-5h11a6 6 0 0 1 0 12"/>',restart:'<path d="M4 9a9 9 0 1 1-1 7m1-13v6h6"/>',volume:'<path d="M4 9h4l5-4v14l-5-4H4zM17 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/>',spark:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>',flag:'<path d="M5 21V3m0 1h13l-3 5 3 5H5"/>'};
 paths.bomb='<circle cx="11" cy="14" r="7"/><path d="m15 8 2-3 3 1m-1-5 1 2m-7 0 1 2M7 11l-1 3"/>';
 paths.shuffle='<path d="m17 3 4 4-4 4M3 7h3c6 0 6 10 12 10h3m-4-4 4 4-4 4M3 17h3c2 0 3-1 4-3m4-4c1-2 2-3 4-3h3"/>';
+paths.hammer='<rect x="4" y="4" width="13" height="5" rx="1.5"/><path d="M12 9v11h3.2V9"/>';
 const icon=n=>`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[n]||paths.star}</svg>`;
 const vial=(tier=0)=>`<span class="vial vial-${tier%6}" aria-hidden="true"></span>`;
 const mascot=()=>`<img class="mascot" src="assets/bottle-mascot.webp" alt="Happy Peak Haven bottle mascot">`;
@@ -50,7 +56,9 @@ function rankedResults(id,level){return {subscribe(fn){rankedListeners.add(fn);f
  async nextLevel(){rankedListeners.clear();if(await rankedNextLevel(id,level+1))beginGame(id,level+1);else{toast('This run could not continue. Your verified score still counts.');route('freeplay');}}};}
 // Phone haptics. Android vibrates; on iPhone, Safari has no vibration API, but toggling a hidden switch control gives
 // a light system tap (iOS 18 and later), which is used for the same moments. Off with the Vibration setting.
-const HAPTICS={select:[5],undo:[6],drop:[8],crystal:[12],bond:[12],perfect:[20],merge:[28],invalid:[10,40,10],miss:[35,45,35],win:[18,60,30],combo2:[16,20,24],combo3:[18,24,36]};
+const HAPTICS={select:[5],undo:[6],drop:[8],crystal:[12],bond:[12],perfect:[20],merge:[28],invalid:[10,40,10],miss:[35,45,35],win:[18,60,30],combo2:[16,20,24],combo3:[18,24,36],
+ // One per Peak Blocks clear level, so a clear still taps back now that the cue carries its combo.
+ clear1:[20],clear2:[16,20,24],clear3:[18,24,36],clear4:[18,26,40],clear5:[20,28,46],bigClear:[26,30,30]};
 let hapticAt=0,hapticSwitch=null;
 function haptic(type,force=false){const pattern=active==='ridge'&&type==='perfect'?[8]:HAPTICS[type];// every Ridge gate is a lighter tick
  if(!pattern||data.haptics===false)return;const now=performance.now();if(!force&&now-hapticAt<45)return;hapticAt=now;
@@ -104,10 +112,15 @@ function streak(){let count=0,date=new Date();if(!data.days.includes(localDay(da
 const gameAudio=new GameAudio(()=>data.sound);
 document.addEventListener('pointerdown',()=>gameAudio.prepare(),{capture:true,passive:true});
 document.addEventListener('keydown',()=>gameAudio.prepare(),{capture:true});
-const soundCues={big:[0,4,7,12],sparkle:[12],drop:[0],select:[7],invalid:[0,-4],undo:[3,0],hint:[5,9],tool:[0,5],perfect:[0,7],merge:[0,4,7],win:[0,4,7,12,16],miss:[0,-3,-7],toggle:[7,12]};
+// An iPhone with the ringer switch on mutes Web Audio until the page claims a playback session, and only a
+// click or touchend can claim it. This arms every gesture, so the claim survives a call or a locked phone too.
+audioSession.listen(document);
+const soundCues={big:[0,4,7,12],sparkle:[12],drop:[0],select:[7],invalid:[0,-4],undo:[3,0],hint:[5,9],tool:[0,5],perfect:[0,7],merge:[0,4,7],win:[0,4,7,12,16],miss:[0,-3,-7],toggle:[7,12],
+ // Peak Blocks asks for its clear by combo level, so the no-samples fallback needs the same names.
+ clear1:[0,7],clear2:[0,7,12],clear3:[0,4,7,12],clear4:[0,4,7,14],clear5:[0,5,9,12,17],bigClear:[0,4,7,12]};
 function sound(type,opts){haptic(type);if(!data.sound)return;if(gameAudio.play(active,type,opts))return;try{audio??=new(window.AudioContext||window.webkitAudioContext)();audio.resume().catch(()=>{});const notes=soundCues[type]||soundCues.select,base={tower:440,merge:349,sort:554,blocks:392,mahjong:659,orbit:554,ridge:494,bond:440,sequence:740}[active]||440,wave=active==='merge'||active==='blocks'||active==='ridge'?'triangle':'sine',now=audio.currentTime;notes.forEach((step,index)=>{const oscillator=audio.createOscillator(),gain=audio.createGain(),start=now+index*.058,duration=type==='win'?0.17:0.12,frequency=base*2**(step/12);oscillator.type=wave;oscillator.frequency.setValueAtTime(frequency,start);oscillator.frequency.exponentialRampToValueAtTime(frequency*1.025,start+duration*.45);gain.gain.setValueAtTime(.0001,start);gain.gain.linearRampToValueAtTime(type==='win'?0.03:0.022,start+.012);gain.gain.exponentialRampToValueAtTime(.0001,start+duration);oscillator.connect(gain);gain.connect(audio.destination);oscillator.start(start);oscillator.stop(start+duration+.02);});}catch{/* Audio is optional. */}}
 function soundSettingControl(id){return '<label class="settings-row sound-setting-row"><div><strong>Game sound effects</strong><small></small></div><input id="'+id+'" type="checkbox" aria-label="Game sound effects" '+(data.sound?'checked':'')+'></label>';}
-function bindSoundControl(id){const input=$('#'+id);if(!input)return;const small=input.closest('.settings-row')?.querySelector('small'),update=()=>{if(small)small.textContent=data.sound?'Sound effects on · tap to mute':'Sound effects off · tap to enable';};update();input.onchange=()=>{data.sound=input.checked;data.soundPreference=true;save();update();if(!data.sound){gameAudio.stop();audio?.suspend().catch(()=>{});}else sound('toggle');};}
+function bindSoundControl(id){const input=$('#'+id);if(!input)return;const small=input.closest('.settings-row')?.querySelector('small'),update=()=>{if(small)small.textContent=data.sound?'Sound effects on · tap to mute':'Sound effects off · tap to enable';};update();input.onchange=()=>{data.sound=input.checked;data.soundPreference=true;save();update();if(!data.sound){gameAudio.stop();audio?.suspend().catch(()=>{});audioSession.release();}else sound('toggle');};}
 function logo(){return `<img class="ph-logo" src="assets/ph-arcade-logo.webp" alt="PH Arcade">`;}
 function currency(){return `<div class="player-pills"><button class="currency coin" data-wallet aria-label="${data.coins} coins. View rewards">${icon('coin')}<b>${fmt(data.coins)}</b><span>+</span></button><button class="currency gem" data-wallet aria-label="${data.gems} gems. View rewards">${icon('gem')}<b>${fmt(data.gems)}</b><span>+</span></button><button class="icon-button settings-button" data-settings aria-label="Open settings">${icon('settings')}</button></div>`;}
 function shell(content,selected='home',world=selected){const scene=selected==='game'?`game-${world}`:world==='help'?'profile':world,format='webp',asset=['orbit','ridge','bond','sequence'].includes(world)?`${scene}-v2`:scene==='home'?'home-lobby':scene;document.body.classList.toggle('game-open',selected==='game');document.body.dataset.scene=scene;document.body.style.setProperty('--world-art',`url("assets/worlds/${asset}.${format}")`);app.innerHTML=`<div class="phone-app world-interface view-${selected} ${selected==='game'?'in-game':''}">${selected==='game'?'':`<header class="app-header"><a class="brand" href="#home" aria-label="PH Arcade home">${logo()}</a>${currency()}</header>`}<main>${content}</main>${selected==='game'?'':`<nav class="bottom-nav" aria-label="Main navigation">${[['home','home','Home'],['arcade','games','Arcade'],['journey','gift','Rewards'],['collection','bottle','Bottles'],['profile','user','Profile']].map(([id,s,label])=>`<button data-nav="${id}" class="${selected===id?'active':''}" ${selected===id?'aria-current="page"':''}>${icon(s)}<span>${label}</span></button>`).join('')}</nav>`}</div>`;document.body.classList.toggle('motion-off',!data.motion);syncSceneParallax();app.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>navigate(b.dataset.nav));app.querySelectorAll('[data-wallet]').forEach(b=>b.onclick=()=>navigate('journey'));$('[data-settings]')?.addEventListener('click',openSettings);$('.brand')?.addEventListener('click',e=>{e.preventDefault();navigate('home');});}
@@ -153,7 +166,25 @@ const gameAssets={tower:['tower-scene','happy-vials','collectible-vials'],merge:
 const imageCache=new Map();
 function preloadImage(name){if(!imageCache.has(name))imageCache.set(name,new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>img.decode().then(resolve,resolve);img.onerror=()=>{imageCache.delete(name);reject(new Error(name));};img.src=`assets/${name}${/\.(?:webp|jpe?g|png)$/i.test(name)?'':'.webp'}`;}));return imageCache.get(name);}
 async function beginGame(id,level=null){level=level||(puzzleGames.includes(id)?puzzleLevel(id):1);const ticket=++loadTicket;view='loading';setHash(`play/${id}`);window.scrollTo(0,0);shell(`<section class="game-loading" aria-labelledby="loading-title"><div class="loading-brand">${logo()}</div>${mascot()}<div class="loading-copy lab-console"><div class="loading-track" role="progressbar" aria-label="Game assets loaded" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="loading-fill"></i></div><h1 id="loading-title">Loading ${games[id].name}…</h1><p id="loading-status">Preparing your lab adventure</p><button class="text-button" id="loading-cancel">${icon('close')}Back to arcade</button></div></section>`,'game',id);$('#loading-cancel').onclick=()=>route('freeplay');const started=performance.now(),sceneAsset=['orbit','ridge','bond','sequence'].includes(id)?`worlds/game-${id}-v2`:`worlds/game-${id}`;const assets=[sceneAsset,...gameAssets[id],'ui/console-frame'];let complete=0;try{await Promise.all(assets.map(async name=>{await preloadImage(name);if(ticket!==loadTicket)return;complete++;$('#loading-fill').style.transform=`scaleX(${complete/assets.length})`;$('.loading-track').setAttribute('aria-valuenow',Math.round(complete/assets.length*100));}));await document.fonts.ready;await new Promise(resolve=>setTimeout(resolve,Math.max(0,(motionAllowed()?750:150)-(performance.now()-started))));if(ticket===loadTicket&&view==='loading')mountGame(id,level);}catch{if(ticket!==loadTicket)return;$('#loading-status').textContent='The artwork couldn’t load. Check your connection and try again.';$('#loading-title').textContent='Almost there';$('#loading-cancel').insertAdjacentHTML('beforebegin','<button class="button" id="loading-retry">Try again</button>');$('#loading-retry').onclick=()=>beginGame(id,level);}}
-function gameTools(list){return `<div class="game-tools control-dock lab-console slim-console">${list.map(([id,label,symbol])=>`<button class="tool-button" data-tool="${id}" aria-label="${label}">${icon(symbol)}<b>3</b><span>${label}</span></button>`).join('')}</div>`;}
+function gameTools(list,uses=3){return `<div class="game-tools control-dock lab-console slim-console">${list.map(([id,label,symbol])=>`<button class="tool-button" data-tool="${id}" aria-label="${label}">${icon(symbol)}<b>${uses}</b><span>${label}</span></button>`).join('')}</div>`;}
+// Peak Blocks' level chip. The level is worked out from the lines the game already reports, through the
+// same helper the milestone banner and the achievement use, so the three cannot disagree. Nothing in the
+// rules, the scoring or the replay knows this exists.
+let shownLevel=1;
+function hudLevel(lines){
+  const level=blocksLevel(lines);
+  hudValue('#hud-level',String(level));
+  if(level===shownLevel)return;
+  const chip=$('.hud-level');
+  shownLevel=level;
+  if(!chip||!motionAllowed())return;
+  chip.getAnimations?.().forEach(animation=>animation.cancel());
+  chip.animate([
+    {transform:'scale(1)',filter:'brightness(1)'},
+    {transform:'scale(1.18)',filter:'brightness(1.6)',offset:.3},
+    {transform:'scale(1)',filter:'brightness(1)'},
+  ],{duration:520,easing:'cubic-bezier(.22,1,.3,1)'});
+}
 function hudValue(selector,value){const el=$(selector);if(!el)return;el.setAttribute('aria-label',value);const n=Number(String(value).replace(/,/g,''));el.textContent=Number.isFinite(n)&&n>=10000?new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(n):value;el.style.setProperty('--digits',String(el.textContent).length);}
 function mountGame(id,level=null){
  runningLevel=level||(puzzleGames.includes(id)?puzzleLevel(id):1);sequenceOpened=null;
@@ -162,24 +193,78 @@ function mountGame(id,level=null){
  // below all come from that ruleset rather than from v2 as they used to.
  const seqVersion=sequenceRulesVersion(ranked),seqBriefs={v2:sequenceBrief,v3:v3Brief},seqLevels={v2Level:sequenceLevel,v3Level};
  runChallenge=['sort','mahjong'].includes(id)?gameChallenge(id,runningLevel):null;
- active=id;finishing=false;view='game';gameAudio.prepare();
+ active=id;finishing=false;view='game';shownLevel=1;gameAudio.prepare(id);startAchievements(id);
  const g=games[id],isPuzzle=id==='blocks'||id==='mahjong';
  const objectiveText=runChallenge?objective(runChallenge):id==='sequence'?sequenceObjective(seqVersion,runningLevel,seqBriefs):id==='orbit'?'Pull and release the ball. Score by dropping it into the hoop.':id==='ridge'?'Thread the mountain gates and keep a clean line.':id==='bond'?'Fire into a clear gap in the turning ring.':'Keep going and set a new personal best.';
  const canvasAlt={tower:'Vial Tower. Tap or press Space to drop the moving vial.',merge:'Vial Merge. Arrow keys position the vial. Space drops it. Matching tiers merge.',orbit:'Orbit. Pull the ball down and sideways, release to shoot into the hoop. Arrow keys aim. Space shoots.',ridge:'Ridge Run. Tap anywhere or press Space to fly through the open center of each gate.',bond:'Bond. Tap anywhere or press Space to attach a vial to the moving ring without hitting another.',sequence:`Sequence match three puzzle. Level ${runningLevel}, 7 by 7 board, ${sequenceMoves(seqVersion,runningLevel,seqLevels)} moves. Select neighbouring crystals to swap. Arrow keys move the selector and Enter selects.`};
  const detailLabel=id==='sort'?'MOVES':id==='tower'?'VIALS':id==='merge'?'TOP TIER':id==='blocks'?'LINES':id==='mahjong'?'PAIRS LEFT':id==='orbit'?'SHOTS LEFT':id==='ridge'?'GATES':id==='bond'?'BONDS':id==='sequence'?'MOVES':'LEVEL';
  const thirdLabel=id==='sort'||id==='ridge'?'BEST':id==='sequence'?'LEVEL':'COMBO';
- shell(`<section class="game-world scene-${id}" data-motion="${motionAllowed()}"><h1 class="sr-only">${g.name}</h1><button class="icon-button game-back" id="game-back" aria-label="Pause game and open back menu">${icon('back')}</button><div class="hud"><div>${icon('star')}<span><small>SCORE</small><strong id="hud-score">0</strong></span></div><div>${icon(id==='blocks'?'games':id==='sequence'?'spark':'bottle')}<span><small>${detailLabel}</small><strong id="hud-detail">0</strong></span></div><div>${icon(id==='sort'?'trophy':'flame')}<span><small>${thirdLabel}</small><strong id="hud-combo">${id==='sequence'?fmt(runningLevel):'0'}</strong></span></div></div><p class="sr-only" id="game-objective">${objectiveText}</p>${id==='sequence'?'<section class="sequence-goals" id="sequence-goals" aria-label="Level objectives"></section><aside class="sequence-guide" aria-label="How obstacles work"></aside>':''}<div class="mission-progress" ${runChallenge?'':'hidden'}><i id="mission-fill"></i></div><section class="play-panel" aria-label="${g.name} game">${id==='sort'?'<div class="sort-board" id="sort-board" aria-label="Sorting tubes"></div><div class="sort-key" id="sort-key"></div><div class="sort-controls control-dock lab-console slim-console"><button class="button secondary" id="sort-undo">'+icon('undo')+'Undo</button><button class="button" id="sort-hint">'+icon('spark')+'Hint</button><button class="button secondary" id="sort-restart">'+icon('restart')+'Reset</button></div>':isPuzzle?`<div class="puzzle-stage ${id}">${id==='blocks'?'<div class="block-board" id="block-board" role="grid" aria-label="Block placement board, eight rows and eight columns"></div>':'<div class="mahjong-board" id="mahjong-board" aria-label="Layered matching tiles"></div>'}<div class="impact-label" id="impact-label" aria-hidden="true"></div></div>${id==='blocks'?'<div class="block-tray lab-console" id="block-tray" aria-label="Available pieces"></div>':''}${gameTools(id==='blocks'?[['bomb','Bomb','bomb'],['undo','Undo','undo'],['shuffle','Shuffle','shuffle'],['hint','Hint','help']]:[['hint','Hint','help'],['undo','Undo','undo'],['shuffle','Shuffle','restart']])}`:`<div class="canvas-wrap"><canvas id="game-canvas" tabindex="0" role="application" aria-label="${canvasAlt[id]}" aria-describedby="game-objective game-message"></canvas><div class="impact-label" id="impact-label" aria-hidden="true"></div><div class="alignment-cue" id="alignment-cue" aria-hidden="true"></div></div>`}<p class="game-message" id="game-message" role="status" aria-live="polite">Ready when you are.</p></section></section>`,'game',id);
+ shell(`<section class="game-world scene-${id}" data-motion="${motionAllowed()}"><h1 class="sr-only">${g.name}</h1><button class="icon-button game-back" id="game-back" aria-label="Pause game and open back menu">${icon('back')}</button><div class="hud"><div>${icon('star')}<span><small>SCORE</small><strong id="hud-score">0</strong></span></div><div>${icon(id==='blocks'?'games':id==='sequence'?'spark':'bottle')}<span><small>${detailLabel}</small><strong id="hud-detail">0</strong></span></div>${id==='blocks'?`<div class="hud-level">${icon('flag')}<span><small>LEVEL</small><strong id="hud-level">1</strong></span></div>`:''}<div>${icon(id==='sort'?'trophy':'flame')}<span><small>${thirdLabel}</small><strong id="hud-combo">${id==='sequence'?fmt(runningLevel):'0'}</strong></span></div></div><p class="sr-only" id="game-objective">${objectiveText}</p>${id==='sequence'?'<section class="sequence-goals" id="sequence-goals" aria-label="Level objectives"></section><aside class="sequence-guide" aria-label="How obstacles work"></aside>':''}<div class="mission-progress" ${runChallenge?'':'hidden'}><i id="mission-fill"></i></div><section class="play-panel" aria-label="${g.name} game">${id==='sort'?'<div class="sort-board" id="sort-board" aria-label="Sorting tubes"></div><div class="sort-key" id="sort-key"></div><div class="sort-controls control-dock lab-console slim-console"><button class="button secondary" id="sort-undo">'+icon('undo')+'Undo</button><button class="button" id="sort-hint">'+icon('spark')+'Hint</button><button class="button secondary" id="sort-restart">'+icon('restart')+'Reset</button></div>':isPuzzle?`<div class="puzzle-stage ${id}">${id==='blocks'?'<div class="block-board" id="block-board" role="grid" aria-label="Block placement board, eight rows and eight columns"></div>':'<div class="mahjong-board" id="mahjong-board" aria-label="Layered matching tiles"></div>'}<div class="impact-label" id="impact-label" aria-hidden="true"></div></div>${id==='blocks'?'<div class="block-tray lab-console" id="block-tray" aria-label="Available pieces"></div>':''}${gameTools(id==='blocks'?[['bomb','Bomb','bomb'],['undo','Undo','undo'],['shuffle','Shuffle','shuffle'],['hint','Hint','help']]:[['hint','Hint','help'],['undo','Undo','undo'],['shuffle','Shuffle','restart']])}`:`<div class="canvas-wrap"><canvas id="game-canvas" tabindex="0" role="application" aria-label="${canvasAlt[id]}" aria-describedby="game-objective game-message"></canvas><div class="impact-label" id="impact-label" aria-hidden="true"></div><div class="alignment-cue" id="alignment-cue" aria-hidden="true"></div></div>${id==='sequence'&&sequenceHasTools(seqVersion)?`<aside class="sequence-assist" role="status" aria-live="polite" hidden></aside>${gameTools([['shuffle','Shuffle','restart'],['hammer','Hammer','hammer']],SEQUENCE_TOOLS.shuffle)}`:''}`}<p class="game-message" id="game-message" role="status" aria-live="polite">Ready when you are.</p></section></section>`,'game',id);
  $('#game-back').onclick=()=>pauseGame();
  if(id==='sort'){setupSort(runningLevel);return;}
- const cb={haptic:(type,force)=>haptic(type,force),goals:payload=>{const world=$('.game-world');renderSequenceGoals(world,payload,()=>pauseGame(true),cards=>showObstacleIntro(world,cards));if(payload.version!==1&&payload.level!==sequenceOpened){sequenceOpened=payload.level;openSequenceLevel(world,payload,{motion:motionAllowed()});}},checkpoint:(checkpoint,gates)=>renderRidgeCheckpoint($('.game-world'),checkpoint,gates),revive:()=>showRidgeRescue($('.game-world'),engine),aligned:value=>{if($('#alignment-cue'))$('#alignment-cue').textContent=value?'Tap now!':'';},hud:(score,detail,combo)=>{hudValue('#hud-score',fmt(score));hudValue('#hud-detail',fmt(detail));hudValue('#hud-combo',id==='ridge'?fmt(Math.max(data.best.ridge||0,score)):id==='blocks'?String(parseInt(combo,10)||0):id==='sequence'?fmt(runningLevel):combo);},message:m=>{if($('#game-message'))$('#game-message').textContent=m;},sound,ready:()=>{},end:result=>finishGame(id,result),effect:(label,kind,meta)=>impact(label,kind,meta),place:height=>{if(height>=10){earn('tower10');if(!data.daily.includes(localDay())){data.daily.push(localDay());earn('daily');}save();}},topTier:()=>{earn('merge5');save();}};
+ const cb={haptic:(type,force)=>haptic(type,force),goals:payload=>{const world=$('.game-world');renderSequenceGoals(world,payload,()=>pauseGame(true),cards=>showObstacleIntro(world,cards));if(payload.version!==1&&payload.level!==sequenceOpened){sequenceOpened=payload.level;openSequenceLevel(world,payload,{motion:motionAllowed()});}},checkpoint:(checkpoint,gates)=>renderRidgeCheckpoint($('.game-world'),checkpoint,gates),revive:()=>showRidgeRescue($('.game-world'),engine),milestone:payload=>noteAchievement(id,payload),tools:state=>{if(active==='sequence')sequenceToolState(state);},aligned:value=>{if($('#alignment-cue'))$('#alignment-cue').textContent=value?'Tap now!':'';},hud:(score,detail,combo)=>{hudValue('#hud-score',fmt(score));hudValue('#hud-detail',fmt(detail));if(id==='blocks')hudLevel(detail);hudValue('#hud-combo',id==='ridge'?fmt(Math.max(data.best.ridge||0,score)):id==='blocks'?String(parseInt(combo,10)||0):id==='sequence'?fmt(runningLevel):combo);},message:m=>{if($('#game-message'))$('#game-message').textContent=m;},sound,ready:()=>{},end:result=>finishGame(id,result),effect:(label,kind,meta)=>impact(label,kind,meta),place:height=>{if(height>=10){earn('tower10');if(!data.daily.includes(localDay())){data.daily.push(localDay());earn('daily');}save();}},topTier:()=>{earn('merge5');save();}};
  const options={motion:motionAllowed(),level:runningLevel,best:data.best[id]||0,skin:SKINS.findIndex(s=>s.id===data.skin),...(ranked?{seed:ranked.seed,rulesVersion:ranked.rulesVersion??1}:{})};
  engine=id==='blocks'?startBlocks($('.game-world'),cb,options):id==='mahjong'?startMahjong($('.game-world'),cb,options):id==='tower'?new TowerEngine($('#game-canvas'),cb,options):id==='merge'?new MergeEngine($('#game-canvas'),cb,options):id==='orbit'?new OrbitEngine($('#game-canvas'),cb,options):id==='ridge'?new RidgeEngine($('#game-canvas'),cb,options):id==='bond'?new BondEngine($('#game-canvas'),cb,options):new SequenceEngine($('#game-canvas'),cb,options);
+ if(id==='sequence'&&sequenceHasTools(seqVersion))bindSequenceTools();
  $('#game-canvas')?.focus({preventScroll:true});
  setTimeout(()=>{if(active===id)showFirstPlayHint(id);},700);
  if(window.parent!==window)window.parent.postMessage({type:'ph-game-ready',game:id},location.origin);
 }
 // Peak Blocks sends the combo and line count with each clear (see blast() in puzzle-games.js), which sets how hard the
 // board flashes and how strong the haptic is. The callout text itself comes from the game.
+// "Achievement unlocked!", the moment a run earns it.
+//
+// Only a ranked run can earn anything: it is tied to the signed-in account, and the saved totals ride in on
+// window.phRankedRun. Free play and guests get no popup, because there is nothing being earned. This is a
+// prediction either way — the server works the real numbers out from the replay it verifies, and a run that
+// fails to verify saves nothing, so the popup can be wrong in only one direction and only for a moment.
+let achievementPopup=null,runStats={},runTotals=null;
+function startAchievements(id){
+  const ranked=rankedRun(id);
+  runStats={};
+  runTotals=ranked?.achievements??null;
+  achievementPopup?.reset();
+  achievementPopup=runTotals?createAchievementPopup({host:$('.game-world')??document.body,motion:motionAllowed(),
+    onShow:()=>sound('win')}):null;
+}
+// Each game reports whatever it has just moved; this keeps the run's numbers and asks what they would earn.
+function noteAchievement(id,payload){
+  if(!achievementPopup||!runTotals||!payload)return;
+  runStats={...runStats,...payload};
+  const stats=statsFromRun(id,runStats);
+  if(stats)achievementPopup.offer(wouldEarn(runTotals,id,stats));
+}
+// Sequence's helper dock, wired the way Peak Blocks' is: a count on each button, the tools that can still
+// help glowing when the board has nothing left, and the Hammer arming itself for the next tap on the board.
+// The engine owns the rules, including what a tool may do and when, so this only draws and forwards.
+function sequenceToolState(state){
+ const assist=$('.sequence-assist');
+ for(const [name,button] of Object.entries(sequenceToolButtons())){
+  const left=state[name]??0;
+  // The engine says whether a button may be pressed. Older payloads had no `usable`, so the count is the
+  // fallback; anything newer cannot disagree with what a press will actually do.
+  const usable=state.usable?state.usable[name]:left>0;
+  button.querySelector('b').textContent=left;
+  button.disabled=!usable;
+  button.classList.toggle('tool-suggested',Boolean(state.stuck&&usable));
+  button.classList.toggle('active',name==='hammer'&&Boolean(state.armed));
+  button.setAttribute('aria-pressed',String(name==='hammer'&&Boolean(state.armed)));
+  button.setAttribute('aria-label',`${name[0].toUpperCase()+name.slice(1)}. ${left} uses left. ${name==='shuffle'?'Re-mix the board. It always leaves a move.':'Break one crystal. It counts toward the goals.'}`);
+ }
+ $('.game-world')?.classList.toggle('sequence-stuck',Boolean(state.stuck));
+ if(!assist)return;
+ assist.hidden=!state.stuck;
+ if(state.stuck)assist.innerHTML='<strong>No moves? Use a tool</strong><span>Shuffle re-mixes the board. Hammer breaks one crystal.</span>';
+}
+function sequenceToolButtons(){
+ return Object.fromEntries([...document.querySelectorAll('.game-tools [data-tool]')].map(b=>[b.dataset.tool,b]));
+}
+function bindSequenceTools(){
+ const buttons=sequenceToolButtons();
+ buttons.shuffle?.addEventListener('click',()=>{if(engine?.useShuffle?.())return;sound('invalid');});
+ buttons.hammer?.addEventListener('click',()=>{if(!engine?.armHammer)return;if(engine.armHammer(!engine.hammerArmed))sound('tool');else sound('invalid');});
+ sequenceToolState(engine?.toolState?.()??{shuffle:0,hammer:0});
+}
 function blockImpactFeedback(label,meta){
  if(!meta)return label;
  const board=$('#block-board'),big=meta.perfect||meta.newBest||meta.combo>=3||meta.lines>=3;

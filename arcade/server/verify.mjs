@@ -2,6 +2,7 @@
 // The client's claimed score is never trusted; it is only kept to flag runs worth a closer look.
 import {SIM_STEP} from '../../dist/rng.js';
 import {replayRidge,replaySequence,replayBlocks} from '../../tools/replay.mjs';
+import {statsFromRun} from '../../dist/achievements.js';
 
 export class RejectedRun extends Error{}
 const reject=reason=>{throw new RejectedRun(reason);};
@@ -28,7 +29,8 @@ export async function verifySegment({game,replay,seed,level,elapsedSeconds,rules
     }
     else if(game==='blocks'){
       const r=replayBlocks(replay);
-      result={score:r.score,ended:true,ticks:0,won:false,detail:{lines:r.lines,moves:r.moves}};
+      result={score:r.score,ended:true,ticks:0,won:false,detail:{lines:r.lines,moves:r.moves},
+        stats:{score:r.score,bestCombo:r.bestCombo,lines:r.lines}};
     }
     else reject('Game is not part of the competition');
   }catch(error){
@@ -39,5 +41,8 @@ export async function verifySegment({game,replay,seed,level,elapsedSeconds,rules
   const gameSeconds=(result.ticks||0)*SIM_STEP;
   if(Number.isFinite(elapsedSeconds)&&gameSeconds>elapsedSeconds+CLOCK_SLACK_SECONDS)reject('Run finished faster than real time allows');
   if(!Number.isInteger(result.score)||result.score<0)reject('Replay produced an invalid score');
-  return {score:result.score,won:Boolean(result.won),gameSeconds,detail:result.detail??null};
+  // The achievement numbers, worked out from the replay that was just played here and nowhere else. A
+  // browser can claim any score and any combo; it cannot make this replay produce them.
+  return {score:result.score,won:Boolean(result.won),gameSeconds,detail:result.detail??null,
+    stats:statsFromRun(game,result.stats??{})};
 }

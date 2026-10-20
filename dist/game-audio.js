@@ -1,6 +1,9 @@
 // Shared samples keep the existing PH sound. Every known cue also has a same-context
 // fallback: a late/failed download or an interrupted mobile AudioContext cannot swallow it.
-const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear','blk-pick','blk-place','blk-clear','blk-big','blk-invalid','blk-over','blk-undo','blk-shuffle'];
+import {audioSession} from './audio-session.js';
+const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear','blk-pick','blk-place','blk-clear','blk-big','blk-invalid','blk-over','blk-undo','blk-shuffle',
+ // The marimba cascades for a Peak Blocks combo, and the Ridge Run jump.
+ 'blk-combo-1','blk-combo-2','blk-combo-3','blk-combo-4','blk-combo-5','blk-combo-big','ridge-jump'];
 // A context that is interrupted or suspended may take a moment to come back. Wait that long for it,
 // then give up: a cue older than STALE no longer reads as an answer to the tap that asked for it.
 const WAKE_WAIT=1200,STALE=500;
@@ -14,13 +17,46 @@ const cues={
  blkPick:{file:'blk-pick',gain:.55,jitter:.03,own:true},blkPlace:{file:'blk-place',gain:.5,jitter:.04,own:true},blkClear:{file:'blk-clear',gain:.7,own:true},
  blkBig:{file:'blk-big',gain:.8,own:true},blkSparkle:{file:'blk-pick',gain:.35,own:true},blkInvalid:{file:'blk-invalid',gain:.65,own:true},blkOver:{file:'blk-over',gain:.7,own:true},
  blkUndo:{file:'blk-undo',gain:.55,own:true},blkShuffle:{file:'blk-shuffle',gain:.55,own:true},
+ // One clear cue per combo level, and a separate big clear: a marimba cascade that runs longer and higher
+ // with each clear in a streak. blk-clear and blk-big stay for the cues that still use them (the Bomb, and
+ // NEW BEST!), so nothing else changed sound.
+ blkClear1:{file:'blk-combo-1',gain:.7,own:true},blkClear2:{file:'blk-combo-2',gain:.7,own:true},blkClear3:{file:'blk-combo-3',gain:.7,own:true},
+ blkClear4:{file:'blk-combo-4',gain:.7,own:true},blkClear5:{file:'blk-combo-5',gain:.7,own:true},blkBigClear:{file:'blk-combo-big',gain:.8,own:true},
+ // Ridge Run's flap: a soft low bloop. `jitter` is a plain Math.random spread on the playback rate, applied
+ // in play() and nowhere near the engine's seeded RNG, so a run's physics and its replay cannot feel it.
+ ridgeJump:{file:'ridge-jump',gain:.45,jitter:.06,own:true},
 };
+// How many combo levels have a clear sound of their own. A longer combo keeps the top one.
+export const COMBO_LEVELS=5;
+// The cue a Peak Blocks clear asks for: a combo level from 1 to COMBO_LEVELS, or the separate big clear.
+export function clearEvent({combo=1,big=false}={}){
+ if(big)return 'bigClear';
+ const level=Math.min(Math.max(Math.round(Number(combo)||1),1),COMBO_LEVELS);
+ return `clear${level}`;
+}
 const pitch={mahjong:1.12,merge:.88,sequence:1.08,blocks:.95};
-const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle'}};
+// The names a game asks for. The internal cue names (blkPick and the rest) are what an override points AT,
+// not what a game asks for, which is why they are not here: a game reaches them only through its override.
+export const EVENTS=Object.freeze(['select','toggle','hint','tool','undo','shuffle','launch','flap','drop',
+ 'invalid','bond','crystal','merge','perfect','win','swish','rim','miss','big','sparkle',
+ 'clear1','clear2','clear3','clear4','clear5','bigClear']);
+const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},ridge:{flap:'ridgeJump'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle',clear1:'blkClear1',clear2:'blkClear2',clear3:'blkClear3',clear4:'blkClear4',clear5:'blkClear5',bigClear:'blkBigClear'}};
 export function cueFor(game,event){const name=overrides[game]?.[event]??event,cue=cues[name];return cue?{...cue,rate:(cue.rate||1)*(cue.own?1:pitch[game]||1)}:null;}
-const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12]};
+// Every file one game could possibly ask for. Peak Blocks' cascades are 598 KB of the set and no other game
+// can reach them, so loading per game is the difference between a Ridge Run player downloading 100 KB and
+// downloading all 733 KB.
+export function filesFor(game){
+ const out=new Set();
+ for(const event of EVENTS){const cue=cueFor(game,event);if(cue)out.add(cue.file);}
+ return [...out].sort();
+}
+// What the menus use, and so what every game needs whatever else it loads.
+export const SHARED_FILES=Object.freeze(filesFor(null));
+// The whole set, for anything that wants to check they all exist.
+export const ALL_FILES=Object.freeze(files);
+const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12],clear1:[0,7],clear2:[0,7,12],clear3:[0,4,7,12],clear4:[0,4,7,14],clear5:[0,5,9,12,17],bigClear:[0,4,7,12]};
 export class GameAudio{
- constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;this.waiting=null;}
+ constructor(enabled,session=audioSession){this.enabled=enabled;this.session=session;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;this.waiting=null;}
  wake(){
   const ctx=this.context;if(!ctx||ctx.state==='running')return Promise.resolve();
   // A resume requested before user activation can remain pending. Always make a
@@ -44,14 +80,23 @@ export class GameAudio{
   this.waiting=entry;return entry.promise;
  }
 
- prepare(){
+ // Which files to have ready: the shared ones always, plus this game's own. A cue whose file has not
+ // arrived yet is not silent — play() races the download and falls back to the synth, as it always has.
+ wanted(game){
+  if(!game)return SHARED_FILES;
+  const own=filesFor(game);
+  return own.length?[...new Set([...SHARED_FILES,...own])]:SHARED_FILES;
+ }
+ prepare(game=null){
   if(!this.enabled())return;
+  // Before the context: on iOS the session type decides whether anything the context plays is audible at all.
+  this.session?.resume();
   try{
    if(!this.context||this.context.state==='closed'){
     this.generation++;this.context=new(window.AudioContext||window.webkitAudioContext)();this.buffers.clear();this.decoded.clear();this.waiting=null;
    }
    this.wake();const ctx=this.context;
-   for(const file of files)if(!this.buffers.has(file)){
+   for(const file of this.wanted(game))if(!this.buffers.has(file)){
     const pending=fetch(`assets/audio/${file}.wav`).then(r=>{if(!r.ok)throw new Error('Audio unavailable');return r.arrayBuffer();}).then(bytes=>ctx.decodeAudioData(bytes)).then(buffer=>{if(this.context===ctx){this.decoded.set(file,buffer);this.failed.delete(file);}return buffer;}).catch(()=>{if(this.context===ctx){this.buffers.delete(file);this.failed.add(file);}return null;});
     this.buffers.set(file,pending);
    }
@@ -73,7 +118,7 @@ export class GameAudio{
  }
  play(game,event,opts={}){
   const cue=cueFor(game,event);if(!cue)return false;if(!this.enabled())return true;
-  this.prepare();const ctx=this.context;if(!ctx)return false;
+  this.prepare(game);const ctx=this.context;if(!ctx)return false;
   const generation=this.generation,rate=cue.rate*(opts.rate||1)*(1+(Math.random()*2-1)*(cue.jitter||0)),delay=Math.max(0,opts.delay||0);
   const ready=this.decoded.get(cue.file),pending=this.buffers.get(cue.file),queuedAt=Date.now();
   const deliver=async()=>{

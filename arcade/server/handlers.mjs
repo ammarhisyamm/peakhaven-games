@@ -7,6 +7,7 @@ import {AdminLogNotReady,MonthEndNotReady} from './competition.mjs';
 import {prizeLine,gameLabel,monthLabel} from '../ui/month-prizes.js';
 import {BOTTLE_SKINS,pointsForGame,bottleUnlocked} from '../ui/bottle-unlocks.js';
 import {verifySegment,RejectedRun} from './verify.mjs';
+import {addRun,totalsFrom,achievementState,newlyEarned} from '../../dist/achievements.js';
 import {COIN_CURRENCY,CoinsNotReady,MAX_PENDING_PURCHASES,cleanDelta,cleanNote,cleanPackCoins,formatAmount,newReference,packFor,packList} from './coins.mjs';
 import {createPaymentProvider} from './payments.mjs';
 
@@ -100,6 +101,24 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   const adminLogReady=async()=>Boolean(await store.adminLogReady?.());
   // Whether flag-details.sql has run. Without it a flagged run shows the fixed sentence, as it always did.
   const flagDetailsReady=async()=>Boolean(await store.flagDetailsReady?.());
+  const achievementsReady=async()=>Boolean(await store.achievementsReady?.());
+  // Every achievement number a player has, from the runs the server itself verified. Rejected and refunded
+  // runs are not here to be counted: a run rejected at verification never got a row, and one rejected later
+  // loses its row with it.
+  const playerTotals=async playerId=>
+    (await achievementsReady()) ? totalsFrom(await store.playerRunStats(playerId)) : {};
+  // Records what one verified segment earned and reports back anything that crossed a tier. A Sequence run
+  // verifies one level at a time, so each level folds into that run's own row: a best keeps the higher
+  // number, a lifetime tally adds up. Nothing here reads a number the browser sent.
+  const recordAchievements=async(run,playerId,stats)=>{
+    if(!stats||!(await achievementsReady()))return [];
+    const before=await playerTotals(playerId);
+    const existing=(await store.runStatsFor(run.id))?.stats??null;
+    const merged=addRun(existing?{[run.game]:{...existing}}:{},run.game,stats)[run.game];
+    if(!merged)return [];
+    await store.saveRunStats({runId:run.id,playerId,game:run.game,stats:merged});
+    return newlyEarned(before,await playerTotals(playerId));
+  };
   // A whole number of uses for an invite code. The schema will not take zero or less.
   const cleanMaxUses=value=>{
     const n=Number(value);
@@ -243,6 +262,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   // in flight keeps the engine it began on and a new run cannot submit an easier older replay.
   const sequenceVersion=run=>{
    if(run.game!=='sequence')return 1;
+   if(run.seed===seedFor(secret,'sequence-v4',run.day,1))return 4;
    if(run.seed===seedFor(secret,'sequence-v3',run.day,1))return 3;
    if(run.seed===seedFor(secret,'sequence-v2',run.day,1))return 2;
    return 1;
@@ -298,7 +318,8 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       // Only a first place wins a prize, so only a first place raises the winner modal.
       const last=await archivedPodium();
       const wins=last.rows.filter(r=>r.winner&&r.player_id===s.player.id).map(r=>({game:r.game,month:last.month}));
-      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:adminEmails.has(String(s.user.email||'').toLowerCase()),...await wallet(s.player.id)});
+      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:adminEmails.has(String(s.user.email||'').toLowerCase()),
+        achievements:achievementState(await playerTotals(s.player.id)),achievementTotals:await playerTotals(s.player.id),...await wallet(s.player.id)});
     },
 
     async profile({token,body}){
@@ -321,7 +342,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       const game=body?.game;if(!COMPETITION.games.includes(game))return fail(400,'That game is not in the competition.');
       const requestId=body?.requestId??null;
       if(requestId!==null&&(typeof requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)))return fail(400,'Invalid start request. Please reopen the game.');
-      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v3':game==='ridge'?'ridge-v6':game,day,1);
+      const day=dayKey(now()),seed=seedFor(secret,game==='sequence'?'sequence-v4':game==='ridge'?'ridge-v6':game,day,1);
       // Free tries first, then a coin if there is one. The store spends the coin and creates the run in one
       // step, so two taps with one coin left can only make one run.
       const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId,allowPaid:await coinsReady()});
@@ -366,7 +387,9 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
         if(latest?.status!=='rejected'&&(latest?.replays||[]).some(rep=>isDeepStrictEqual(rep,body.replay)))return ok(await finishView(latest,s.player.id));
         return fail(409,'This run was already updated.');
       }
-      return ok({...await finishView({...run,score,segments:level,level,status:done?'closed':'open',updated_at:at.toISOString()},s.player.id),levelScore:result.score});
+      const earned=await recordAchievements(run,s.player.id,result.stats);
+      return ok({...await finishView({...run,score,segments:level,level,status:done?'closed':'open',updated_at:at.toISOString()},s.player.id),levelScore:result.score,earned,
+        achievements:achievementState(await playerTotals(s.player.id))});
     },
 
     // With a game, that game's board: best scores this month or year. Without one, the overall rank-points table.
