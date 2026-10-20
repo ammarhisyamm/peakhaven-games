@@ -1,5 +1,6 @@
 // Shared samples keep the existing PH sound. Every known cue also has a same-context
 // fallback: a late/failed download or an interrupted mobile AudioContext cannot swallow it.
+import {audioSession} from './audio-session.js';
 const files=['tap','whoosh','score','swish','rim','thunk','clank','fail','clear','blk-pick','blk-place','blk-clear','blk-big','blk-invalid','blk-over','blk-undo','blk-shuffle'];
 // A context that is interrupted or suspended may take a moment to come back. Wait that long for it,
 // then give up: a cue older than STALE no longer reads as an answer to the tap that asked for it.
@@ -14,13 +15,25 @@ const cues={
  blkPick:{file:'blk-pick',gain:.55,jitter:.03,own:true},blkPlace:{file:'blk-place',gain:.5,jitter:.04,own:true},blkClear:{file:'blk-clear',gain:.7,own:true},
  blkBig:{file:'blk-big',gain:.8,own:true},blkSparkle:{file:'blk-pick',gain:.35,own:true},blkInvalid:{file:'blk-invalid',gain:.65,own:true},blkOver:{file:'blk-over',gain:.7,own:true},
  blkUndo:{file:'blk-undo',gain:.55,own:true},blkShuffle:{file:'blk-shuffle',gain:.55,own:true},
+ // One clear cue per combo level, and a separate big clear. They all point at today's sounds on purpose:
+ // the hook is the name, so a new sample per level drops in by changing one `file` here.
+ blkClear1:{file:'blk-clear',gain:.7,own:true},blkClear2:{file:'blk-clear',gain:.7,own:true},blkClear3:{file:'blk-clear',gain:.7,own:true},
+ blkClear4:{file:'blk-clear',gain:.7,own:true},blkClear5:{file:'blk-clear',gain:.7,own:true},blkBigClear:{file:'blk-big',gain:.8,own:true},
 };
+// How many combo levels have a clear sound of their own. A longer combo keeps the top one.
+export const COMBO_LEVELS=5;
+// The cue a Peak Blocks clear asks for: a combo level from 1 to COMBO_LEVELS, or the separate big clear.
+export function clearEvent({combo=1,big=false}={}){
+ if(big)return 'bigClear';
+ const level=Math.min(Math.max(Math.round(Number(combo)||1),1),COMBO_LEVELS);
+ return `clear${level}`;
+}
 const pitch={mahjong:1.12,merge:.88,sequence:1.08,blocks:.95};
-const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle'}};
+const overrides={sort:{drop:'launch'},mahjong:{drop:'crystal'},blocks:{select:'blkPick',drop:'blkPlace',perfect:'blkClear',merge:'blkClear',big:'blkBig',sparkle:'blkSparkle',invalid:'blkInvalid',miss:'blkOver',undo:'blkUndo',shuffle:'blkShuffle',clear1:'blkClear1',clear2:'blkClear2',clear3:'blkClear3',clear4:'blkClear4',clear5:'blkClear5',bigClear:'blkBigClear'}};
 export function cueFor(game,event){const name=overrides[game]?.[event]??event,cue=cues[name];return cue?{...cue,rate:(cue.rate||1)*(cue.own?1:pitch[game]||1)}:null;}
-const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12]};
+const notes={select:[7],drop:[0],undo:[7,3,0],shuffle:[0,7,12],hint:[5,9],invalid:[0,-4],miss:[0,-3,-7],perfect:[0,7],merge:[0,4,7],big:[0,4,7,12],win:[0,4,7,12,16],sparkle:[12],clear1:[0,7],clear2:[0,7,12],clear3:[0,4,7,12],clear4:[0,4,7,14],clear5:[0,5,9,12,17],bigClear:[0,4,7,12]};
 export class GameAudio{
- constructor(enabled){this.enabled=enabled;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;this.waiting=null;}
+ constructor(enabled,session=audioSession){this.enabled=enabled;this.session=session;this.context=null;this.buffers=new Map();this.decoded=new Map();this.failed=new Set();this.sources=new Set();this.generation=0;this.waiting=null;}
  wake(){
   const ctx=this.context;if(!ctx||ctx.state==='running')return Promise.resolve();
   // A resume requested before user activation can remain pending. Always make a
@@ -46,6 +59,8 @@ export class GameAudio{
 
  prepare(){
   if(!this.enabled())return;
+  // Before the context: on iOS the session type decides whether anything the context plays is audible at all.
+  this.session?.resume();
   try{
    if(!this.context||this.context.state==='closed'){
     this.generation++;this.context=new(window.AudioContext||window.webkitAudioContext)();this.buffers.clear();this.decoded.clear();this.waiting=null;
