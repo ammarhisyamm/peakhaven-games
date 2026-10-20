@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {clearEvent,cueFor,COMBO_LEVELS} from '../dist/game-audio.js';
 import {SIM_STEP} from '../dist/rng.js';
 import {installStubs,stubCanvas,stubCallbacks} from './ridge-planner.mjs';
+import {clearCues} from '../dist/puzzle-games.js';
 
 const NEW_FILES=['blk-combo-1','blk-combo-2','blk-combo-3','blk-combo-4','blk-combo-5','blk-combo-big','ridge-jump'];
 const audioPath=name=>fileURLToPath(new URL(`../dist/assets/audio/${name}.wav`,import.meta.url));
@@ -66,6 +67,30 @@ test('Ridge Run flaps the new jump, and nothing else does',()=>{
  assert.equal(cueFor('ridge','perfect').file,'clear');
  assert.equal(cueFor('ridge','miss').file,'fail');
  assert.equal(cueFor('ridge','bond').file,'score');
+});
+
+test('a clear plays its cascade unpitched, with the sparkle ticks on top',()=>{
+ const events=out=>clearCues(out).map(c=>c.event);
+ // No clear: the placement still snaps.
+ assert.deepEqual(events({lines:0,combo:0}),['drop']);
+ assert.deepEqual(events({lines:1,combo:1}),['clear1','drop']);
+ assert.deepEqual(events({lines:1,combo:3}),['clear3','sparkle','sparkle','drop']);
+ assert.deepEqual(events({lines:3,combo:2}),['bigClear','sparkle','drop']);
+ // The cascade itself carries no rate: the sample for that level already is the combo.
+ for(const combo of [1,2,3,4,5,6,9,30]){
+  const [cascade]=clearCues({lines:1,combo});
+  assert.equal(cascade.opts,undefined,`combo ${combo} plays its cascade at its own speed`);
+  const file=cueFor('blocks',cascade.event).file;
+  assert.equal(file,`blk-combo-${Math.min(combo,COMBO_LEVELS)}`);
+ }
+ // The sparkles still climb, both within a clear and with the combo behind it.
+ const three=clearCues({lines:1,combo:3}).filter(c=>c.event==='sparkle');
+ assert.equal(three.length,2);
+ assert.ok(three[1].opts.rate>three[0].opts.rate,'later ticks are higher');
+ assert.ok(three[1].opts.delay>three[0].opts.delay,'and later');
+ const five=clearCues({lines:1,combo:5}).filter(c=>c.event==='sparkle');
+ assert.ok(five[0].opts.rate>three[0].opts.rate,'a longer streak lifts the ticks');
+ assert.equal(clearCues({lines:1,combo:20}).filter(c=>c.event==='sparkle').length,4,'four ticks at most');
 });
 
 // A context that records what was started, so the rate a flap really plays at can be read back.

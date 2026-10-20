@@ -5,6 +5,20 @@ import {SHAPES,emptyGrid,tileLayout,tileRows,fits,placements,placeBlock,makeTray
 const symbols=['Blue vial','Pink vial','Gold vial','Purple vial','Green vial','Blue crystal','Pink crystal','Gold crystal','Green crystal'];
 const tileArt=kind=>kind>=5?`<span class="tile-gem block-${kind-4}" aria-hidden="true"></span>`:`<span class="happy-vial happy-${kind}" aria-hidden="true"></span>`;
 const clone=value=>structuredClone(value);
+// Which cues a Peak Blocks line clear plays, and in what order. Pure and at module scope so the choice is
+// covered by tests with no DOM.
+// The cascade is never pitched by the combo. Each level is its own sample, already longer and higher than
+// the one below it, so pitching it as well would count the combo twice and make a long streak sound sharp
+// and short. The sparkle ticks on top keep the lift they always had.
+export function clearCues(out){
+ const feel=comboFeedback(out);
+ if(!feel.lines)return [{event:'drop'}];
+ const cues=[{event:clearEvent({combo:feel.combo,big:feel.big})}];
+ const lift=2**((Math.min(feel.combo,6)-1)/6);
+ for(let i=1;i<Math.min(feel.combo,5);i++)cues.push({event:'sparkle',opts:{rate:lift*2**((i*2)/12)*1.2,delay:.05+i*.045}});
+ cues.push({event:'drop'});
+ return cues;
+}
 function controls(root){return Object.fromEntries([...root.querySelectorAll('[data-tool]')].map(b=>[b.dataset.tool,b]));}
 export function startBlocks(root,cb,options={}){
  // Rules live in blocks-core.js. `state` mirrors g.state and is re-read after every rules call, since Undo swaps the object.
@@ -53,12 +67,8 @@ const p=state.tray[state.selected];if(!p)return;const out=placeBlock(state.grid,
   for(const [x,y]of p.shape)board.querySelector(`[data-cell="${(r+y)*8+c+x}"]`)?.classList.add('ghost');
   for(const [rr,cc]of out.cleared)board.querySelector(`[data-cell="${rr*8+cc}"]`)?.classList.add('clear-preview');}
  function afterAction(){if(g.ended){finish();return;}hud();if(!anyFit(g))cb.message('No space left! Use one of the glowing tools to make room.');}
- // Block Blast style: every placement snaps; a clear pops on top, pitched up two semitones per combo step, with one more sparkle per step.
-function clearSound(out){if(out.lines){const rate=2**((Math.min(out.combo||1,6)-1)/6),feel=comboFeedback(out);
-  // One cue per combo level, and a separate big clear. Today every level points at the sound we already
-  // ship, so this changes nothing a player hears; it is the hook the new samples will land on.
-  cb.sound(clearEvent({combo:feel.combo,big:feel.big}),{rate});
-  for(let i=1;i<Math.min(out.combo||1,5);i++)cb.sound('sparkle',{rate:rate*2**((i*2)/12)*1.2,delay:.05+i*.045});}cb.sound('drop');}
+ // Block Blast style: every placement snaps, and a clear pops on top with one more sparkle per combo step.
+function clearSound(out){for(const cue of clearCues(out))cb.sound(cue.event,cue.opts);}
 function place(r,c){if(locked())return;if(bomb){if(!blocksBomb(g,r,c)){cb.sound('invalid');cb.message('Choose a square near filled blocks.');return;}state=g.state;bomb=false;cb.effect('SPACE CLEARED!','blocks');cb.sound('merge');render();afterAction();return;}const p=state.tray[state.selected];if(!p){cb.sound('invalid');cb.message('Select a piece from the tray first.');return;}const before=state.grid.map(row=>[...row]),out=blocksPlace(g,state.selected,r,c);if(!out){cb.sound('invalid');cb.message('That piece needs empty squares. Try another spot.');return;}state=g.state;hintCells=[];render();landed(p,r,c,out);blast(out,before,p.color,r,c);clearSound(out);cb.message(out.lines?`${out.lines} ${out.lines===1?'line':'lines'} cleared! +${out.points}${out.combo>1?` · combo ${out.combo}`:''}`:'Lovely fit. Keep a little space for the next piece.');let shown=false;if(out.lines){const praise=['','','GREAT!','EXCELLENT!','AMAZING!','UNBELIEVABLE!','UNBELIEVABLE!'][Math.min(out.lines,6)],label=out.perfect?'PERFECT CLEAR!':out.combo>1?`COMBO ${out.combo}${praise?` · ${praise}`:''}`:praise;if(label){cb.effect(label,'blocks',{lines:out.lines,combo:out.combo,perfect:out.perfect,points:out.points});shown=true;}}const feel=comboFeedback(out,{motion});shake(feel);comboCount(feel);lineBurst(out,p.color);
   milestones(out.rewards,shown);newBest(shown,(out.rewards?.length||0)*BANNER_GAP);cb.progress?.({lines:state.lines});afterAction();}
  // Clear effects, modelled on Block Blast: every cleared block bursts (a flash, then it shrinks away and throws
