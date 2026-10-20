@@ -4,6 +4,17 @@
 import {settleProgression} from './sequence-progression.js';
 
 export const SEQUENCE_V3_VERSION = 3;
+// v4 eases levels 1-14 and adds the two helper tools. Everything from level 15 up is the v3 curve,
+// unchanged, and a v1, v2 or v3 run is still played and verified by exactly the rules it was played on.
+export const SEQUENCE_V4_VERSION = 4;
+export const SEQUENCE_LATEST_VERSION = SEQUENCE_V4_VERSION;
+// Two of each per run, like Peak Blocks' dock. Tools do not cost a move: they are the way out of a board
+// that has stopped giving, and charging a move for one would make using it feel like a punishment.
+export const SEQUENCE_TOOLS = Object.freeze({shuffle: 2, hammer: 2});
+// How a tool is written into the move log. A swap is [tick, from, to] with both cells on the board, so a
+// negative `from` is a tool and can never be mistaken for one: HAMMER carries the cell it broke, SHUFFLE
+// carries -1. Keeping the log all-integer triples means the server's validation stays as strict as it was.
+export const SEQ_LOG = Object.freeze({hammer: -1, shuffle: -2});
 export const V3_SIZE = 7, V3_CELLS = 49;
 const EMPTY = -1;        // a hole waiting to be filled
 export const UNKNOWN = -2; // a refill a bot is not allowed to see; never matches, never clears
@@ -367,8 +378,8 @@ export function v3AllGoals(config, state, score) {
 
 export const v3Complete = (score, config, state) => score >= config.target && v3Goals(config, state).every(g => g.left === 0);
 
-export function v3Brief(level) {
-  const c = v3Level(level), parts = [`Reach ${c.target.toLocaleString('en-AU')} points`];
+export function v3Brief(level, version = SEQUENCE_V3_VERSION) {
+  const c = v3Level(level, version), parts = [`Reach ${c.target.toLocaleString('en-AU')} points`];
   if (c.ice.some(Boolean)) parts.push(c.ice.includes(3) ? 'break the three-layer ice' : c.ice.includes(2) ? 'break the two-layer ice' : 'break the ice');
   if (c.locks.some(Boolean)) parts.push('free the trapped crystals');
   if (c.collect) parts.push(`collect ${c.collect.count} ${CRYSTAL_NAMES[c.collect.type]}`);
@@ -402,6 +413,22 @@ export const V3_TUNING = Object.freeze({
   iceTiles: [4, 9], iceEvery: 7, trapCount: [2, 5], trapEvery: 14, collectCount: [8, 16], collectEvery: 5,
   // A level asking for two kinds of objective at once asks less of each.
   duoShare: 0.7,
+  // v4 only. Testers cleared the first levels but said getting through them took too long, and the measured
+  // curve agrees: there is a cliff at level 5, where ice goes to two layers in the same level the score goal
+  // starts climbing steeply, and the collect levels at 9 and 10 ask for nine crystals on the same 24 moves.
+  // This eases levels 1 to 14 and meets the solved curve again at 15, which is untouched along with
+  // everything above it. Solved the same way the rest of the curve was: by measuring the bots per level with
+  // tools/sequence-levels.mjs and moving these numbers until levels 1-10 landed inside the wanted band.
+  early: {
+    // The first level that plays exactly as v3 does. The knots below end here, at the v3 value, so the two
+    // curves join without a step.
+    until: 15,
+    perMove: [[1, 215], [3, 225], [5, 250], [10, 400], [15, 630]],
+    // The second layer of ice waits until the player has had a dozen levels of the single-layer kind.
+    iceLayersFrom: 12,
+    // Objective quotas ease from this share at level 1 back to the full quota at `until`.
+    quotaShare: 0.6,
+  },
 });
 
 export const v3Palette = () => V3_TUNING.palette;
@@ -414,8 +441,7 @@ export function v3Moves(level) {
 }
 
 // Straight lines between the knots, held flat past the last one.
-export function v3PerMove(level) {
-  const n = Math.max(1, level), knots = V3_TUNING.perMove;
+function alongKnots(knots, n) {
   if (n <= knots[0][0]) return knots[0][1];
   for (let i = 1; i < knots.length; i++) {
     const [x0, y0] = knots[i - 1], [x1, y1] = knots[i];
@@ -423,14 +449,26 @@ export function v3PerMove(level) {
   }
   return knots[knots.length - 1][1];
 }
+export function v3PerMove(level, version = SEQUENCE_V3_VERSION) {
+  const n = Math.max(1, level);
+  // v4's early knots run up to the level where they meet v3's curve; above that there is one curve.
+  if (version >= SEQUENCE_V4_VERSION && n < V3_TUNING.early.until) return alongKnots(V3_TUNING.early.perMove, n);
+  return alongKnots(V3_TUNING.perMove, n);
+}
+// How much of a level's objective quota it actually asks for: all of it, except in v4's early levels.
+export function v3QuotaShare(level, version = SEQUENCE_V3_VERSION) {
+  const n = Math.max(1, level), {until, quotaShare} = V3_TUNING.early;
+  if (version < SEQUENCE_V4_VERSION || n >= until) return 1;
+  return quotaShare + (1 - quotaShare) * (n - 1) / (until - 1);
+}
 
 // The score goal is the moves times the points per move a competent player earns — which climbs steeply
 // as specials and combos come online — adjusted for how much the level's own objectives already ask.
 // It keeps rising past level 36 instead of flattening at 4,500 the way v2's did.
-export function v3Target(level) {
+export function v3Target(level, version = SEQUENCE_V3_VERSION) {
   const n = Math.max(1, level);
   const weight = V3_TUNING.planWeight[v3Plan(n)] ?? 1;
-  return Math.round(v3Moves(n) * v3PerMove(n) * weight / 50) * 50;
+  return Math.round(v3Moves(n) * v3PerMove(n, version) * weight / 50) * 50;
 }
 
 // The objective rotation. Levels 1-10 keep PR #20's teaching order so the mechanics still arrive one at a
@@ -495,19 +533,22 @@ function pickCells(level, salt, count, eligible) {
 
 const ramp = (n, from, to, over) => Math.min(to, from + Math.floor(Math.max(0, n - 1) / over));
 
-export function v3Level(level) {
+export function v3Level(level, version = SEQUENCE_V3_VERSION) {
   const n = Number.isFinite(level) ? Math.max(1, Math.floor(level)) : 1;
-  const plan = v3Plan(n), moves = v3Moves(n), target = v3Target(n);
+  const plan = v3Plan(n), moves = v3Moves(n), target = v3Target(n, version);
   const ice = Array(V3_CELLS).fill(0), locks = Array(V3_CELLS).fill(false);
   const wantsIce = plan.includes('ice'), wantsTraps = plan.includes('traps'), wantsCollect = plan.includes('collect');
   // Two objectives in one level each ask less, so a mixed level is a change of shape rather than a wall.
-  const share = (wantsIce ? 1 : 0) + (wantsTraps ? 1 : 0) + (wantsCollect ? 1 : 0) > 1 ? V3_TUNING.duoShare : 1;
+  const share = ((wantsIce ? 1 : 0) + (wantsTraps ? 1 : 0) + (wantsCollect ? 1 : 0) > 1 ? V3_TUNING.duoShare : 1)
+    * v3QuotaShare(n, version);
   const quota = ([from, to], every) => Math.max(1, Math.round(ramp(n, from, to, every) * share));
 
   if (wantsIce) {
     const count = quota(V3_TUNING.iceTiles, V3_TUNING.iceEvery);
-    // One layer while ice is new, two from level 5, and a third from level 25 so it keeps growing.
-    const layers = n < 5 ? 1 : n < 25 ? 2 : 3;
+    // One layer while ice is new, two once it is familiar, and a third from level 25 so it keeps growing.
+    // v3 doubled it at level 5, in the same level its score goal started climbing; v4 waits.
+    const second = version >= SEQUENCE_V4_VERSION ? V3_TUNING.early.iceLayersFrom : 5;
+    const layers = n < second ? 1 : n < 25 ? 2 : 3;
     for (const i of pickCells(n, 1, count, () => true)) ice[i] = layers;
   }
   if (wantsTraps) {
@@ -519,7 +560,7 @@ export function v3Level(level) {
   const collect = wantsCollect
     ? {type: (Math.floor(n / 3) + Math.floor((n - 1) / 10)) % palette, count: quota(V3_TUNING.collectCount, V3_TUNING.collectEvery)}
     : null;
-  return {level: n, plan, moves, target, palette, ice, locks, collect};
+  return {level: n, plan, moves, target, palette, ice, locks, collect, version};
 }
 
 // ---------------------------------------------------------------- boards

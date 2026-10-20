@@ -29,6 +29,7 @@ const {SequenceEngine} = await mod('dist/tryout-games.js');
 const {sequenceMatches, SEQUENCE_MOVES} = await mod('dist/sequence-rules.js');
 const {SEQUENCE_RULES_VERSION, sequenceLevel, sequenceGoals, progressionExchange, applySequenceWave} = await mod('dist/sequence-progression.js');
 const {createRandom, SIM_STEP} = await mod('dist/rng.js');
+const {useToolWhenStuck} = await mod('tools/sequence-bot.mjs');
 // v3 lives in its own module so the v1/v2 paths stay untouched. Absent on older checkouts, which is how
 // this script still measures a baseline on a build that has no v3.
 const v3 = await mod('dist/sequence-v3.js').catch(() => null);
@@ -41,7 +42,7 @@ const RUNS = +arg('runs', 200);
 const SWEEP = +arg('sweep', 0);
 const MODE = arg('mode', SWEEP ? 'sweep' : 'both');
 const LEVELS = String(arg('levels', '1,2,5,10,15,20,30,40,60,100')).split(',').map(Number);
-if (RULES === 3 && !v3) throw new Error('This build has no dist/sequence-v3.js; pass --rules 2');
+if (RULES >= 3 && !v3) throw new Error('This build has no dist/sequence-v3.js; pass --rules 2');
 
 const PAIRS = [];
 for (let i = 0; i < 49; i++) {if (i % 7 < 6) PAIRS.push([i, i + 1]); if (i + 7 < 49) PAIRS.push([i, i + 7]);}
@@ -86,7 +87,7 @@ const legalV2 = (board, state) => {
 // ---------------------------------------------------------------- bots
 
 export function makeBots(rules) {
-  if (rules === 3) {
+  if (rules >= 3) {
     const {v3Legal, previewV3Move} = v3;
     const legal = e => v3Legal(e.board, e.progress);
     return {
@@ -185,12 +186,13 @@ export function play(level, seed, pick, rules, targetOverride = null) {
   const e = new SequenceEngine(canvas(), cb, {seed, level, motion: false, rulesVersion: rules});
   // The tuner uses this to ask "this level, but with that score goal", which is how the curve was solved.
   if (targetOverride !== null) e.target = targetOverride;
-  const goalsNow = () => rules === 3 ? v3.v3Goals(e.config, e.progress) : sequenceGoals(e.config, e.progress);
+  const goalsNow = () => rules >= 3 ? v3.v3Goals(e.config, e.progress) : sequenceGoals(e.config, e.progress);
   let stuck = 0;
   while (!e.ended && e.ticks < MAX_TICKS) {
     if (!e.pending) {
       const pair = pick(e);
-      if (!pair) {if (++stuck > 4) break;} else {stuck = 0; e.choose(pair[0], pair[1]);}
+      // A v4 board with no move waits for a tool; a player would use one, so the bot does too.
+      if (!pair) {if (!useToolWhenStuck(e) && ++stuck > 4) break;} else {stuck = 0; e.choose(pair[0], pair[1]);}
     }
     e.step(SIM_STEP);
   }
@@ -233,7 +235,7 @@ const median = a => {const s = [...a].sort((x, y) => x - y); return s.length ? s
 const BOTS = ['random', 'greedy', 'smart'];
 
 const bots = makeBots(RULES);
-const levelOf = level => RULES === 3 ? v3.v3Level(level) : sequenceLevel(level);
+const levelOf = level => RULES >= 3 ? v3.v3Level(level, RULES) : sequenceLevel(level);
 
 function measure(level) {
   const row = {level, config: levelOf(level)};
