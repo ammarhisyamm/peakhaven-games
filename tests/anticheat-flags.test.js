@@ -103,19 +103,32 @@ test('A duration reads the way a person would say it',()=>{
 });
 
 test('Each flag fires on its own measurement and stays quiet otherwise',()=>{
-  const base={game:'blocks',claimed:100,verified:100,openSeconds:60,history:[],moves:0,done:true};
+  const base={game:'blocks',claimed:100,verified:100,segmentSeconds:60,segment:1,history:[],moves:0};
   assert.deepEqual(flags.runFlags(base),[],'an unremarkable run has nothing said about it');
 
   const mismatch=flags.runFlags({...base,claimed:12400,verified:9850});
   assert.deepEqual(mismatch.map(r=>r.code),['claim-mismatch']);
   assert.equal(mismatch[0].text,'Claimed 12,400 against a verified 9,850.');
 
-  const long=flags.runFlags({...base,openSeconds:8040});
+  // A single-segment game has only the run to name, so it says so.
+  const long=flags.runFlags({...base,segmentSeconds:8040});
   assert.deepEqual(long.map(r=>r.code),['long-open']);
-  assert.equal(long[0].text,'Submitted 2 h 14 min after starting.','names the time, as asked');
-  assert.deepEqual(flags.runFlags({...base,openSeconds:flags.LONG_RUN_SECONDS}),[],'exactly on the threshold is not over it');
-  assert.deepEqual(flags.runFlags({...base,openSeconds:8040,done:false}),[],
-    'a Sequence run still being played has not taken too long yet');
+  assert.equal(long[0].text,'This run took 2 h 14 min.','names the time, as asked');
+  assert.equal(long[0].segmentSeconds,8040,'and keeps the number it was built from');
+  assert.equal(long[0].segment,1);
+  // Sequence names the level, because that is the stretch somebody held the seed for.
+  const longLevel=flags.runFlags({...base,game:'sequence',segment:6,segmentSeconds:2820});
+  assert.equal(longLevel[0].text,'Level 6 took 47 min.','names the segment, as asked');
+  assert.equal(longLevel[0].segment,6);
+  assert.deepEqual(flags.runFlags({...base,segmentSeconds:flags.LONG_SEGMENT_SECONDS}),[],'exactly on the threshold is not over it');
+  // There is no "wait until the run is over" any more: the segment being measured has already landed, so a
+  // slow level is said at the moment it lands rather than held back until the run closes.
+  const midRun=flags.runFlags({...base,game:'sequence',segment:3,segmentSeconds:2820});
+  assert.deepEqual(midRun.map(r=>r.code),['long-open'],'a slow level is flagged while the run is still going');
+  // And the whole point of the change: a long sitting made of ordinary levels is not a flag.
+  for(const seconds of [120,600,1799])
+    assert.deepEqual(flags.runFlags({...base,game:'sequence',segment:30,segmentSeconds:seconds}),[],
+      `a ${seconds}s level says nothing, however many of them a run has`);
 
   const history=[9850,8000,7000,6000,5000];
   // Claiming what it verified, so the only thing under test is the outlier rule: the shared base claims
@@ -147,8 +160,8 @@ test('Each flag fires on its own measurement and stays quiet otherwise',()=>{
 });
 
 test('One run can be caught by several checks at once',()=>{
-  const caught=flags.runFlags({game:'sequence',claimed:99999,verified:48200,openSeconds:8040,
-    history:[9850,8000,7000,6000,5000],moves:40,medianGapSeconds:.1,done:true});
+  const caught=flags.runFlags({game:'sequence',claimed:99999,verified:48200,segmentSeconds:8040,segment:2,
+    history:[9850,8000,7000,6000,5000],moves:40,medianGapSeconds:.1});
   assert.deepEqual(caught.map(r=>r.code).sort(),['claim-mismatch','fast-moves','long-open','score-outlier']);
 });
 
@@ -160,6 +173,17 @@ test('A Sequence run collects its reasons level by level, keeping the newest of 
   assert.equal(merged[0].text,'fast, level two','measured over more of the run, so it wins');
   assert.deepEqual(flags.mergeReasons(null,null),[]);
   assert.deepEqual(flags.mergeReasons([{nope:1},null],[]),[],'a row with no code is not a reason');
+});
+
+test('Of two slow levels the longer one is the one kept',()=>{
+  const three={code:'long-open',segment:3,segmentSeconds:5400,text:'Level 3 took 1 h 30 min.'};
+  const seven={code:'long-open',segment:7,segmentSeconds:2100,text:'Level 7 took 35 min.'};
+  assert.equal(flags.mergeReasons([three],[seven])[0].text,three.text,
+    'a later, shorter stretch does not replace the worst one');
+  assert.equal(flags.mergeReasons([seven],[three])[0].text,three.text,'whichever order they arrive in');
+  // Every other code keeps the plain newest-wins rule.
+  const old={code:'fast-moves',text:'old'},fresh={code:'fast-moves',text:'new'};
+  assert.equal(flags.mergeReasons([old],[fresh])[0].text,'new');
 });
 
 test('A stored run can be described from its replays without replaying it',()=>{
@@ -179,7 +203,7 @@ test('A stored run can be described from its replays without replaying it',()=>{
 
 // ---------------------------------------------------------------- the flags through the API
 
-test('A run finished long after it started is flagged, and still counts for every point it scored',async()=>{
+test('A single-segment run that took too long is flagged, and still counts for every point it scored',async()=>{
   const w=world(),player=await w.join('slow@peak.test','Slow');
   const started=await w.api.start({token:player.token,body:{game:'blocks'}});
   const b=blocksReplay(started.body.seed);
@@ -191,10 +215,67 @@ test('A run finished long after it started is flagged, and still counts for ever
   assert.equal(run.status,'closed','nor rejects it');
   assert.equal(run.flagged,true);
   assert.deepEqual(run.flag_reasons.map(r=>r.code),['long-open']);
-  assert.match(run.flag_reasons[0].text,/^Submitted 45 min after starting\.$/);
+  assert.match(run.flag_reasons[0].text,/^This run took 45 min\.$/);
   // And it is on the boards, which is the half of this that matters most.
   const board=(await w.api.leaderboard({token:player.token,query:{period:'monthly',game:'blocks'}})).body;
   assert.equal(board.me.points,b.score,'a flagged run still ranks');
+});
+
+// The reason the clock is per segment. A Sequence run is many levels in one sitting, and at a human pace
+// a long session crosses half an hour without anything odd in it. The whole-run clock flagged every one
+// of those; this one only speaks up when a single level was held open.
+test('A long Sequence sitting of ordinary levels is flagged for nothing',async()=>{
+  const w=world(),player=await w.join('marathon@peak.test','Marathon');
+  const started=await w.api.start({token:player.token,body:{game:'sequence'}});
+  let seed=started.body.seed,level=1,total=0;
+  // Twelve minutes a level: nothing remarkable on its own, and well past half an hour by level three.
+  const perLevel=12*60;
+  for(let i=0;i<4;i++){
+    const played=sequenceReplay(seed,level);
+    w.advance(perLevel);
+    total+=perLevel;
+    const f=await w.api.finish({token:player.token,body:{runId:started.body.runId,replay:played.replay,claimed:played.score}});
+    assert.equal(f.status,200,JSON.stringify(f.body));
+    if(f.body.done)break;
+    seed=f.body.nextSeed;level=f.body.nextLevel;
+  }
+  assert.ok(total>flags.LONG_SEGMENT_SECONDS,`the sitting ran ${total}s, past the ${flags.LONG_SEGMENT_SECONDS}s threshold`);
+  const run=w.store.runs.get(started.body.runId);
+  assert.deepEqual(run.flag_reasons,[],'no level was slow, so there is nothing to say about the run');
+  assert.equal(run.flagged,false);
+});
+
+test('One Sequence level held open is flagged, and the sentence names that level',async()=>{
+  const w=world(),player=await w.join('held@peak.test','Held');
+  const started=await w.api.start({token:player.token,body:{game:'sequence'}});
+  const l1=sequenceReplay(started.body.seed,1);
+  w.advance(l1.seconds+60);
+  const first=await w.api.finish({token:player.token,body:{runId:started.body.runId,replay:l1.replay,claimed:l1.score}});
+  assert.equal(first.status,200);
+  assert.equal(first.body.done,false,'the run goes on, which is the case the old rule could not see');
+  assert.deepEqual(w.store.runs.get(started.body.runId).flag_reasons,[],'level one was ordinary');
+
+  // Level two is handed its seed and then sat on for 47 minutes before a replay arrives for it.
+  const l2=sequenceReplay(first.body.nextSeed,first.body.nextLevel);
+  w.advance(47*60);
+  const second=await w.api.finish({token:player.token,body:{runId:started.body.runId,replay:l2.replay,claimed:l2.score}});
+  assert.equal(second.status,200,'a flag never refuses the run');
+  const run=w.store.runs.get(started.body.runId);
+  assert.equal(run.score,l1.score+l2.score,'nor changes its score');
+  assert.equal(run.flagged,true);
+  assert.deepEqual(run.flag_reasons.map(r=>r.code),['long-open']);
+  assert.equal(run.flag_reasons[0].text,`Level ${first.body.nextLevel} took 47 min.`,'the sentence names the level');
+  assert.equal(run.flag_reasons[0].segment,first.body.nextLevel);
+  assert.equal(run.flag_reasons[0].segmentSeconds,47*60);
+  // And the flag survives a later, ordinary level rather than being wiped by it.
+  if(!second.body.done){
+    const l3=sequenceReplay(second.body.nextSeed,second.body.nextLevel);
+    w.advance(l3.seconds+60);
+    assert.equal((await w.api.finish({token:player.token,body:{runId:started.body.runId,replay:l3.replay,claimed:l3.score}})).status,200);
+    const after=w.store.runs.get(started.body.runId);
+    assert.deepEqual(after.flag_reasons.map(r=>r.code),['long-open'],'a quiet level does not clear it');
+    assert.match(after.flag_reasons[0].text,/took 47 min\.$/,'and the slow level is still the one named');
+  }
 });
 
 test('A score far above the player&rsquo;s own best is flagged once there is enough history',async()=>{
@@ -467,7 +548,7 @@ test('The checklist warns on the things the run already shows',async()=>{
   assert.equal(byKey.flags.status,'warn');
   assert.match(byKey.flags.detail,/open flag/);
   assert.equal(byKey.timing.status,'warn','the long wait is a timing remark');
-  assert.match(byKey.timing.detail,/after starting/);
+  assert.match(byKey.timing.detail,/This run took 45 min/);
   assert.equal(byKey.history.status,'warn','and the score is far above their own best');
   assert.match(byKey.history.detail,/previous best/);
 });

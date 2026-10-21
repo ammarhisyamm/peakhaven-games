@@ -283,7 +283,7 @@ There are four, all measured by the server from the replay it just played and fr
 | code | what it reads | threshold |
 | --- | --- | --- |
 | `claim-mismatch` | the score the browser sent against the one its replay produced | any difference |
-| `long-open` | `started_at` to the submission | over 30 min |
+| `long-open` | one segment on its own: a Sequence level, or a whole Blocks/Ridge run | over 30 min |
 | `score-outlier` | the verified score against the player's own best in that game | over 3x, with 5+ earlier runs |
 | `fast-moves` | Sequence: median gap between moves. Peak Blocks: wall time over its placements | 150 ms / 400 ms |
 

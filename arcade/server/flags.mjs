@@ -10,10 +10,15 @@
 // ever compared against the verified one.
 import {SIM_STEP} from '../../dist/rng.js';
 
-// How long a run may sit open before finishing it is worth remarking on. A run is handed its seed when it
-// starts, so the clock is also how long somebody had the day's course in hand before submitting a replay
-// for it.
-export const LONG_RUN_SECONDS=30*60;
+// How long one segment may take before it is worth remarking on. A segment is one Sequence level, or the
+// whole of a Blocks or Ridge run, and its clock starts where the last one stopped: the run's own start for
+// the first, the previous segment's finish for the rest.
+//
+// Per segment rather than per run, because a run is handed its seed a segment at a time. What is worth
+// reading is a long stretch holding one seed with nothing submitted for it, not a long sitting: a Sequence
+// player clearing thirty levels at a human pace crosses half an hour without anything odd happening, and a
+// whole-run clock flags every one of them.
+export const LONG_SEGMENT_SECONDS=30*60;
 // A score this many times the player's own previous best, once they have enough history for "best" to mean
 // something, is worth a look. Someone genuinely improving does not usually treble their best in one run.
 export const OUTLIER_MULTIPLE=3;
@@ -72,21 +77,25 @@ export function historyOf(scores){
 //
 // Nothing in here can refuse a run or alter a score. It is handed only measurements:
 //   claimed / verified      the browser's number against the one the replay produced
-//   openSeconds             started_at to now, by the server's clock
+//   segmentSeconds          how long this segment alone took, by the server's clock
+//   segment                 which one it was: the Sequence level, or 1 for a single-segment game
 //   history                 the player's earlier verified scores in this game
 //   moves                   inputs in this segment, from the replay
 //   medianGapSeconds        median gap between them, where the replay carries a clock
 //   wallSecondsPerMove      the run's own wall time over its placements (Peak Blocks only)
-export function runFlags({game,claimed,verified,openSeconds,history,moves,medianGapSeconds,wallSecondsPerMove,done=true}){
+export function runFlags({game,claimed,verified,segmentSeconds,segment,history,moves,medianGapSeconds,wallSecondsPerMove}){
   const out=[];
   if(Number.isFinite(claimed)&&claimed!==verified)
     out.push({code:'claim-mismatch',claimed,verified,
       text:`Claimed ${number(claimed)} against a verified ${number(verified)}.`});
-  // Only once the run is actually over: a Sequence run part-way through its levels has not taken too long
-  // yet, it is still being played.
-  if(done&&Number.isFinite(openSeconds)&&openSeconds>LONG_RUN_SECONDS)
-    out.push({code:'long-open',openSeconds:round(openSeconds),
-      text:`Submitted ${formatDuration(openSeconds)} after starting.`});
+  // Measured when the segment lands, so there is no "is the run over yet" to wait for: a segment that took
+  // this long is finished by the time it is being read, whether or not the run goes on. Only Sequence has
+  // more than one, so only Sequence names a level; anywhere else the segment is the run.
+  if(Number.isFinite(segmentSeconds)&&segmentSeconds>LONG_SEGMENT_SECONDS)
+    out.push({code:'long-open',segmentSeconds:round(segmentSeconds),segment:Number(segment)||1,
+      text:game==='sequence'
+        ?`Level ${Number(segment)||1} took ${formatDuration(segmentSeconds)}.`
+        :`This run took ${formatDuration(segmentSeconds)}.`});
   const past=history?historyOf(history):null;
   if(past&&past.runs>=OUTLIER_MIN_RUNS&&past.best>0&&verified>past.best*OUTLIER_MULTIPLE)
     out.push({code:'score-outlier',score:verified,previousBest:past.best,priorRuns:past.runs,
@@ -105,12 +114,19 @@ export function runFlags({game,claimed,verified,openSeconds,history,moves,median
 // A Sequence run is verified a level at a time, so its reasons arrive in instalments. One code is kept once:
 // the newest wins, because it was measured over more of the run. Order is kept so the page reads the way the
 // run happened.
+//
+// long-open is the exception, because it is the one reason measured over a single segment rather than over
+// everything so far: the longest stretch stays. Otherwise a 90-minute level three would be quietly replaced
+// by a 35-minute level seven, and the worse of the two is the one worth reading.
+const keep=(existing,incoming)=>
+  existing.code==='long-open'&&(Number(existing.segmentSeconds)||0)>(Number(incoming.segmentSeconds)||0)
+    ?existing:incoming;
 export function mergeReasons(existing,incoming){
   const out=[];
   const fresh=new Map((incoming??[]).map(r=>[r.code,r]));
   for(const reason of existing??[]){
     if(!reason||typeof reason!=='object'||!reason.code)continue;
-    out.push(fresh.has(reason.code)?fresh.get(reason.code):reason);
+    out.push(fresh.has(reason.code)?keep(reason,fresh.get(reason.code)):reason);
     fresh.delete(reason.code);
   }
   for(const reason of incoming??[])if(fresh.has(reason.code)){out.push(reason);fresh.delete(reason.code);}

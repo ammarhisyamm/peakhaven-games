@@ -630,7 +630,7 @@ try {
     Array.isArray(flagRun.flag_reasons) && flagRun.flag_reasons.length === 0, JSON.stringify(flagRun.flag_reasons));
   check('a list of reasons can be written and read back',
     await (async () => {
-      const reasons = [{code: 'long-open', openSeconds: 8040, text: 'Submitted 2 h 14 min after starting.'},
+      const reasons = [{code: 'long-open', segmentSeconds: 2820, segment: 6, text: 'Level 6 took 47 min.'},
         {code: 'score-outlier', score: 48200, previousBest: 9850, priorRuns: 7, text: 'Scored 48,200.'}];
       await beforeFlags.db.query('update public.runs set flag_reasons = $2 where id = $1', [flagRun.id, JSON.stringify(reasons)]);
       const back = (await beforeFlags.db.query('select flag_reasons from public.runs where id = $1', [flagRun.id])).rows[0].flag_reasons;

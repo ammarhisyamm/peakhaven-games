@@ -526,9 +526,13 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       // and never moves it on a board: the score below is the verified one either way, and the run goes on
       // counting until an admin decides otherwise. All a reason does is put the run in Runs to review with
       // a sentence saying what looked odd.
+      // This segment's own clock: the run's start for the first, the previous segment's finish for the
+      // rest. updated_at is written on every verified segment, so for a Sequence level it is exactly when
+      // the level before it landed.
+      const segmentStart=Date.parse(run.segments>0?run.updated_at:(run.started_at??run.updated_at));
       const reasons=mergeReasons(run.flag_reasons,runFlags({
-        game:run.game,claimed,verified:result.score,done,
-        openSeconds:(at-Date.parse(run.started_at??run.updated_at))/1000,
+        game:run.game,claimed,verified:result.score,
+        segmentSeconds:(at-segmentStart)/1000,segment:level,
         history:await store.playerGameScores?.(s.player.id,run.game,run.id),
         moves:result.signals?.moves,
         medianGapSeconds:result.signals?.medianGapSeconds,

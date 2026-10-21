@@ -6,15 +6,16 @@
 -- There are now several, and a run can be caught by more than one of them at once:
 --
 --   claim-mismatch   the browser's score did not match the one its replay produced
---   long-open        the run was finished long after it was started, so somebody had the day's course in
---                    hand for a while before submitting a replay for it
+--   long-open        one stretch of the run took a long time, so somebody had that seed in hand for a
+--                    while before submitting a replay for it. Measured a segment at a time: one Sequence
+--                    level, or the whole of a Blocks or Ridge run, never the run's total sitting
 --   score-outlier    the verified score is several times the player's own previous best in that game
 --   fast-moves       the inputs came faster than a hand moves, sustained over the run
 --
 -- So the reasons are kept on the run as a list, each one a small object holding the sentence an admin
 -- reads and the numbers it was built from:
 --
---   [{"code": "long-open", "openSeconds": 8040, "text": "Submitted 2 h 14 min after starting."},
+--   [{"code": "long-open", "segmentSeconds": 2820, "segment": 6, "text": "Level 6 took 47 min."},
 --    {"code": "score-outlier", "score": 48200, "previousBest": 9850, "priorRuns": 7,
 --     "text": "Scored 48,200, more than 3x their previous best of 9,850 over 7 earlier runs."}]
 --

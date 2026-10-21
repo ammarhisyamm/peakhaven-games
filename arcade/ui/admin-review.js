@@ -13,7 +13,7 @@ const fmt=n=>Math.max(0,Number(n)||0).toLocaleString('en-AU');
 export const ACTION_LABELS={run_clear_flag:'Flag cleared',run_reject:'Run rejected',
   invite_create:'Code created',invite_max_uses:'Uses changed'};
 // What each check is called, for the panel's own explanation of what it is showing.
-export const FLAG_LABELS={'claim-mismatch':'Score did not match its replay','long-open':'Finished long after starting',
+export const FLAG_LABELS={'claim-mismatch':'Score did not match its replay','long-open':'One stretch took a long time',
   'score-outlier':'Far above their own best','fast-moves':'Inputs faster than a hand moves',legacy:'Flagged'};
 export const actionLabel=action=>ACTION_LABELS[action]??String(action??'');
 
