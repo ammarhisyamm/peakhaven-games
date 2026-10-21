@@ -152,6 +152,12 @@ body.game-open #app{width:min(100%,480px);max-width:480px;box-shadow:none}
 .goal-symbol.goal-lock{color:#ffdc86}
 .sequence-goal.is-complete{background:#174c53;color:#b8f1d5}
 .sequence-guide{position:absolute;left:var(--game-gutter);right:var(--game-gutter);bottom:max(20px,env(safe-area-inset-bottom));z-index:4;display:grid;gap:12px;padding:12px;background:#09243edb;border-radius:12px;color:#dceff9;pointer-events:none}
+/* A run with the helper dock has it along the bottom, so the reminder moves up to clear it. As a margin
+   rather than a bottom, so the short-screen rules further down still set the distance from the edge and
+   this only adds the dock's band to it. The board measures its own bottom from this panel's top
+   (SequenceEngine.geometry in dist/tryout-games.js), so lifting it is also what keeps the board off the
+   dock. v1 to v3 runs have no dock and the reminder keeps the bottom to itself. */
+.in-game .scene-sequence:has(.game-tools) .sequence-guide{margin-bottom:60px}
 .sequence-guide p{display:flex;align-items:center;gap:10px;font:500 14px/1.5 Inter,sans-serif;margin:0}
 .sequence-guide strong{font-weight:800;color:#fff}
 .sequence-guide .guide-symbol{flex:none;width:26px;height:26px;color:#95e7fa}

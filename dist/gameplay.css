@@ -123,7 +123,19 @@ body.game-open #app{position:fixed;inset:0;width:min(100%,480px);height:100dvh;m
 .block-cell.filled.clear-preview.block-8{filter:hue-rotate(48deg) saturate(1.2) brightness(1.35) drop-shadow(0 0 6px #6ff6ff)}
 .block-cell.filled.clear-preview.block-9{filter:hue-rotate(-24deg) saturate(1.5) brightness(1.35) drop-shadow(0 0 6px #6ff6ff)}
 /* Sequence's helper dock, from rules v4. The dock and its buttons are the shared .game-tools ones; these
-   are the two pieces that are its own: the glow on a tool that can still help, and the banner above it. */
+   are the three pieces that are its own: where the dock sits, the glow on a tool that can still help,
+   and the banner above it.
+   The placement is not optional. .play-panel is position:absolute;inset:0;display:block and .canvas-wrap
+   is absolute on top of it, so the dock is the only child still in the panel's flow: with no placement of
+   its own it lands on the panel's origin, which is the top-left corner of the screen, under the back
+   button and the HUD. The three DOM-board scenes never showed this because the rule above gives their
+   panel a centred flex column; Sequence is the one canvas scene with a dock, so it needs its own. */
+.in-game .scene-sequence .game-tools{position:absolute;left:0;right:0;bottom:max(12px,env(safe-area-inset-bottom));width:auto;max-width:none;margin:0;z-index:6}
+/* The dock takes the floor, so the status line moves up onto it rather than under it: the buttons are
+   opaque and would otherwise sit across the middle of the sentence. This is the original shell's layout
+   only -- the V2 interface hides this line in the Sequence scene, where the goal panel says the same
+   things -- and the board has room below it for both on every viewport that is not very short. */
+.in-game .scene-sequence .game-message{bottom:calc(max(12px,env(safe-area-inset-bottom)) + 58px)}
 .sequence-assist{position:absolute;left:12px;right:12px;bottom:84px;z-index:7;padding:11px 14px;background:#ffe8ae;color:#102339;border:3px solid #ffb020;border-radius:14px;display:grid;gap:4px;text-align:center;font:600 15px/1.4 Inter,sans-serif;box-shadow:0 8px 22px #00142a73}
 .sequence-assist[hidden]{display:none}
 .sequence-assist strong{font-size:20px;font-weight:850;line-height:1.2;color:#0d1f33}
