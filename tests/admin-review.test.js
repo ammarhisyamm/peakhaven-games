@@ -292,7 +292,12 @@ test('A flagged run keeps what was claimed against what the replay produced',asy
   assert.ok(listed,'and it is waiting to be reviewed');
   assert.equal(listed.verifiedScore,run.played.score);
   assert.equal(listed.claimedScore,run.played.score+3000);
-  assert.match(reasonLine(listed),/^Claimed [\d,]+ · Verified [\d,]+$/,'the page shows both numbers');
+  // The reason now carries the pair in words, which is the same two numbers said as a sentence. The two
+  // columns are still written and still returned, asserted just above, so a query can still count them.
+  assert.deepEqual(listed.reasons.map(r=>r.code),['claim-mismatch']);
+  assert.match(reasonLine(listed),/^Claimed [\d,]+ against a verified [\d,]+\.$/,'the page shows both numbers');
+  for(const n of [run.played.score,run.played.score+3000])
+    assert.ok(reasonLine(listed).includes(n.toLocaleString('en-AU')),`${n} is named`);
   assert.equal((await w.view(token)).body.review.details,true);
 });
 
@@ -328,7 +333,12 @@ test('Without flag-details.sql a run is still flagged and still reviewable',asyn
   const listed=view.body.review.runs.find(r=>r.id===started.body.runId);
   assert.equal(listed.claimedScore,null);
   assert.equal(listed.verifiedScore,null);
-  assert.match(reasonLine(listed),/did not match/i,'so it shows the sentence it always showed');
+  // The pair of numbers is what this migration carries, and without it there is no pair to show. The
+  // sentence is a different migration (flag-reasons.sql), which this deployment has, so the run still says
+  // why in words — it just cannot say it with these two numbers beside it.
+  assert.deepEqual(listed.reasons.map(r=>r.code),['claim-mismatch'],'the reason is still known');
+  assert.match(reasonLine(listed),/^Claimed .* against a verified /,'so it reads as a sentence, not as the pair');
+  assert.doesNotMatch(reasonLine(listed),/·/,'the claimed-against-verified pair needs the columns this one lacks');
 });
 
 test('The review list can be narrowed to one game, or to flagged or rejected',async()=>{

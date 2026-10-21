@@ -2,7 +2,7 @@
 import {randomUUID} from 'node:crypto';
 import {refundPlan,refundedRunReason} from './coins.mjs';
 
-export function createMemoryStore({invites={},now=()=>new Date()}={}){
+export function createMemoryStore({invites={},now=()=>new Date(),flagReasons=true}={}){
   const codes=new Map(Object.entries(invites).map(([code,max])=>[code,{max,uses:0,note:'',created_at:null}]));
   const players=new Map(),runs=new Map(),runStats=new Map(),results=new Map(),prizes=new Map(),purchases=new Map(),ledger=[],adminEntries=[];
   const copy=v=>v&&structuredClone(v);
@@ -26,6 +26,26 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     async updatePlayer(id,patch){Object.assign(players.get(id),patch);return copy(players.get(id));},
     async playersByIds(ids){return ids.map(id=>players.get(id)).filter(Boolean).map(copy);},
     async allPlayers(){return [...players.values()].map(copy);},
+    // Several runs at once, for the admin page's look at a month's winners.
+    async runsByIds(ids){return ids.map(id=>runs.get(id)).filter(Boolean).map(copy);},
+    // A player's earlier verified scores in one game, for the personal-best flag. Rejected runs are not
+    // history, and a run that never had a segment verified never happened.
+    async playerGameScores(playerId,game,excludeRunId=null){
+      return [...runs.values()]
+        .filter(r=>r.player_id===playerId&&r.game===game&&r.status!=='rejected'&&r.segments>0&&r.id!==excludeRunId)
+        .map(r=>Number(r.score)||0);
+    },
+    // How many verified runs each player has per game, and their best. One row per player and game.
+    async runTotalsByPlayer(){
+      const out=new Map();
+      for(const r of runs.values()){
+        if(r.status==='rejected'||!(r.segments>0))continue;
+        const key=`${r.player_id}|${r.game}`,row=out.get(key)??{player_id:r.player_id,game:r.game,runs:0,best:0};
+        row.runs++;row.best=Math.max(row.best,Number(r.score)||0);
+        out.set(key,row);
+      }
+      return [...out.values()];
+    },
     // Free tries only: a paid run never uses one of the three free tries up.
     async countRuns(playerId,day){const out={};for(const r of runs.values())if(r.player_id===playerId&&r.day===day&&!r.paid)out[r.game]=(out[r.game]||0)+1;return out;},
     async startRun({playerId,game,day,seed,limit,requestId=null,allowPaid=false}){
@@ -39,7 +59,7 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
       const t=now().toISOString();
       for(const r of runs.values())if(r.player_id===playerId&&r.game===game&&r.status==='open'){r.status='closed';r.finished_at=t;}
       const run={request_id:requestId,id:randomUUID(),player_id:playerId,game,day,seed,level:1,segments:0,score:0,status:'open',flagged:false,paid,replays:[],started_at:t,updated_at:t,finished_at:null,reject_reason:null,
-        claimed_score:null,verified_score:null};
+        claimed_score:null,verified_score:null,flag_reasons:[]};
       runs.set(run.id,run);
       // The coin and the run are one step here, as they are in one transaction in start_run.
       if(paid){players.get(playerId).coins=balance(playerId)-1;log({player_id:playerId,delta:-1,reason:'run',run_id:run.id,note:`Extra try: ${game}`});}
@@ -139,6 +159,9 @@ export function createMemoryStore({invites={},now=()=>new Date()}={}){
     // to; until it has run, adminLogReady() is false and every action is refused rather than made untraceably.
     async adminLogReady(){return true;},
     async flagDetailsReady(){return true;},
+    // Whether flag-reasons.sql has run. The tests set this false to exercise the fallback, which is the
+    // single sentence the admin page showed when there was only one way to be flagged.
+    async flagReasonsReady(){return flagReasons;},
     // Everything worth a second look in one month: the runs a verification flagged, and the ones already
     // rejected, newest change first.
     async runsToReview({from,to,game=null,state=null}){
@@ -200,5 +223,7 @@ export function createMemoryAuth(){
     async deleteUser(id){users.delete(id);},
     async sendLink(email,redirectTo){sent.push({email,redirectTo});},
     async emailsByIds(ids){return ids.map(id=>users.get(id)).filter(Boolean).map(u=>({id:u.id,email:u.email}));},
+    // The whole directory in one call, the way listUsers answers in production.
+    async allEmails(){return [...users.values()].map(u=>({id:u.id,email:u.email}));},
   };
 }

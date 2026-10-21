@@ -274,6 +274,52 @@ run claiming half as much again is a different conversation from one that is out
   schema as it stands on `origin/main`, twice, in both orders and one without the other. 26 checks.
 - Tests: `tests/admin-review.test.js`.
 
+## Flags, duplicate accounts and the look before a prize
+
+A run is flagged when something about it is worth a person reading. **A flag never rejects a run, never
+changes its score and never moves it on a board** — it writes a sentence and puts the run in Runs to review.
+There are four, all measured by the server from the replay it just played and from its own clock:
+
+| code | what it reads | threshold |
+| --- | --- | --- |
+| `claim-mismatch` | the score the browser sent against the one its replay produced | any difference |
+| `long-open` | one segment on its own: a Sequence level, or a whole Blocks/Ridge run | over 30 min |
+| `score-outlier` | the verified score against the player's own best in that game | over 3x, with 5+ earlier runs |
+| `fast-moves` | Sequence: median gap between moves. Peak Blocks: wall time over its placements | 150 ms / 400 ms |
+
+- **Reasons live on the run** as a list, so one run can carry several, each with the sentence an admin reads
+  and the numbers it was built from. The sentence is stored rather than rebuilt, so a run reviewed next month
+  still says what it said when it was flagged even if a threshold has moved since.
+- **Existing projects need the migration**: run `supabase/flag-reasons.sql` once in the Supabase SQL editor,
+  for the `flag_reasons` column on `runs`. Idempotent, and independent of the two above. Until it has run,
+  runs are still flagged, still listed and still reviewable, and each one shows the single sentence the page
+  showed when there was one way to be flagged.
+- **Calibration**: against the harness bots, all four flag **0%** of honest play — Sequence medians 525–1008 ms
+  between moves against a 150 ms threshold, and no bot run ever trebles its own running best over 55 eligible
+  runs. One honest limit worth knowing: `fast-moves` cannot currently fire for **Sequence**, because the
+  engine refuses a move while an animation is pending and `replaySequence` rejects a run containing a refused
+  move — so a Sequence bot is turned away at verification rather than flagged. Played as fast as the engine
+  permits, a legal replay still medians 575 ms. The rule is kept because it costs nothing and becomes live if
+  that gating ever loosens.
+- **Possible duplicate accounts**: the admin page groups accounts that joined on the same invite code within
+  half an hour of each other (chained, so four signups ten minutes apart stay one cluster), and accounts whose
+  addresses reach one mailbox (`name+tag@` is `name@`, and Gmail ignores dots). Display only — it blocks
+  nothing and flags nothing, because plus-addressing is legitimate and a shared code is what a shared code is
+  for. Built from three things already stored: the invite code, the signup time and the email.
+- **Before paying a prize**: each game's top three with the run behind the row — verified score, input count,
+  `started_at` to `finished_at`, game time, and any flag — plus a six-line checklist showing what the stored
+  run can already answer. **Re-verify** re-plays the stored replay through the same verifier that let it in
+  and reports whether it still produces the score on the board; it writes nothing, so it is not logged as an
+  admin action. A Sequence run is re-played a level at a time, against the seed each level was handed.
+- `emailsByIds` now reads the whole directory in one `listUsers` call instead of one `getUserById` per
+  player, which is what makes a duplicate panel over every account affordable inside one Vercel function. It
+  falls back to the old way if `listUsers` is refused.
+- Proof: `node tools/verify-sql.mjs` covers `flag-reasons.sql` too — that it applies twice without changing
+  anything the second time, that the column is `jsonb not null default '[]'`, that the check constraint
+  refuses anything that is not a list, that no browser key holds a grant on `runs`, and that a database
+  without it reports `42703` the way the store expects. 124 checks in all.
+- Tests: `tests/anticheat-flags.test.js`.
+
 Locally the whole loop works without any of the environment variables: the dev server falls back to obvious
 placeholder bank details, so buy a pack as a player, then **Mark paid** as `admin@dev.test` on `/admin.html`,
 then play an extra try.

@@ -7,17 +7,21 @@ import {initAccount} from './account.js';
 import {PRIZE_FALLBACK,prizeLine,winnerEmails,monthLabel,monthName} from './month-prizes.js';
 import {coinsPanels,bindCoins,actionMessage} from './admin-coins.js';
 import {reviewPanels,bindReview,reviewMessage} from './admin-review.js';
+import {duplicatePanel} from './admin-duplicates.js';
+import {winnerPanels,bindWinners} from './admin-winners.js';
 
 const $=s=>document.querySelector(s),main=$('#main');
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Math.max(0,Number(n)||0).toLocaleString('en-AU');
 const GAMES=['blocks','sequence','ridge'];
+// The duplicate panel shows a best score per game, so it needs the labels rather than the ids.
+const GAME_LABELS=[{game:'blocks',label:'Peak Blocks'},{game:'sequence',label:'Sequence'},{game:'ridge',label:'Ridge Run'}];
 
 let account,view=null,month=null,busy=false,note='',noteKind='',coins=null;
 // Which runs the review panel is showing. The month comes from the page's own month selector.
 let reviewGame='',reviewState='';
 // The actions that belong to admin-review.js rather than admin-coins.js, so the right one reports them.
-const REVIEW_ACTIONS=['clear-flag','reject','invite-create','invite-max-uses'];
+const REVIEW_ACTIONS=['clear-flag','reject','re-verify','invite-create','invite-max-uses'];
 
 function say(message,kind=''){note=message;noteKind=kind;render();}
 
@@ -130,9 +134,9 @@ function render(){
     return;
   }
   if(!view){
-    main.innerHTML=`<section class="panel"><h2>Monthly results</h2><p>${busy?'Loading…':escape(note||'Nothing loaded yet.')}</p>${busy?'':'<button class="secondary" id="reload">Try again</button>'}</section>${coinsPanels(coins,busy)}${reviewPanels(coins,busy)}`;
+    main.innerHTML=`<section class="panel"><h2>Monthly results</h2><p>${busy?'Loading…':escape(note||'Nothing loaded yet.')}</p>${busy?'':'<button class="secondary" id="reload">Try again</button>'}</section>${winnerPanels(coins,busy)}${coinsPanels(coins,busy)}${reviewPanels(coins,busy)}${duplicatePanel(coins,GAME_LABELS)}`;
     if(!busy)$('#reload').onclick=()=>load(month);
-    bindCoins(main,{act});bindReview(main,{act,filter});
+    bindCoins(main,{act});bindReview(main,{act,filter});bindWinners(main,{act});
     return;
   }
   const finalisedSet=new Set(view.finalisedMonths||[]);
@@ -152,8 +156,10 @@ function render(){
     <section class="panel"><h2>Prize text</h2>${prizeInputs()}</section>
     <section class="panel"><h2>Winners</h2>${winnerRows()}</section>
     ${backupRows()}
+    ${winnerPanels(coins,busy)}
     ${coinsPanels(coins,busy)}
     ${reviewPanels(coins,busy)}
+    ${duplicatePanel(coins,GAME_LABELS)}
     <section class="panel"><h2>Every podium</h2>${view.games.map(g=>`<div class="admin-game-block"><h3>${escape(g.label)}</h3><p class="admin-hint">${escape(prizeLine({[g.game]:g.text},g.game))}</p><ol class="admin-list">${g.podium.length?g.podium.map(r=>`<li><span class="admin-place">${r.rank===1?'1st':r.rank===2?'2nd':'3rd'}</span><div><strong>${escape(r.name)}</strong><small>${r.winner?'Winner':'Runner-up'}</small></div><span class="admin-score">${fmt(r.score)}</span></li>`).join(''):'<li class="admin-hint">No scores.</li>'}</ol></div>`).join('')}</section>`;
 
   $('#month').onchange=e=>load(e.target.value);
@@ -162,7 +168,7 @@ function render(){
   if(saveButton)saveButton.onclick=savePrizes;
   const copy=$('#copy-emails');
   if(copy)copy.onclick=()=>copyEmails(winnerEmails(view.winners));
-  bindCoins(main,{act});bindReview(main,{act,filter});
+  bindCoins(main,{act});bindReview(main,{act,filter});bindWinners(main,{act});
 }
 
 const readPrizes=()=>Object.fromEntries(GAMES.map(game=>[game,main.querySelector(`[data-prize="${game}"]`)?.value??'']));
