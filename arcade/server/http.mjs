@@ -2,6 +2,7 @@
 import {createHandlers} from './handlers.mjs';
 import {supabaseEnv,createSupabaseBackend} from './supabase-store.mjs';
 import {createPaymentProvider} from './payments.mjs';
+import {createStripeWebhook} from './stripe.mjs';
 
 let handlers=null;
 function setup(){
@@ -38,6 +39,42 @@ export function route(name){
       return res.status(500).json({error:'Something went wrong. Please try again.'});
     }
   };
+}
+
+// Stripe's webhook, and the one reason this deployment has a twelfth function: a signature can only be
+// checked against the exact bytes Stripe sent, and every other route here reads req.body, which is a parsed
+// object. Vercel's req.body is a lazy getter, so a function that never asks for it leaves the stream
+// untouched and can read those bytes itself — which is what rawBody below does.
+let hook=null;
+export function stripeWebhook(){
+  return async function handler(req,res){
+    res.setHeader('Cache-Control','no-store');
+    if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'});
+    const env=supabaseEnv();
+    if(!env.ready)return res.status(503).json({error:'Accounts are not set up on this deployment yet.'});
+    if(!hook){
+      const {store}=createSupabaseBackend(env);
+      hook=createStripeWebhook({store,providerId:createPaymentProvider().id});
+    }
+    try{
+      const out=await hook({body:await rawBody(req),signature:req.headers['stripe-signature']});
+      return res.status(out.status).json(out.body);
+    }catch(error){
+      // A 500 is the honest answer: Stripe retries for three days, and the event is not written down until
+      // it has actually been acted on, so the retry does the work this attempt did not.
+      console.error('[api/stripe]',error);
+      return res.status(500).json({error:'The event could not be handled. Please retry.'});
+    }
+  };
+}
+// The bytes as sent. Nothing here reads req.body: a parsed object re-serialised is no longer what Stripe
+// signed, so if the stream really has been consumed this answers with nothing and the webhook says so rather
+// than verifying a signature against a guess.
+async function rawBody(req){
+  if(Buffer.isBuffer(req.rawBody))return req.rawBody;
+  const chunks=[];
+  for await(const chunk of req)chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk));
+  return chunks.length?Buffer.concat(chunks):null;
 }
 
 // Public settings the browser needs to sign in. Empty when accounts aren't configured, so the site runs in demo mode.

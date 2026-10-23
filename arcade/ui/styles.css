@@ -147,6 +147,9 @@ tr.you td{background:#e6f7ff;font-weight:700}.podium-place.empty{opacity:.45}.fo
 .admin-list.purchases li,.admin-list.ledger li{flex-wrap:wrap}
 .admin-reference{font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.04em}
 .admin-pack,.admin-age,.admin-reason{font-size:13px;opacity:.8}
+/* A Stripe Checkout Session id is long and is read to be pasted somewhere, so it wraps rather than pushing
+   the row's buttons off the end. */
+.admin-provider-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;opacity:.7;word-break:break-all}
 .admin-row-actions{display:flex;gap:8px;margin-left:auto}
 .admin-row-actions button{padding:8px 14px;font-size:13px}
 .admin-status{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--line)}
