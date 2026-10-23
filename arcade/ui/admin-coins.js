@@ -41,6 +41,8 @@ function paymentNotice(view){
     ?'Set <b>STRIPE_SECRET_KEY</b> and <b>STRIPE_WEBHOOK_SECRET</b> (and point a Stripe webhook endpoint at <b>/api/stripe</b>).'
     :'Set <b>ARCADE_PAY_ACCOUNT_NAME</b> and either <b>ARCADE_PAY_BSB</b> + <b>ARCADE_PAY_ACCOUNT_NUMBER</b> or <b>ARCADE_PAY_PAYID</b>.'} Coins already handed out can still be spent.</p>`;
   if(view?.providerReady===false)return `<p class="admin-note bad">The card shop is hidden because <b>arcade/supabase/stripe.sql</b> has not been run in the Supabase SQL editor yet. Run it, then reload this page. Until then no card payment is taken, and coins already handed out can still be spent.</p>`;
+  // Test keys take no money, so the shop is open to admins alone and nobody else sees it at all.
+  if(view?.testMode)return `<p class="admin-note">Payments: ${escape(providerLabel(view.provider))}, <b>in test mode</b>. The shop is open to admin accounts only, and every other player sees it exactly as if payments were off. Pay with a Stripe test card; no real money moves. Swap in the live key and that endpoint&rsquo;s signing secret to open it to everybody.</p>`;
   return `<p class="admin-hint">Payments: ${escape(providerLabel(view.provider))}. The shop is open.${stripe
     ?' Coins are added by the Stripe webhook at /api/stripe, never by hand and never by the page the player comes back on.':''}</p>`;
 }

@@ -55,8 +55,13 @@ export function stripeEnv(env=process.env){
     apiVersion:pick('STRIPE_API_VERSION')||null,
     siteUrl:cleanSiteUrl(pick('ARCADE_SITE_URL')),
     ready:Boolean(secretKey&&webhookSecret),
-    live:secretKey.startsWith('sk_live_')};
+    // A live key is the only kind that takes real money. Anything else — sk_test_, a restricted test key, or
+    // a key in a shape this does not recognise — counts as test mode, because being wrong in that direction
+    // only hides the shop from players, while being wrong the other way would sell them nothing for nothing.
+    live:LIVE_KEY.test(secretKey),
+    testMode:Boolean(secretKey)&&!LIVE_KEY.test(secretKey)};
 }
+const LIVE_KEY=/^(sk|rk)_live_/;
 // Where the player is sent back to. A deployment only needs this when the host the request arrived on is not
 // the one the arcade is served from; otherwise the request's own origin is used.
 export function cleanSiteUrl(value){

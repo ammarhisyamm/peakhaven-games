@@ -213,6 +213,16 @@ delivery cannot be replayed later). The success page the player comes back on gr
   `refund_purchase` a manual refund uses, so unspent coins come back and the runs the spent ones paid for stop
   counting; `checkout.session.expired` cancels the pending purchase so an abandoned checkout does not leave
   the player blocked. Anything else is answered `200` and ignored.
+- **Test keys sell to admins only.** When `STRIPE_SECRET_KEY` is not a live key (`sk_live_`/`rk_live_`), the
+  shop is open to the accounts in `ARCADE_ADMIN_EMAILS` and **everybody else sees it exactly as if payments
+  were off** — no packs, no payment details, no shop, and no mention of a test mode. A test-mode payment is
+  not a payment: the card is a fake one and no money moves, so a player who found the shop would be handed
+  real coins, on the same leaderboard as everyone else, for nothing. What a player does **not** lose is their
+  balance — coins already granted are still shown and still spent, which is the rule `ui/wallet-view.js`
+  holds. An admin's shop carries a **TEST MODE** badge and a line saying no real money moves, so whoever is
+  testing a payment is never in any doubt about which it was, and the admin page says the same. A key in a
+  shape neither `sk_live_` nor `rk_live_` counts as test mode: being wrong that way only hides the shop from
+  players, while being wrong the other way would sell them nothing for nothing.
 - A refund or a dispute arrives as a **charge**, not as a session, so the purchase is traced through
   `provider_payment_ref` (the PaymentIntent, recorded when the session completed) as well as through metadata.
 - A webhook never touches a purchase that is being paid by bank transfer, and refuses an event whose amount,
@@ -243,8 +253,9 @@ delivery cannot be replayed later). The success page the player comes back on gr
   paid — and **Cancel** and **Refund** work as they always did.
 - Tests: `tests/stripe.test.js` (a mocked Stripe: a grant on a valid signed event, a rejected signature, a
   stale timestamp, a tampered body, no double grant on a replay, a refund reversing coins and runs, a dispute,
-  an amount that does not match, and the redirect on its own granting nothing), and the `stripe.sql` section of
-  `tools/verify-sql.mjs`.
+  an amount that does not match, the redirect on its own granting nothing, and both sides of the test-key
+  guard — a player who sees no shop but keeps and spends their coins, and an admin who sees a badged one that
+  works end to end), and the `stripe.sql` section of `tools/verify-sql.mjs`.
 
 #### Setting it up in Stripe, in test mode
 
@@ -265,7 +276,8 @@ delivery cannot be replayed later). The success page the player comes back on gr
      `charge.refunded`, `charge.dispute.created`.
    - Create it, then **Reveal** the **Signing secret** (`whsec_…`) and set it in Vercel as
      `STRIPE_WEBHOOK_SECRET`. **Redeploy** so both variables are live.
-5. **Make a test purchase.** Open the arcade, sign in, go to the coin shop and buy a pack. On Stripe's page
+5. **Make a test purchase**, signed in as one of `ARCADE_ADMIN_EMAILS` — on a test key the shop is open to
+   admins only, and any other account sees no shop at all. The panel is badged **TEST MODE**. On Stripe's page
    use test card **4242 4242 4242 4242**, any future expiry (`12/34`), any CVC (`123`), any postcode. You are
    returned to the arcade, which says *Confirming your payment* for a second and then **Coins added**.
 6. **Check it landed.** In Stripe: **Webhooks → your endpoint → Event deliveries** shows
@@ -289,7 +301,9 @@ and the whole loop runs on this machine.
    (`sk_live_…`), and **create the webhook endpoint again** in live mode with the same URL and the same five
    events. Test and live endpoints are separate and their signing secrets are different.
 3. In Vercel, replace `STRIPE_SECRET_KEY` with the live key and `STRIPE_WEBHOOK_SECRET` with the live
-   endpoint's secret, then redeploy. Nothing in the repo changes; `arcade/supabase/stripe.sql` has already run.
+   endpoint's secret, then redeploy. Nothing in the repo changes; `arcade/supabase/stripe.sql` has already
+   run. **That swap is also what opens the shop to players**: the live key takes the admin-only guard and the
+   TEST MODE badge off with it.
 4. Buy the 1-coin pack with a real card as the first live payment, check the admin page shows it paid, then
    refund it from Stripe and check the coin comes back.
 5. If a live payment ever shows a `400` in **Event deliveries**, the signing secret in Vercel is not that

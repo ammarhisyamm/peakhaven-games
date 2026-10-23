@@ -103,7 +103,8 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
 </section>
 <section class="kg-shop" aria-labelledby="kg-shop-title">
  <button class="kg-close" type="button" aria-label="Close coin shop">${svg('close')}</button>
- <header class="kg-shop-head">${mascot('kg-shop-mascot')}<div><h2 id="kg-shop-title" class="kg-shop-title">${accountShop?'EXTRA TRIES':'KEEP GOING?'}</h2><p>One balance. Play any of the three games.</p><span class="kg-pill">${accountShop?'1 coin = 1 extra try':'1 blue coin = 1 play'}</span></div></header>
+ <header class="kg-shop-head">${mascot('kg-shop-mascot')}<div><h2 id="kg-shop-title" class="kg-shop-title">${accountShop?'EXTRA TRIES':'KEEP GOING?'}</h2><p>One balance. Play any of the three games.</p><span class="kg-pill">${accountShop?'1 coin = 1 extra try':'1 blue coin = 1 play'}</span>${accountShop?.testMode?'<span class="kg-pill kg-test-mode">TEST MODE</span>':''}</div></header>
+ ${accountShop?.testMode?'<p class="kg-test-note">Card payments are in test mode, so only admins can see this shop and no real money moves. Use a Stripe test card.</p>':''}
  <p class="kg-run-note">${eyebrow} · ${title.toLowerCase()} · ${fmt(result?.score)} pts</p>
  <p class="kg-out-note">Your free plays are used up for today.</p>
  <p class="kg-balance">${coinArt(0)}<span>${accountShop?'Your coins':'Shared coins'}</span><strong class="kg-wallet-count">0</strong></p>

@@ -57,9 +57,18 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   // write any of that, so the shop stays hidden rather than taking a payment it could not account for. Every
   // other provider needs nothing, so this is true for them.
   const providerStoreReady=async()=>payments.id!=='stripe'||Boolean(await store.stripeReady?.());
+  // Whether this account runs the competition. The same set adminIn() checks, read without the 403.
+  const isAdmin=user=>adminEmails.has(String(user?.email||'').toLowerCase());
   // The shop also needs somewhere for the money to go, so a half-configured deployment shows no shop at all
   // rather than a pack list that cannot be paid for.
-  const shopReady=async()=>Boolean(payments.ready)&&await coinsReady()&&await providerStoreReady();
+  //
+  // A provider on test keys is open to admins only. A test-mode payment is not a payment — the card is a
+  // fake one and no money moves — so a player who found the shop would be handed coins for nothing, on the
+  // same leaderboard as everybody else. Everyone but an admin therefore sees exactly what they would see if
+  // payments were switched off: no packs, no payment details, no shop. What they do **not** lose is their
+  // balance: coins already granted are still shown and still spent, which is the rule wallet-view.js holds.
+  const shopReady=async(admin=false)=>Boolean(payments.ready)&&(admin||!payments.testMode)
+    &&await coinsReady()&&await providerStoreReady();
   const coinBalance=async playerId=>(await coinsReady())?Math.max(0,Number(await store.coinsFor(playerId))||0):0;
   const purchaseView=row=>({reference:row.reference,coins:Number(row.coins)||0,pack:Number(row.pack)||0,
     amount:Number(row.amount_cents)||0,price:formatAmount(row.amount_cents),currency:row.currency??COIN_CURRENCY,
@@ -71,11 +80,16 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   // What the player is shown: their balance, anything still waiting for payment, and whatever was granted
   // recently so a "coins added" message can be shown once. Purchases older than this are history.
   const RECENT_MS=14*24*60*60*1000;
-  async function wallet(playerId){
-    const shop=await shopReady();
+  async function wallet(playerId,{admin=false}={}){
+    const shop=await shopReady(admin);
     // coinsReady is sent on its own because a balance of nil and no coin system at all look identical
     // from the browser, and only one of them should put a wallet on the screen.
-    const base={coinsReady:false,coins:0,purchases:[],shop:{enabled:shop,provider:payments.id,packs:shop?packList():[],payment:shop?payments.describe():null}};
+    //
+    // testMode only ever reaches a browser that can see the shop, which on test keys is an admin's, and it is
+    // what puts the TEST MODE badge on it: whoever is testing a card payment should never be in any doubt
+    // about which it was.
+    const base={coinsReady:false,coins:0,purchases:[],shop:{enabled:shop,provider:payments.id,
+      testMode:shop&&Boolean(payments.testMode),packs:shop?packList():[],payment:shop?payments.describe():null}};
     if(!(await coinsReady()))return base;
     const rows=await store.playerPurchases(playerId,['pending','paid']);
     const cutoff=now().getTime()-RECENT_MS;
@@ -87,6 +101,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   async function coinsView(){
     if(!(await coinsReady()))return {ready:false,pending:[],settled:[],players:[],ledger:[],provider:payments.id,
       paymentReady:Boolean(payments.ready),providerReady:await providerStoreReady(),
+      testMode:Boolean(payments.testMode),
       needsAdminConfirmation:Boolean(payments.needsAdminConfirmation)};
     const pending=await store.purchasesByStatus(['pending']);
     // Paid, cancelled and refunded, newest first: this is where a refund is started from.
@@ -98,6 +113,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     const at=now().getTime();
     return {ready:true,provider:payments.id,paymentReady:Boolean(payments.ready),
       providerReady:await providerStoreReady(),
+      testMode:Boolean(payments.testMode),
       needsAdminConfirmation:Boolean(payments.needsAdminConfirmation),
       pending:pending.map(row=>({...purchaseView(row),...providerRefs(row),id:row.id,player_id:row.player_id,
         name:people.get(row.player_id)?.name??'Player',email:emails.get(row.player_id)??null,
@@ -471,8 +487,8 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       // Only a first place wins a prize, so only a first place raises the winner modal.
       const last=await archivedPodium();
       const wins=last.rows.filter(r=>r.winner&&r.player_id===s.player.id).map(r=>({game:r.game,month:last.month}));
-      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:adminEmails.has(String(s.user.email||'').toLowerCase()),
-        achievements:achievementState(await playerTotals(s.player.id)),achievementTotals:await playerTotals(s.player.id),...await wallet(s.player.id)});
+      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:isAdmin(s.user),
+        achievements:achievementState(await playerTotals(s.player.id)),achievementTotals:await playerTotals(s.player.id),...await wallet(s.player.id,{admin:isAdmin(s.user)})});
     },
 
     async profile({token,body}){
@@ -499,7 +515,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       // Free tries first, then a coin if there is one. The store spends the coin and creates the run in one
       // step, so two taps with one coin left can only make one run.
       const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId,allowPaid:await coinsReady()});
-      if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id),shop:await shopReady()});
+      if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id),shop:await shopReady(isAdmin(s.user))});
       if(run.game!==game||run.status!=='open'||run.segments>0)return fail(409,'This run has already been played. Please start a new one.');
       return ok({runId:run.id,game,seed:run.seed,level:1,rulesVersion:runVersion(run),paid:Boolean(run.paid),plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id)});
     },
@@ -637,7 +653,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     // never name its own price. Nothing is granted: this hands back a reference to pay against.
     async buy({token,body,origin}){
       const s=await signedIn(token);if(s.error)return s.error;
-      if(!(await shopReady()))return fail(503,'Extra tries are not on sale yet.');
+      if(!(await shopReady(isAdmin(s.user))))return fail(503,'Extra tries are not on sale yet.');
       const coins=cleanPackCoins(body?.coins);
       if(!coins)return fail(400,'Choose one of the coin packs.');
       const pack=packFor(coins);

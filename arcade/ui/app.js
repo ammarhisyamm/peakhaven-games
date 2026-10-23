@@ -105,6 +105,8 @@ function openExtraPlays(){
   const waiting=pendingPurchase();
   showReferenceResults({shopOnly:true,assetBase:'game/assets/',
    accountShop:{coins:coinsNow(),packs:server.shop.packs||[],pending:waiting,pendingInstructions:server.shop.payment,
+    // On test keys the server only opens the shop to an admin, and says so here so the panel can.
+    testMode:Boolean(server.shop.testMode),
     buy:async coins=>{
      const r=await account.api('buy',{body:{coins}});
      if(r.ok)await refreshMe();

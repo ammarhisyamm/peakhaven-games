@@ -4,6 +4,8 @@
 // A provider is an object with:
 //   id                     short name, stored on the purchase row so an old purchase keeps its provider
 //   ready                  false when the deployment has not been configured for it; the shop stays hidden
+//   testMode               true when it is configured against a sandbox rather than real money; the shop is
+//                          then shown to admins only, and everybody else sees it as if payments were off
 //   needsAdminConfirmation true when a human marks the purchase paid, false when the provider tells us
 //   describe()             what the player is shown about paying: {kind, lines:[{label,value}], note}
 //   async begin(purchase, {origin})
@@ -32,6 +34,8 @@ export function createManualProvider(details=paymentDetails()){
   return {
     id:'manual',
     ready:Boolean(details.ready),
+    // A bank transfer is real money or it is nothing; there is no sandbox to be in.
+    testMode:false,
     needsAdminConfirmation:true,
     describe(){
       return {kind:'manual',lines:lines(),
@@ -73,6 +77,9 @@ export function createStripeProvider(env=process.env,{fetch=globalThis.fetch}={}
   return {
     id:'stripe',
     ready:settings.ready,
+    // On test keys the shop is for admins only: handlers.mjs hides it from everybody else exactly as if
+    // payments were off, because a test-mode payment hands out real coins for a fake card.
+    testMode:settings.testMode,
     needsAdminConfirmation:false,
     describe,
     async begin(purchase,{origin=null}={}){

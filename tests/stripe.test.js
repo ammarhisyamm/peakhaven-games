@@ -18,8 +18,12 @@ const {checkoutProgress,checkoutReturn}=await import('../arcade/ui/coins-return.
 const SECRET='test-secret',ADMIN='boss@peak.test';
 const WEBHOOK_SECRET='whsec_test_51HfakeSigningSecret';
 // The environment as a Stripe deployment would set it. No real key is ever needed: the fetch is ours.
-const KEYS={ARCADE_PAYMENT_PROVIDER:'stripe',STRIPE_SECRET_KEY:'sk_test_51Fake',STRIPE_WEBHOOK_SECRET:WEBHOOK_SECRET,
+//
+// The default here is a **live** key, because that is the deployment every test but the two about test mode is
+// describing: on a test key the shop is open to admins only, which is its own pair of tests below.
+const KEYS={ARCADE_PAYMENT_PROVIDER:'stripe',STRIPE_SECRET_KEY:'sk_live_51Fake',STRIPE_WEBHOOK_SECRET:WEBHOOK_SECRET,
   ARCADE_SITE_URL:'https://arcade.peakhaven.test/'};
+const TEST_KEYS={...KEYS,STRIPE_SECRET_KEY:'sk_test_51Fake'};
 
 // Stripe's API, as far as this integration uses it: create a Checkout Session, read one back. Every request is
 // recorded so the tests can assert on what was actually sent, which is where "the browser cannot name its own
@@ -123,7 +127,7 @@ test('Buying a pack opens a Checkout Session for the price the server holds, and
   assert.match(created.form.cancel_url,/\?coins=cancelled&ref=PHA-/);
   assert.equal(created.headers['Idempotency-Key'],`purchase-${created.form['metadata[purchase_id]']}`,
     'a retried buy cannot leave two sessions behind');
-  assert.match(created.headers.Authorization,/^Bearer sk_test_/);
+  assert.match(created.headers.Authorization,/^Bearer sk_/);
 
   // What the browser is told: where to go, and nothing about a balance having changed.
   assert.equal(r.body.instructions.kind,'stripe');
@@ -502,7 +506,7 @@ test('Where Stripe is sent back to, and what it is told to call this purchase',a
   await assert.rejects(()=>noHome.begin({id:'p1',reference:'PHA-7K3Q',coins:1,amount_cents:299,currency:'AUD',player_id:'pl1'},{origin:null}),
     /ARCADE_SITE_URL/);
   // The origin of the request is enough on its own.
-  const w=world({keys:{ARCADE_PAYMENT_PROVIDER:'stripe',STRIPE_SECRET_KEY:'sk_test_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}});
+  const w=world({keys:{ARCADE_PAYMENT_PROVIDER:'stripe',STRIPE_SECRET_KEY:'sk_live_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}});
   const ann=await w.join('ann@x.com','Ann');
   await w.buy(ann,1);
   assert.match(w.stripe.calls[0].form.success_url,/^https:\/\/arcade\.peakhaven\.test\/\?coins=paid/);
@@ -609,6 +613,81 @@ test('The admin page shows a card purchase with its Stripe session and status',a
   const marked=await w.api.admin({token:admin.token,body:{action:'paid',id:paidView.settled[0].id}});
   assert.equal(marked.body.result.granted,false);
   assert.equal((await w.me(ann)).coins,0);
+});
+
+test('On test keys the shop is for admins only, and says so',async()=>{
+  const w=world({keys:TEST_KEYS}),admin=await w.join(ADMIN,'Boss'),ann=await w.join('ann@x.com','Ann');
+  // A test-mode payment is not a payment, so a player must not be able to reach one. What they see is exactly
+  // what they would see with payments switched off: no packs, no payment details, no shop.
+  const player=await w.me(ann);
+  assert.equal(player.shop.enabled,false);
+  assert.equal(player.shop.packs.length,0);
+  assert.equal(player.shop.payment,null);
+  assert.equal(player.shop.testMode,false,'and they are not even told there is a test mode');
+  const refused=await w.buy(ann,10);
+  assert.equal(refused.status,503);
+  assert.equal(refused.body.error,'Extra tries are not on sale yet.');
+  assert.equal(w.stripe.calls.length,0,'nothing of theirs ever reaches Stripe');
+  assert.equal(w.store.purchases.size,0,'and no purchase is left behind');
+  // What they keep is their balance. A hidden shop has never meant a hidden wallet: coins granted by hand are
+  // still shown and still spent, which is the rule wallet-view.js holds.
+  assert.equal(player.coinsReady,true);
+  const given=await w.api.admin({token:admin.token,body:{action:'adjust',player:ann.id,delta:2,note:'granted by hand'}});
+  assert.equal(given.status,200,JSON.stringify(given.body));
+  assert.equal((await w.me(ann)).coins,2);
+  await w.useFreeTries(ann,'blocks');
+  const paidRun=await w.api.start({token:ann.token,body:{game:'blocks'}});
+  assert.equal(paidRun.status,200,JSON.stringify(paidRun.body));
+  assert.equal(paidRun.body.paid,true,'a coin they hold still buys an extra try');
+  assert.equal((await w.me(ann)).coins,1);
+  // And when those run out, the 409 does not dangle a shop they cannot open.
+  await w.api.start({token:ann.token,body:{game:'blocks'}});
+  const out=await w.api.start({token:ann.token,body:{game:'blocks'}});
+  assert.equal(out.status,409);
+  assert.equal(out.body.shop,false);
+
+  // The admin sees the shop, with the badge on it and the real packs behind it.
+  const boss=await w.me(admin);
+  assert.equal(boss.shop.enabled,true);
+  assert.equal(boss.shop.testMode,true,'which is what puts TEST MODE on the panel');
+  assert.deepEqual(boss.shop.packs.map(p=>p.coins),COIN_PACKS.map(p=>p.coins));
+  assert.equal(boss.shop.payment.kind,'stripe');
+  const bought=await w.buy(admin,10);
+  assert.equal(bought.status,200,JSON.stringify(bought.body));
+  assert.match(bought.body.instructions.checkoutUrl,/^https:\/\/checkout\.stripe\.test\//);
+  // The whole card path still works for them, webhook and all, which is the point of being able to test it.
+  await w.send(sessionEvent(w.stripe.complete(w.stripe.last().id)));
+  assert.equal((await w.me(admin)).coins,10);
+  // The admin page says which mode it is in, rather than reporting an open shop.
+  const view=(await w.api.admin({token:admin.token,query:{view:'coins'},method:'GET'})).body;
+  assert.equal(view.testMode,true);
+  assert.equal(view.paymentReady,true);
+  assert.equal(view.providerReady,true);
+});
+
+test('Live keys behave normally, for everybody',async()=>{
+  const w=world(),admin=await w.join(ADMIN,'Boss'),ann=await w.join('ann@x.com','Ann');
+  const player=await w.me(ann);
+  assert.equal(player.shop.enabled,true,'a live key sells to players, not just to admins');
+  assert.equal(player.shop.testMode,false,'and carries no badge');
+  assert.deepEqual(player.shop.packs.map(p=>p.coins),COIN_PACKS.map(p=>p.coins));
+  const bought=await w.buy(ann,5);
+  assert.equal(bought.status,200,JSON.stringify(bought.body));
+  await w.send(sessionEvent(w.stripe.complete(w.stripe.last().id)));
+  assert.equal((await w.me(ann)).coins,5);
+  assert.equal((await w.api.admin({token:admin.token,query:{view:'coins'},method:'GET'})).body.testMode,false);
+
+  // Which key counts as live, and which as test. Anything unrecognised is treated as test mode: being wrong
+  // that way only hides the shop from players, while being wrong the other way would sell them nothing.
+  for(const [key,live] of [['sk_live_abc',true],['rk_live_abc',true],['sk_test_abc',false],['rk_test_abc',false],
+    ['sk_live',false],['whatever',false],['',false]]){
+    const env=stripeEnv({STRIPE_SECRET_KEY:key,STRIPE_WEBHOOK_SECRET:'whsec_x'});
+    assert.equal(env.live,live,`${key||'(empty)'} live`);
+    assert.equal(env.testMode,Boolean(key)&&!live,`${key||'(empty)'} testMode`);
+  }
+  assert.equal(createStripeProvider(TEST_KEYS).testMode,true);
+  assert.equal(createStripeProvider(KEYS).testMode,false);
+  assert.equal(createPaymentProvider({ARCADE_PAYMENT_PROVIDER:'manual'}).testMode,false,'a bank transfer has no sandbox');
 });
 
 test('Only a signed-in player can buy, and only an admin can see the money',async()=>{

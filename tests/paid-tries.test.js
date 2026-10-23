@@ -495,6 +495,10 @@ test('The payment step is pluggable, and Stripe needs no dependency',async()=>{
   assert.equal(stripe.needsAdminConfirmation,false,'a card payment tells us itself');
   await assert.rejects(()=>stripe.begin({}),/not configured/);
   assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_test_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}).ready,true);
+  assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_test_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}).testMode,true,
+    'a test key sells to admins only');
+  assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_live_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}).testMode,false);
+  assert.equal(manual.testMode,false,'and a bank transfer has no sandbox to be in');
   assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_test_x'}).ready,false,'a key with no way to verify an event is not enough');
   assert.equal(createPaymentProvider({ARCADE_PAYMENT_PROVIDER:'stripe'}).ready,false,'so an unconfigured Stripe hides the shop');
   assert.equal(createPaymentProvider({ARCADE_PAYMENT_PROVIDER:'bitcoin'}).ready,false,'and an unknown provider hides it too');
