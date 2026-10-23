@@ -2,6 +2,7 @@
 import {createClient} from '@supabase/supabase-js';
 import {AdminLogNotReady,MonthEndNotReady,columnMissing,tableMissing} from './competition.mjs';
 import {CoinsNotReady,coinsMissing} from './coins.mjs';
+import {StripeNotReady,cleanStripeId} from './stripe.mjs';
 
 export function supabaseEnv(env=process.env){
   const url=env.SUPABASE_URL||env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,8 +26,25 @@ export function createSupabaseBackend(env=supabaseEnv()){
   const admin=createClient(env.url,env.serviceKey,options),pub=createClient(env.url,env.anonKey,options);
   const RUN_FIELDS='id,player_id,game,day,seed,level,segments,score,status,flagged,reject_reason,replays,started_at,updated_at,finished_at';
   const PURCHASE_FIELDS='id,player_id,pack,coins,amount_cents,currency,reference,provider,status,created_at,resolved_at,resolved_by';
+  // The same row with what Stripe calls it. Read separately because the two columns arrive with
+  // supabase/stripe.sql: a deployment without that file still reads every purchase it has, with no refs.
+  const PURCHASE_STRIPE_FIELDS=`${PURCHASE_FIELDS},provider_ref,provider_payment_ref`;
   const run=r=>r&&{...r,seed:Number(r.seed)};
   const purchase=p=>p&&{...p,coins:Number(p.coins)||0,pack:Number(p.pack)||0,amount_cents:Number(p.amount_cents)||0};
+  // A purchase read asks for the Stripe columns first and drops back to the columns every deployment has if
+  // stripe.sql has not been run. `build` is handed the column list and returns the query, so the retry is the
+  // same read with a shorter select rather than a second code path. coinsOptional still covers a deployment
+  // that has not run paid-tries.sql either, where there is no purchases table at all.
+  const readPurchases=async(build,fallback)=>{
+    const first=await build(PURCHASE_STRIPE_FIELDS);
+    if(!first.error)return first.data??fallback;
+    if(!columnMissing(first.error))return coinsOptional(first,fallback);
+    return coinsOptional(await build(PURCHASE_FIELDS),fallback);
+  };
+  const purchaseList=build=>readPurchases(build,[]);
+  const onePurchase=build=>readPurchases(build,null);
+  // Set once supabase/stripe.sql has been seen to have run; see stripeReady below.
+  let stripeMigrated=false;
 
   const store={
     async inviteAvailable(code){const d=must(await admin.from('invites').select('uses,max_uses').eq('code',code).maybeSingle());return Boolean(d&&d.uses<d.max_uses);},
@@ -157,15 +175,77 @@ export function createSupabaseBackend(env=supabaseEnv()){
     },
     async purchaseById(id){
       if(!/^[0-9a-f-]{36}$/i.test(String(id)))return null;
-      return purchase(coinsOptional(await admin.from('purchases').select(PURCHASE_FIELDS).eq('id',id).maybeSingle(),null));
+      return purchase(await onePurchase(select=>admin.from('purchases').select(select).eq('id',id).maybeSingle()));
     },
     async playerPurchases(playerId,statuses=null){
-      let query=admin.from('purchases').select(PURCHASE_FIELDS).eq('player_id',playerId);
-      if(statuses)query=query.in('status',statuses);
-      return coinsOptional(await query.order('created_at'),[]).map(purchase);
+      return (await purchaseList(select=>{
+        let query=admin.from('purchases').select(select).eq('player_id',playerId);
+        if(statuses)query=query.in('status',statuses);
+        return query.order('created_at');
+      })).map(purchase);
     },
     async purchasesByStatus(statuses){
-      return coinsOptional(await admin.from('purchases').select(PURCHASE_FIELDS).in('status',statuses).order('created_at'),[]).map(purchase);
+      return (await purchaseList(select=>admin.from('purchases').select(select).in('status',statuses).order('created_at'))).map(purchase);
+    },
+    // One purchase by what Stripe calls it: the Checkout Session id, or the payment intent a refund or a
+    // dispute arrives under. Both are unique, so this is one row or none.
+    async purchaseByProviderRef(ref){
+      const id=cleanStripeId(ref);
+      if(!id)return null;
+      const {data,error}=await admin.from('purchases').select(PURCHASE_STRIPE_FIELDS)
+        .or(`provider_ref.eq.${id},provider_payment_ref.eq.${id}`).limit(1).maybeSingle();
+      if(error){
+        if(coinsMissing(error)||columnMissing(error))return null;
+        throw new Error(error.message);
+      }
+      return purchase(data??null);
+    },
+    // What Stripe calls this purchase, written down the first time an event names it so a later refund can be
+    // traced back. Neither ref is ever overwritten with nothing.
+    async setPurchaseRefs(id,{sessionId=null,paymentRef=null}={}){
+      const patch={};
+      if(cleanStripeId(sessionId))patch.provider_ref=cleanStripeId(sessionId);
+      if(cleanStripeId(paymentRef))patch.provider_payment_ref=cleanStripeId(paymentRef);
+      if(!Object.keys(patch).length)return null;
+      const {data,error}=await admin.from('purchases').update(patch).eq('id',id).select('id,provider_ref,provider_payment_ref').maybeSingle();
+      if(error){
+        if(columnMissing(error)||coinsMissing(error))throw new StripeNotReady();
+        throw new Error(error.message);
+      }
+      return data??null;
+    },
+    // Whether supabase/stripe.sql has run: the two columns on purchases and the event log. Until it has, the
+    // shop stays hidden on a Stripe deployment and the webhook answers 503 rather than granting unrecorded.
+    //
+    // A yes is remembered, because /api/me asks on every read and a migration is never un-run. A no is asked
+    // again every time, so running the file takes effect without a redeploy.
+    async stripeReady(){
+      if(stripeMigrated)return true;
+      for(const [table,column] of [['purchases','provider_ref'],['payment_events','type']]){
+        const {error}=await admin.from(table).select(column,{head:true,count:'exact'});
+        if(error){if(coinsMissing(error)||columnMissing(error))return false;throw new Error(error.message);}
+      }
+      stripeMigrated=true;
+      return true;
+    },
+    // Every webhook event that has already been acted on, by Stripe's own event id. The primary key is what
+    // makes a replay a no-op even if two deliveries arrive at the same moment.
+    async paymentEventSeen(id){
+      const {data,error}=await admin.from('payment_events').select('id').eq('id',String(id)).maybeSingle();
+      if(error){
+        if(coinsMissing(error))throw new StripeNotReady();
+        throw new Error(error.message);
+      }
+      return Boolean(data);
+    },
+    async recordPaymentEvent({id,provider='stripe',type,purchaseId=null}){
+      const {error}=await admin.from('payment_events').insert({id:String(id),provider,type,purchase_id:purchaseId});
+      // A duplicate means another delivery of the same event got there first, which is the whole point.
+      if(error&&error.code!=='23505'){
+        if(coinsMissing(error))throw new StripeNotReady();
+        throw new Error(error.message);
+      }
+      return {id:String(id)};
     },
     // The four things that move coins are one database function each, so each is one transaction and each is
     // safe to call twice. See supabase/paid-tries.sql.

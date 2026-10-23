@@ -480,7 +480,7 @@ test('The shop stays hidden until there is somewhere for the money to go',async(
   assert.equal(paymentDetails({ARCADE_PAY_ACCOUNT_NAME:' Peak  Haven <b> '}).accountName,'Peak Haven b');
 });
 
-test('The payment step is pluggable, and Stripe is a stub and not a dependency',async()=>{
+test('The payment step is pluggable, and Stripe needs no dependency',async()=>{
   assert.equal(createPaymentProvider({}).id,'manual','manual unless told otherwise');
   assert.equal(createPaymentProvider({}).ready,false,'and not ready until the details are set');
   assert.equal(createPaymentProvider({ARCADE_PAYMENT_PROVIDER:'manual',ARCADE_PAY_ACCOUNT_NAME:'Peak Haven',ARCADE_PAY_PAYID:'pay@peak.test'}).ready,true);
@@ -489,16 +489,25 @@ test('The payment step is pluggable, and Stripe is a stub and not a dependency',
   const begun=await manual.begin({reference:'PHA-7K3Q',amount_cents:999});
   assert.equal(begun.status,'pending');
   assert.equal(begun.instructions.amount,'A$9.99');
-  const stripe=createStripeProvider();
+  const stripe=createStripeProvider({});
   assert.equal(stripe.id,'stripe');
-  assert.equal(stripe.ready,false,'nothing is implemented yet');
-  assert.equal(stripe.needsAdminConfirmation,false);
-  await assert.rejects(()=>stripe.begin({}),/not implemented yet/);
-  assert.equal(createPaymentProvider({ARCADE_PAYMENT_PROVIDER:'stripe'}).ready,false,'so the shop stays hidden');
+  assert.equal(stripe.ready,false,'not until both the key and the signing secret are set');
+  assert.equal(stripe.needsAdminConfirmation,false,'a card payment tells us itself');
+  await assert.rejects(()=>stripe.begin({}),/not configured/);
+  assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_test_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}).ready,true);
+  assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_test_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}).testMode,true,
+    'a test key sells to admins only');
+  assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_live_x',STRIPE_WEBHOOK_SECRET:'whsec_x'}).testMode,false);
+  assert.equal(manual.testMode,false,'and a bank transfer has no sandbox to be in');
+  assert.equal(createStripeProvider({STRIPE_SECRET_KEY:'sk_test_x'}).ready,false,'a key with no way to verify an event is not enough');
+  assert.equal(createPaymentProvider({ARCADE_PAYMENT_PROVIDER:'stripe'}).ready,false,'so an unconfigured Stripe hides the shop');
   assert.equal(createPaymentProvider({ARCADE_PAYMENT_PROVIDER:'bitcoin'}).ready,false,'and an unknown provider hides it too');
-  // The package is deliberately not installed yet.
+  // Stripe is two REST calls and an HMAC, so the SDK is deliberately not a dependency: the tests run on node
+  // alone and the deployment installs nothing new.
   const packageJson=JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../package.json',import.meta.url),'utf8'));
-  assert.equal(Boolean(packageJson.dependencies?.stripe),false,'no stripe dependency until it is actually built');
+  const arcadeJson=JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../arcade/package.json',import.meta.url),'utf8'));
+  assert.equal(Boolean(packageJson.dependencies?.stripe),false,'no stripe package at the root');
+  assert.equal(Boolean(arcadeJson.dependencies?.stripe),false,'and none in the arcade either');
 });
 
 test('Without the migration everything else keeps working and the shop is hidden',async()=>{

@@ -4,6 +4,7 @@ import {applyStandaloneManifest} from './standalone.js';
 import {achievementShelf,achievementCollapse} from './game/achievement-ui.js';
 import {totalsFromShelf} from './game/achievements.js';
 import {walletView,playOffer} from './wallet-view.js';
+import {checkoutProgress,checkoutReturn} from './coins-return.js';
 import {pendingResultStore} from './pending-result.js';
 import {freePlaysLeft,availablePlays,consumePlay,playWallet} from './game/play-credits.js';
 import {showReferenceResults} from './game/reference-results.js';
@@ -104,15 +105,50 @@ function openExtraPlays(){
   const waiting=pendingPurchase();
   showReferenceResults({shopOnly:true,assetBase:'game/assets/',
    accountShop:{coins:coinsNow(),packs:server.shop.packs||[],pending:waiting,pendingInstructions:server.shop.payment,
+    // On test keys the server only opens the shop to an admin, and says so here so the panel can.
+    testMode:Boolean(server.shop.testMode),
     buy:async coins=>{
      const r=await account.api('buy',{body:{coins}});
      if(r.ok)await refreshMe();
      return r.ok?{ok:true,purchase:r.purchase,instructions:r.instructions}:{ok:false,error:r.error};
-    }},
+    },
+    // A card payment happens on the provider's own page, so the arcade hands the browser over. Nothing is
+    // granted when it comes back: the coins are granted by the webhook, and the return just reads /api/me.
+    checkout:url=>{location.href=url;}},
    onExit:()=>{refreshMe().then(()=>{if(view==='play'||view==='bottle')route();});}});
   return;
  }
  showReferenceResults({shopOnly:true,assetBase:'game/assets/',onExit:()=>{if(view==='play')renderPlay();}});
+}
+// Back from a hosted checkout (?coins=paid&ref=PHA-XXXX). The redirect is not a receipt: it proves only that
+// a browser visited an address, so nothing here adds a coin. /api/me is asked until the balance the server
+// reports has caught up with the webhook, and if it has not, the player is told so plainly and told not to
+// pay again. coins-return.js decides the words; this only shows them.
+async function showCheckoutReturn(){
+ const back=checkoutReturn(location.search);
+ if(!back)return;
+ // The query comes straight off the address bar, so a reload, a back button or a shared link is not a second
+ // "payment confirmed" screen.
+ history.replaceState(null,'',`${location.pathname}#${location.hash.slice(1)||'play'}`);
+ if(!account.enabled||!account.signedIn())return;
+ for(let attempt=0;;attempt++){
+  const state=checkoutProgress({...back,purchases:server.purchases,coins:server.coins,attempts:attempt});
+  if(!state)return;
+  // The player closing the modal is the player saying they are done being told about it.
+  if(attempt&&!modal.open)return;
+  showModal(`<h2 id="modal-title">${escape(state.title)}</h2><p>${escape(state.body)}</p>${state.poll
+    ?'<p class="modal-footnote" role="status">Checking with the arcade…</p>'
+    :`${state.phase==='slow'?supportLine('modal-support'):''}<button class="primary" id="coins-done">${state.phase==='added'?'Play':'Back to the arcade'} ${icon('arrow')}</button>`}`);
+  if(!state.poll){
+   if(state.phase==='slow')bindSupport(modal,toast);
+   // Whatever arrived has now been said once, so announceCoins does not say it again on the next render.
+   if(state.phase==='added'&&back.reference)try{localStorage.setItem(`ph-arcade-coins-${back.reference}`,'1');}catch{}
+   $('#coins-done').onclick=()=>{modal.close();location.hash='play';route();};
+   return;
+  }
+  await new Promise(resolve=>setTimeout(resolve,1500));
+  await refreshMe();
+ }
 }
 // "+N coins added", once per purchase on this device, the next time the player opens the arcade after an admin
 // has matched their payment.
@@ -306,6 +342,7 @@ if(account.enabled&&account.signedIn())await refreshMe();
 if(account.linkError){joinNote=linkErrorMessage(account.linkError);joinError=true;joinTab='signin';}
 account.onChange(async()=>{accountRevision++;server=emptyServer();boards={};joinNote='';joinError=false;await refreshMe();route();});
 route();
+await showCheckoutReturn();
 
 // Refresh daily allowances when a tab returns after midnight, without interrupting a running game.
 let refreshing=false;

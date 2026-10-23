@@ -13,6 +13,7 @@ import {BLOCKS_REPLAY_VERSION} from '../../dist/blocks-core.js';
 import {addRun,totalsFrom,achievementState,newlyEarned} from '../../dist/achievements.js';
 import {COIN_CURRENCY,CoinsNotReady,MAX_PENDING_PURCHASES,cleanDelta,cleanNote,cleanPackCoins,formatAmount,newReference,packFor,packList} from './coins.mjs';
 import {createPaymentProvider} from './payments.mjs';
+import {StripeError,StripeNotReady} from './stripe.mjs';
 
 export const BOTTLES=BOTTLE_SKINS.map(b=>b.id);
 const ok=body=>({status:200,body});
@@ -51,21 +52,44 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   // Paid extra tries. False until supabase/paid-tries.sql has run: nobody has coins, no coin can be spent and
   // the shop stays hidden, while the boards, /api/me and the games carry on exactly as before.
   const coinsReady=async()=>Boolean(await store.coinsReady?.());
+  // Card payments need their own migration (supabase/stripe.sql) for the columns a Checkout Session is
+  // recorded in and the log that stops an event being acted on twice. Until it has run there is nowhere to
+  // write any of that, so the shop stays hidden rather than taking a payment it could not account for. Every
+  // other provider needs nothing, so this is true for them.
+  const providerStoreReady=async()=>payments.id!=='stripe'||Boolean(await store.stripeReady?.());
+  // Whether this account runs the competition. The same set adminIn() checks, read without the 403.
+  const isAdmin=user=>adminEmails.has(String(user?.email||'').toLowerCase());
   // The shop also needs somewhere for the money to go, so a half-configured deployment shows no shop at all
   // rather than a pack list that cannot be paid for.
-  const shopReady=async()=>Boolean(payments.ready)&&await coinsReady();
+  //
+  // A provider on test keys is open to admins only. A test-mode payment is not a payment — the card is a
+  // fake one and no money moves — so a player who found the shop would be handed coins for nothing, on the
+  // same leaderboard as everybody else. Everyone but an admin therefore sees exactly what they would see if
+  // payments were switched off: no packs, no payment details, no shop. What they do **not** lose is their
+  // balance: coins already granted are still shown and still spent, which is the rule wallet-view.js holds.
+  const shopReady=async(admin=false)=>Boolean(payments.ready)&&(admin||!payments.testMode)
+    &&await coinsReady()&&await providerStoreReady();
   const coinBalance=async playerId=>(await coinsReady())?Math.max(0,Number(await store.coinsFor(playerId))||0):0;
   const purchaseView=row=>({reference:row.reference,coins:Number(row.coins)||0,pack:Number(row.pack)||0,
     amount:Number(row.amount_cents)||0,price:formatAmount(row.amount_cents),currency:row.currency??COIN_CURRENCY,
     status:row.status,provider:row.provider,createdAt:row.created_at,resolvedAt:row.resolved_at??null});
+  // What the provider calls this purchase, for the admin page only: the Stripe Checkout Session it was paid
+  // on, and the payment a refund or a dispute would arrive under. Null on a bank transfer, and on a
+  // deployment where supabase/stripe.sql has not run.
+  const providerRefs=row=>({providerRef:row.provider_ref??null,providerPaymentRef:row.provider_payment_ref??null});
   // What the player is shown: their balance, anything still waiting for payment, and whatever was granted
   // recently so a "coins added" message can be shown once. Purchases older than this are history.
   const RECENT_MS=14*24*60*60*1000;
-  async function wallet(playerId){
-    const shop=await shopReady();
+  async function wallet(playerId,{admin=false}={}){
+    const shop=await shopReady(admin);
     // coinsReady is sent on its own because a balance of nil and no coin system at all look identical
     // from the browser, and only one of them should put a wallet on the screen.
-    const base={coinsReady:false,coins:0,purchases:[],shop:{enabled:shop,provider:payments.id,packs:shop?packList():[],payment:shop?payments.describe():null}};
+    //
+    // testMode only ever reaches a browser that can see the shop, which on test keys is an admin's, and it is
+    // what puts the TEST MODE badge on it: whoever is testing a card payment should never be in any doubt
+    // about which it was.
+    const base={coinsReady:false,coins:0,purchases:[],shop:{enabled:shop,provider:payments.id,
+      testMode:shop&&Boolean(payments.testMode),packs:shop?packList():[],payment:shop?payments.describe():null}};
     if(!(await coinsReady()))return base;
     const rows=await store.playerPurchases(playerId,['pending','paid']);
     const cutoff=now().getTime()-RECENT_MS;
@@ -76,7 +100,9 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
   // for a by-hand adjustment, and the last of the ledger so an action can be seen to have happened.
   async function coinsView(){
     if(!(await coinsReady()))return {ready:false,pending:[],settled:[],players:[],ledger:[],provider:payments.id,
-      paymentReady:Boolean(payments.ready),needsAdminConfirmation:Boolean(payments.needsAdminConfirmation)};
+      paymentReady:Boolean(payments.ready),providerReady:await providerStoreReady(),
+      testMode:Boolean(payments.testMode),
+      needsAdminConfirmation:Boolean(payments.needsAdminConfirmation)};
     const pending=await store.purchasesByStatus(['pending']);
     // Paid, cancelled and refunded, newest first: this is where a refund is started from.
     const settled=(await store.purchasesByStatus(['paid','cancelled','refunded'])).slice(-20).reverse();
@@ -86,11 +112,13 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
     const emails=new Map(((await auth.emailsByIds?.(ids))||[]).map(e=>[e.id,e.email]));
     const at=now().getTime();
     return {ready:true,provider:payments.id,paymentReady:Boolean(payments.ready),
+      providerReady:await providerStoreReady(),
+      testMode:Boolean(payments.testMode),
       needsAdminConfirmation:Boolean(payments.needsAdminConfirmation),
-      pending:pending.map(row=>({...purchaseView(row),id:row.id,player_id:row.player_id,
+      pending:pending.map(row=>({...purchaseView(row),...providerRefs(row),id:row.id,player_id:row.player_id,
         name:people.get(row.player_id)?.name??'Player',email:emails.get(row.player_id)??null,
         ageMinutes:Math.max(0,Math.round((at-(Date.parse(row.created_at)||at))/60000))})),
-      settled:settled.map(row=>({...purchaseView(row),id:row.id,player_id:row.player_id,
+      settled:settled.map(row=>({...purchaseView(row),...providerRefs(row),id:row.id,player_id:row.player_id,
         name:people.get(row.player_id)?.name??'Player',email:emails.get(row.player_id)??null,
         resolvedBy:row.resolved_by??null})),
       players:players.map(p=>({id:p.id,name:p.name,email:emails.get(p.id)??null,coins:Math.max(0,Number(p.coins)||0)})),
@@ -459,8 +487,8 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       // Only a first place wins a prize, so only a first place raises the winner modal.
       const last=await archivedPodium();
       const wins=last.rows.filter(r=>r.winner&&r.player_id===s.player.id).map(r=>({game:r.game,month:last.month}));
-      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:adminEmails.has(String(s.user.email||'').toLowerCase()),
-        achievements:achievementState(await playerTotals(s.player.id)),achievementTotals:await playerTotals(s.player.id),...await wallet(s.player.id)});
+      return ok({player:{name:s.player.name,bottle:s.player.bottle,points:p.points,podium:p.podium},email:s.user.email,day,triesPerDay:COMPETITION.triesPerDay,plays:await playsLeft(s.player.id,day),wins,admin:isAdmin(s.user),
+        achievements:achievementState(await playerTotals(s.player.id)),achievementTotals:await playerTotals(s.player.id),...await wallet(s.player.id,{admin:isAdmin(s.user)})});
     },
 
     async profile({token,body}){
@@ -487,7 +515,7 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
       // Free tries first, then a coin if there is one. The store spends the coin and creates the run in one
       // step, so two taps with one coin left can only make one run.
       const run=await store.startRun({playerId:s.player.id,game,day,seed,limit:COMPETITION.triesPerDay,requestId,allowPaid:await coinsReady()});
-      if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id),shop:await shopReady()});
+      if(!run)return fail(409,'No free plays left for this game today. More tomorrow.',{plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id),shop:await shopReady(isAdmin(s.user))});
       if(run.game!==game||run.status!=='open'||run.segments>0)return fail(409,'This run has already been played. Please start a new one.');
       return ok({runId:run.id,game,seed:run.seed,level:1,rulesVersion:runVersion(run),paid:Boolean(run.paid),plays:await playsLeft(s.player.id,day),coins:await coinBalance(s.player.id)});
     },
@@ -623,15 +651,26 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
 
     // A player asks to buy a pack. The pack is chosen by its coin count and priced here, so a browser can
     // never name its own price. Nothing is granted: this hands back a reference to pay against.
-    async buy({token,body}){
+    async buy({token,body,origin}){
       const s=await signedIn(token);if(s.error)return s.error;
-      if(!(await shopReady()))return fail(503,'Extra tries are not on sale yet.');
+      if(!(await shopReady(isAdmin(s.user))))return fail(503,'Extra tries are not on sale yet.');
       const coins=cleanPackCoins(body?.coins);
       if(!coins)return fail(400,'Choose one of the coin packs.');
       const pack=packFor(coins);
       const waiting=await store.playerPurchases(s.player.id,['pending']);
-      if(waiting.length>=MAX_PENDING_PURCHASES)
-        return fail(409,'You already have a payment waiting. Finish that one, or ask us to cancel it, before starting another.',{purchase:purchaseView(waiting[0])});
+      if(waiting.length>=MAX_PENDING_PURCHASES){
+        // A hosted checkout the player walked away from is not a reason to refuse them. The provider is asked
+        // what became of it: still open means the same page again, expired means that attempt is dead and this
+        // one replaces it, and paid-but-not-granted-yet means the coins are already on their way.
+        let again=null;
+        if(payments.resume)try{again=await payments.resume(waiting[0],{origin});}catch{again=null;}
+        if(again?.status==='pending'&&again.instructions)
+          return ok({purchase:purchaseView(waiting[0]),instructions:again.instructions,coins:await coinBalance(s.player.id)});
+        if(again?.status==='processing')
+          return fail(409,'Your payment is being confirmed. Your coins will appear in a moment.',{purchase:purchaseView(waiting[0])});
+        if(again?.status==='expired')await store.cancelPurchase(waiting[0].id,payments.id);
+        else return fail(409,'You already have a payment waiting. Finish that one, or ask us to cancel it, before starting another.',{purchase:purchaseView(waiting[0])});
+      }
       let created=null;
       try{
         // The reference is random, so a clash is rare and a unique index catches it; try again with a new one.
@@ -644,14 +683,27 @@ export function createHandlers({store,auth,secret,now=()=>new Date(),admins=[],p
             if(attempt===5||!/duplicate|unique/i.test(String(error.message)))throw error;
           }
         }
-        const begun=await payments.begin(created);
+        const begun=await payments.begin(created,{origin});
+        // What the provider calls this purchase, written down before the player is sent anywhere, so a
+        // webhook that arrives about a payment with no metadata can still be traced to it.
+        if(begun?.providerRef&&store.setPurchaseRefs)await store.setPurchaseRefs(created.id,{sessionId:begun.providerRef});
         // A provider that takes the money itself reports 'paid' and the coins are granted now; the manual
-        // provider always reports 'pending' and an admin grants them once the transfer lands.
+        // provider always reports 'pending' and an admin grants them once the transfer lands. Stripe reports
+        // 'pending' too: its coins are granted by the webhook, never by this request and never by the
+        // redirect the player comes back on.
         if(begun?.status==='paid')await store.grantPurchase(created.id,payments.id);
         return ok({purchase:purchaseView(await store.purchaseById(created.id)??created),
           instructions:begun?.instructions??null,coins:await coinBalance(s.player.id)});
       }catch(error){
         if(error instanceof CoinsNotReady)return fail(503,error.message);
+        if(error instanceof StripeNotReady)return fail(503,error.message);
+        // The row exists but there is nothing to pay it with, so it is closed rather than left to block the
+        // next attempt: one payment at a time means a failed checkout must not cost the player the shop.
+        if(created&&error instanceof StripeError){
+          await store.cancelPurchase(created.id,payments.id).catch(()=>{});
+          console.error('[api/buy] Stripe would not open a checkout',error);
+          return fail(502,'Card payments could not be set up just now. Nothing has been charged. Please try again.');
+        }
         throw error;
       }
     },

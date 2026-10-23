@@ -70,6 +70,10 @@
 .kg-shop-title{font-size:28px;font-weight:900;line-height:1.05;letter-spacing:-.02em;color:#03090f}
 .kg-shop-head p{font-size:13px;line-height:1.4;color:var(--kg-ink-soft)}
 .kg-pill{white-space:nowrap;padding:3px 12px;border:1.5px solid #6fd6f5;border-radius:999px;background:#e9faff;color:#0091d1;font-size:13px;font-weight:800;line-height:1.4}
+/* Test mode. Amber rather than the shop's blue, because the one thing this must not look like is part of the
+   shop: whoever is testing a card payment should never be in any doubt about which it was. */
+.kg-pill.kg-test-mode{border-color:#e0a000;background:#fff5d6;color:#8a5a00;letter-spacing:.04em}
+.kg-test-note{padding:8px 12px;border:1.5px solid #e0a000;border-radius:12px;background:#fff9e8;color:#6d4700;font-size:13px;line-height:1.45;font-weight:650}
 .kg-run-note,.kg-out-note{font-size:13px;line-height:1.45;color:var(--kg-ink-soft)}
 .kg-run-note{padding:8px 12px;border-radius:12px;background:#dff6ff;margin-bottom:-8px}
 .kg-balance{color:var(--kg-ink);display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:14px;background:#dff6ff;font-size:15px;font-weight:650}

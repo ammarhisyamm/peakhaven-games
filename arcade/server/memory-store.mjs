@@ -2,9 +2,11 @@
 import {randomUUID} from 'node:crypto';
 import {refundPlan,refundedRunReason} from './coins.mjs';
 
-export function createMemoryStore({invites={},now=()=>new Date(),flagReasons=true}={}){
+export function createMemoryStore({invites={},now=()=>new Date(),flagReasons=true,stripe=true}={}){
   const codes=new Map(Object.entries(invites).map(([code,max])=>[code,{max,uses:0,note:'',created_at:null}]));
   const players=new Map(),runs=new Map(),runStats=new Map(),results=new Map(),prizes=new Map(),purchases=new Map(),ledger=[],adminEntries=[];
+  // Every webhook event already acted on, by its own id, the way payment_events keeps them.
+  const paymentEvents=new Map();
   const copy=v=>v&&structuredClone(v);
   // The ledger is walked in order, so each row needs a stamp and a tie-break that keep insertion order.
   let ledgerSeq=0;
@@ -18,7 +20,7 @@ export function createMemoryStore({invites={},now=()=>new Date(),flagReasons=tru
     adminEntries.push(entry);return copy(entry);
   };
   return {
-    codes,players,runs,results,prizes,purchases,ledger,adminEntries,
+    codes,players,runs,results,prizes,purchases,ledger,adminEntries,paymentEvents,
     async inviteAvailable(code){const c=codes.get(code);return Boolean(c&&c.uses<c.max);},
     async useInvite(code){const c=codes.get(code);if(!c||c.uses>=c.max)return false;c.uses++;return true;},
     async createPlayer(p){players.set(p.id,{coins:0,...p,created_at:now().toISOString()});return copy(players.get(p.id));},
@@ -83,7 +85,8 @@ export function createMemoryStore({invites={},now=()=>new Date(),flagReasons=tru
     async coinsFor(playerId){return balance(playerId);},
     async createPurchase({playerId,pack,coins,amountCents,currency,reference,provider}){
       if([...purchases.values()].some(p=>p.reference===reference))throw Object.assign(new Error('duplicate key value violates unique constraint "purchases_reference_key"'),{code:'23505'});
-      const row={id:randomUUID(),player_id:playerId,pack,coins,amount_cents:amountCents,currency,reference,provider,status:'pending',created_at:now().toISOString(),resolved_at:null,resolved_by:null};
+      const row={id:randomUUID(),player_id:playerId,pack,coins,amount_cents:amountCents,currency,reference,provider,status:'pending',created_at:now().toISOString(),resolved_at:null,resolved_by:null,
+        provider_ref:null,provider_payment_ref:null};
       purchases.set(row.id,row);return copy(row);
     },
     async purchaseById(id){return copy(purchases.get(id))??null;},
@@ -94,6 +97,26 @@ export function createMemoryStore({invites={},now=()=>new Date(),flagReasons=tru
     async purchasesByStatus(statuses){
       return [...purchases.values()].filter(p=>statuses.includes(p.status))
         .sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at))).map(copy);
+    },
+    // Card payments: what Stripe calls a purchase, and the events already acted on. stripe.sql adds the two
+    // columns and the one table in production; here they are always there unless a test says otherwise.
+    async stripeReady(){return stripe;},
+    async purchaseByProviderRef(ref){
+      if(!ref)return null;
+      return copy([...purchases.values()].find(p=>p.provider_ref===ref||p.provider_payment_ref===ref))??null;
+    },
+    async setPurchaseRefs(id,{sessionId=null,paymentRef=null}={}){
+      const p=purchases.get(id);
+      if(!p)return null;
+      if(sessionId)p.provider_ref=sessionId;
+      if(paymentRef)p.provider_payment_ref=paymentRef;
+      return {id:p.id,provider_ref:p.provider_ref,provider_payment_ref:p.provider_payment_ref};
+    },
+    async paymentEventSeen(id){return paymentEvents.has(String(id));},
+    async recordPaymentEvent({id,provider='stripe',type,purchaseId=null}){
+      const key=String(id);
+      if(!paymentEvents.has(key))paymentEvents.set(key,{id:key,provider,type,purchase_id:purchaseId,created_at:now().toISOString()});
+      return copy(paymentEvents.get(key));
     },
     async grantPurchase(id,adminEmail){
       const p=purchases.get(id);

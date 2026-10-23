@@ -102,7 +102,12 @@ Environment variables (Vercel, Production and Preview): `SUPABASE_URL`, `SUPABAS
 `SUPABASE_SERVICE_ROLE_KEY` (added automatically by the Vercel Supabase integration), `RUN_SEED_SECRET`
 (any long random string; changing it changes every daily course) and `ARCADE_ADMIN_EMAILS` (comma separated;
 these accounts can open `/admin.html`, finalise monthly results and resolve purchases). Paid extra tries add
-`ARCADE_PAYMENT_PROVIDER` and the `ARCADE_PAY_*` details below.
+`ARCADE_PAYMENT_PROVIDER` and then either the `ARCADE_PAY_*` bank details or the `STRIPE_*` keys below.
+
+`api/` holds **12 functions**, which is the cap on this plan. Eleven of them go through `route()` in
+`server/http.mjs`; the twelfth is `api/stripe.js`, which has to stand alone because it needs the raw request
+body to check a signature. Anything new belongs behind an existing route, the way every admin action lives
+behind `/api/admin`.
 
 ## End of month
 
@@ -143,8 +148,7 @@ is verified the same way and nothing on any leaderboard says it was paid for.
 - `server/payments.mjs` is the payment step, one pluggable provider at a time (`ARCADE_PAYMENT_PROVIDER`,
   default `manual`). **manual** is bank transfer / PayID: the player gets a reference (`PHA-XXXX`, drawn from
   an alphabet with no 0/O, 1/I/L, 2/Z, 5/S, 8/B or 6/G so it cannot be mistyped), pays it, and an admin marks
-  it paid. **stripe** is a documented stub and the package is deliberately not a dependency yet; the file says
-  exactly what building it involves, and nothing else would have to change.
+  it paid. **stripe** is Stripe Checkout, below. An unknown or unset provider hides the shop.
 - Payment details come from the environment, never the repo: `ARCADE_PAY_ACCOUNT_NAME` and either
   `ARCADE_PAY_BSB` + `ARCADE_PAY_ACCOUNT_NUMBER` or `ARCADE_PAY_PAYID`, plus an optional one-line
   `ARCADE_PAY_NOTE`. **Until there is enough to actually pay, the shop is hidden entirely**, so merging this
@@ -181,6 +185,130 @@ is verified the same way and nothing on any leaderboard says it was paid for.
   down to `select` on the two new tables **and on `players`**, so nothing but a service-role call can move a
   coin even if a policy is added to that table later.
 - Tests: `tests/paid-tries.test.js`, and `tools/verify-sql.mjs` for the SQL itself.
+
+### Card payments (Stripe Checkout)
+
+`ARCADE_PAYMENT_PROVIDER=stripe` sells the same packs by card. The player taps a pack, the **server** creates
+a Stripe Checkout Session for that pack's price, and the browser is sent to Stripe's own hosted page — so no
+card number ever reaches the arcade, and nothing a browser sends about money is believed: the amount is read
+from `COIN_PACKS`, and checked against the purchase row again before a coin is granted.
+
+**Only a verified webhook grants a coin.** `/api/stripe` checks the `Stripe-Signature` header against the raw
+request body with the endpoint's signing secret (HMAC-SHA256 over `<timestamp>.<body>`, constant-time, against
+every `v1` because rolling a secret leaves two live for a day, and inside a five-minute window so a captured
+delivery cannot be replayed later). The success page the player comes back on grants nothing at all: it polls
+`/api/me` until the balance the server reports has caught up, and says so plainly if it has not — see
+`ui/coins-return.js`, which holds the wording and is tested on its own.
+
+- **No new dependency.** Stripe here is two REST calls (`POST /v1/checkout/sessions`,
+  `GET /v1/checkout/sessions/{id}`) over `fetch` and one HMAC from `node:crypto`, in `server/stripe.mjs`. The
+  tests run on node alone with a fetch of their own, and the deployment installs nothing.
+- **Idempotent twice over.** Every event is written down by its own Stripe id in `payment_events`, so a
+  replayed delivery is answered "already handled"; and `grant_purchase` still allows one grant per purchase,
+  which is the actual guarantee. The webhook acts *first* and records *after*, on purpose: recording first and
+  then failing would leave an event marked as handled with the coins never granted, and Stripe's retry would
+  be told there was nothing to do.
+- **Events it acts on**: `checkout.session.completed` and `checkout.session.async_payment_succeeded` grant
+  (only when `payment_status` is `paid`); `charge.refunded` and `charge.dispute.created` go through the same
+  `refund_purchase` a manual refund uses, so unspent coins come back and the runs the spent ones paid for stop
+  counting; `checkout.session.expired` cancels the pending purchase so an abandoned checkout does not leave
+  the player blocked. Anything else is answered `200` and ignored.
+- **Test keys sell to admins only.** When `STRIPE_SECRET_KEY` is not a live key (`sk_live_`/`rk_live_`), the
+  shop is open to the accounts in `ARCADE_ADMIN_EMAILS` and **everybody else sees it exactly as if payments
+  were off** — no packs, no payment details, no shop, and no mention of a test mode. A test-mode payment is
+  not a payment: the card is a fake one and no money moves, so a player who found the shop would be handed
+  real coins, on the same leaderboard as everyone else, for nothing. What a player does **not** lose is their
+  balance — coins already granted are still shown and still spent, which is the rule `ui/wallet-view.js`
+  holds. An admin's shop carries a **TEST MODE** badge and a line saying no real money moves, so whoever is
+  testing a payment is never in any doubt about which it was, and the admin page says the same. A key in a
+  shape neither `sk_live_` nor `rk_live_` counts as test mode: being wrong that way only hides the shop from
+  players, while being wrong the other way would sell them nothing for nothing.
+- A refund or a dispute arrives as a **charge**, not as a session, so the purchase is traced through
+  `provider_payment_ref` (the PaymentIntent, recorded when the session completed) as well as through metadata.
+- A webhook never touches a purchase that is being paid by bank transfer, and refuses an event whose amount,
+  currency or player does not match the purchase row.
+- **One payment at a time is not a dead end**: tapping Buy with a checkout still open hands back the same
+  Stripe page, says "your payment is being confirmed" if the money is already in, and starts a fresh purchase
+  if Stripe has expired the old one.
+- **Vercel functions: this takes the twelfth of twelve.** `api/stripe.js` has to be its own function because a
+  signature can only be checked against the exact bytes Stripe sent, and every other route goes through
+  `route()` in `server/http.mjs`, which reads `req.body` — a parsed object. Vercel's `req.body` is a lazy
+  getter, so a function that never asks for it leaves the stream untouched and can read those bytes itself.
+- **Existing projects need the migration**: run `supabase/stripe.sql` once in the Supabase SQL editor. It is
+  idempotent and adds no function, because nothing new moves a coin. Until it has run the card shop stays
+  hidden rather than taking a payment it could not account for, the admin page says which file to run, and the
+  webhook answers 503 — which is Stripe's cue to retry it, for three days.
+- **Environment variables** (Vercel, Production and Preview; values never live in the repo):
+
+  | Variable | What it is for |
+  | --- | --- |
+  | `ARCADE_PAYMENT_PROVIDER=stripe` | Turns the card shop on. `manual` keeps bank transfer; unset or unknown hides the shop. |
+  | `STRIPE_SECRET_KEY` | `sk_test_…` / `sk_live_…`. Creates and reads Checkout Sessions. Server only. |
+  | `STRIPE_WEBHOOK_SECRET` | `whsec_…`, the signing secret of the endpoint at `/api/stripe`. Without it nothing can be verified, so the shop stays hidden. |
+  | `STRIPE_API_VERSION` | Optional. Pins the API version; unset uses the account's own default. |
+  | `ARCADE_SITE_URL` | Optional. Where Stripe sends the player back to, when the host a request arrives on is not the one the arcade is served from. Must be `https`. |
+
+- `/admin.html` shows a card purchase with its Checkout Session id (paste it into the Stripe dashboard's
+  search to find the payment) and its status. There is no **Mark paid** for one — nobody marks a card payment
+  paid — and **Cancel** and **Refund** work as they always did.
+- Tests: `tests/stripe.test.js` (a mocked Stripe: a grant on a valid signed event, a rejected signature, a
+  stale timestamp, a tampered body, no double grant on a replay, a refund reversing coins and runs, a dispute,
+  an amount that does not match, the redirect on its own granting nothing, and both sides of the test-key
+  guard — a player who sees no shop but keeps and spends their coins, and an admin who sees a badged one that
+  works end to end), and the `stripe.sql` section of `tools/verify-sql.mjs`.
+
+#### Setting it up in Stripe, in test mode
+
+1. **Get the test keys.** Sign in at [dashboard.stripe.com](https://dashboard.stripe.com) and turn
+   **Test mode** on (the toggle at the top right; every page then says *Test mode* and every key is
+   `…_test_…`). Go to **Developers → API keys**. Copy the **Secret key** (`sk_test_…`) — "Reveal test key" if
+   it is hidden. The publishable key is not needed: the arcade never talks to Stripe from the browser.
+2. **Set it in Vercel.** Project → **Settings → Environment Variables**: `STRIPE_SECRET_KEY` = that key, and
+   `ARCADE_PAYMENT_PROVIDER` = `stripe`, for Production and Preview.
+3. **Run the migration.** Paste `arcade/supabase/stripe.sql` into the Supabase SQL editor and run it.
+4. **Create the webhook endpoint.** Still in test mode: **Developers → Webhooks → Add endpoint**
+   (newer dashboards: **Workbench → Webhooks → Create an event destination**, then *Your account* and the
+   **Snapshot** payload).
+   - **Endpoint URL**: `https://<your-production-domain>/api/stripe` — the arcade's own domain, with no
+     trailing slash. For a preview deployment, that deployment's URL plus `/api/stripe`.
+   - **Events to send** — add these five and nothing else:
+     `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`,
+     `charge.refunded`, `charge.dispute.created`.
+   - Create it, then **Reveal** the **Signing secret** (`whsec_…`) and set it in Vercel as
+     `STRIPE_WEBHOOK_SECRET`. **Redeploy** so both variables are live.
+5. **Make a test purchase**, signed in as one of `ARCADE_ADMIN_EMAILS` — on a test key the shop is open to
+   admins only, and any other account sees no shop at all. The panel is badged **TEST MODE**. On Stripe's page
+   use test card **4242 4242 4242 4242**, any future expiry (`12/34`), any CVC (`123`), any postcode. You are
+   returned to the arcade, which says *Confirming your payment* for a second and then **Coins added**.
+6. **Check it landed.** In Stripe: **Webhooks → your endpoint → Event deliveries** shows
+   `checkout.session.completed` with a `200`. In the arcade: `/admin.html` shows the purchase as **Paid** with
+   its session id, and the coin activity line says `stripe` granted it.
+7. **Test a refund.** In Stripe, open the payment and **Refund** it. `charge.refunded` arrives, the unspent
+   coins come back off the balance, and any run those coins paid for is dropped from the boards — the same path
+   a manual refund takes.
+8. Useful test cards: `4000 0000 0000 0002` declines, `4000 0025 0000 3155` asks for 3D Secure
+   authentication, and `4000 0000 0000 0259` succeeds and then disputes as fraudulent.
+
+Locally, `ARCADE_PAYMENT_PROVIDER=stripe` with the same test keys works against `npm run dev`: run
+`stripe listen --forward-to localhost:8775/api/stripe`, use the `whsec_…` it prints as `STRIPE_WEBHOOK_SECRET`,
+and the whole loop runs on this machine.
+
+#### Going live, later
+
+1. In Stripe, finish **activating the account** (business details, bank account for payouts) — a live key
+   cannot take a payment until that is done.
+2. Turn **Test mode off** and repeat the two steps that are mode-specific: copy the **live** secret key
+   (`sk_live_…`), and **create the webhook endpoint again** in live mode with the same URL and the same five
+   events. Test and live endpoints are separate and their signing secrets are different.
+3. In Vercel, replace `STRIPE_SECRET_KEY` with the live key and `STRIPE_WEBHOOK_SECRET` with the live
+   endpoint's secret, then redeploy. Nothing in the repo changes; `arcade/supabase/stripe.sql` has already
+   run. **That swap is also what opens the shop to players**: the live key takes the admin-only guard and the
+   TEST MODE badge off with it.
+4. Buy the 1-coin pack with a real card as the first live payment, check the admin page shows it paid, then
+   refund it from Stripe and check the coin comes back.
+5. If a live payment ever shows a `400` in **Event deliveries**, the signing secret in Vercel is not that
+   endpoint's. A `503` means `stripe.sql` has not been run (or the provider is not set to `stripe`) — fix it
+   and use **Resend** on the event; nothing is lost, and nothing is granted twice when it arrives.
 
 ### Table grants
 
@@ -364,6 +492,15 @@ connections calling `start_run` for a player with one coin, repeated 50 times; t
 execute any of the functions; that a signed-in player reads only their own rows and can write nothing; and that
 the deployment works in **both** orders — the old code against a migrated database, and the new code against
 one the migration has not reached.
+
+It covers `supabase/achievements.sql`, `supabase/flag-reasons.sql` and `supabase/stripe.sql` the same way. For
+`stripe.sql`: that the two new columns and the event log are reported missing beforehand with the codes the
+store treats as "not migrated yet"; that it applies and re-applies with no change and adds no function at all;
+that one Checkout Session and one payment can each belong to only one purchase; that an event id can only be
+written down once; that a second grant of an already-granted purchase grants nothing even under a new event
+id; that a card refund takes back the unspent coins and drops the runs the spent ones paid for; that neither
+browser key can read the event log, write to it, or put a Checkout Session on a purchase, while a player still
+reads their own; and that all of it holds with `tighten-grants.sql` run **before** it and **after** it.
 
 Useful switches: `PGURL` to use a database you already have (it is dropped and rebuilt), `VERIFY_SQL_ROUNDS`
 for the race, `VERIFY_SQL_KEEP=1` to leave the server up afterwards, and `VERIFY_SQL_MODULES` to point at

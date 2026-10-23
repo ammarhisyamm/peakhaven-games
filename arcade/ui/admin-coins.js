@@ -8,8 +8,11 @@
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Math.max(0,Number(n)||0).toLocaleString('en-AU');
 
-export const PROVIDER_LABELS={manual:'bank transfer / PayID',stripe:'Stripe (not switched on)'};
+export const PROVIDER_LABELS={manual:'bank transfer / PayID',stripe:'Stripe Checkout (card)'};
 export const providerLabel=id=>PROVIDER_LABELS[id]??String(id??'none');
+// What the provider calls a purchase, for looking it up at the other end: a Stripe Checkout Session id, which
+// pasted into the Stripe dashboard's search finds the payment. Blank on a bank transfer.
+export const providerRefLabel=row=>row?.provider==='stripe'?String(row.providerRef??'not started yet'):'';
 
 // "4 minutes", "3 hours", "2 days": how long a player has been waiting to be matched off the bank feed.
 export function ageLabel(minutes){
@@ -31,8 +34,17 @@ function migrationNotice(view){
 }
 function paymentNotice(view){
   if(view?.ready===false)return '';
-  if(view?.paymentReady)return `<p class="admin-hint">Payments: ${escape(providerLabel(view.provider))}. The shop is open.</p>`;
-  return `<p class="admin-note bad">The shop is hidden because this deployment has no payment details. Set <b>ARCADE_PAY_ACCOUNT_NAME</b> and either <b>ARCADE_PAY_BSB</b> + <b>ARCADE_PAY_ACCOUNT_NUMBER</b> or <b>ARCADE_PAY_PAYID</b>. Coins already handed out can still be spent.</p>`;
+  const stripe=view?.provider==='stripe';
+  // The shop needs the provider configured *and*, on Stripe, the migration that records a Checkout Session
+  // and the events already acted on. Either one missing hides the shop, and says which.
+  if(!view?.paymentReady)return `<p class="admin-note bad">The shop is hidden because this deployment has no payment details. ${stripe
+    ?'Set <b>STRIPE_SECRET_KEY</b> and <b>STRIPE_WEBHOOK_SECRET</b> (and point a Stripe webhook endpoint at <b>/api/stripe</b>).'
+    :'Set <b>ARCADE_PAY_ACCOUNT_NAME</b> and either <b>ARCADE_PAY_BSB</b> + <b>ARCADE_PAY_ACCOUNT_NUMBER</b> or <b>ARCADE_PAY_PAYID</b>.'} Coins already handed out can still be spent.</p>`;
+  if(view?.providerReady===false)return `<p class="admin-note bad">The card shop is hidden because <b>arcade/supabase/stripe.sql</b> has not been run in the Supabase SQL editor yet. Run it, then reload this page. Until then no card payment is taken, and coins already handed out can still be spent.</p>`;
+  // Test keys take no money, so the shop is open to admins alone and nobody else sees it at all.
+  if(view?.testMode)return `<p class="admin-note">Payments: ${escape(providerLabel(view.provider))}, <b>in test mode</b>. The shop is open to admin accounts only, and every other player sees it exactly as if payments were off. Pay with a Stripe test card; no real money moves. Swap in the live key and that endpoint&rsquo;s signing secret to open it to everybody.</p>`;
+  return `<p class="admin-hint">Payments: ${escape(providerLabel(view.provider))}. The shop is open.${stripe
+    ?' Coins are added by the Stripe webhook at /api/stripe, never by hand and never by the page the player comes back on.':''}</p>`;
 }
 
 function pendingRows(view,busy){
@@ -40,12 +52,14 @@ function pendingRows(view,busy){
   if(!view.pending?.length)return '<p class="admin-hint">Nothing is waiting for payment.</p>';
   return `<ol class="admin-list purchases">${view.pending.map(row=>`<li>
     <span class="admin-reference">${escape(row.reference)}</span>
-    <div><strong>${escape(row.name)}</strong><small>${escape(row.email||'no email on file')}</small></div>
+    <div><strong>${escape(row.name)}</strong><small>${escape(row.email||'no email on file')}</small>${providerRefLabel(row)?`<small class="admin-provider-ref">${escape(providerLabel(row.provider))} · ${escape(providerRefLabel(row))}</small>`:''}</div>
     <span class="admin-pack">${fmt(row.coins)} coin${row.coins===1?'':'s'} · ${escape(row.price)}</span>
     <span class="admin-age">waiting ${escape(ageLabel(row.ageMinutes))}</span>
     <span class="admin-row-actions">${view.needsAdminConfirmation?`<button class="primary" data-purchase="${escape(row.id)}" data-action="paid"${busy?' disabled':''}>Mark paid</button>`:''}<button class="secondary" data-purchase="${escape(row.id)}" data-action="cancel"${busy?' disabled':''}>Cancel</button></span>
   </li>`).join('')}</ol>
-  <p class="admin-hint">Marking a purchase paid grants its coins. It is safe to click twice: the coins are only ever granted once.</p>`;
+  ${view.needsAdminConfirmation
+    ?'<p class="admin-hint">Marking a purchase paid grants its coins. It is safe to click twice: the coins are only ever granted once.</p>'
+    :'<p class="admin-hint">These are paid for by card, so nobody marks them paid: the coins are granted by the provider’s webhook once the payment goes through. Cancel closes one that was never finished.</p>'}`;
 }
 
 function settledRows(view,busy){
@@ -53,7 +67,7 @@ function settledRows(view,busy){
   return `<section class="panel"><h2>Recent purchases</h2>
     <ol class="admin-list purchases settled">${view.settled.map(row=>`<li>
       <span class="admin-reference">${escape(row.reference)}</span>
-      <div><strong>${escape(row.name)}</strong><small>${escape(row.email||'no email on file')}</small></div>
+      <div><strong>${escape(row.name)}</strong><small>${escape(row.email||'no email on file')}</small>${providerRefLabel(row)?`<small class="admin-provider-ref">${escape(providerLabel(row.provider))} · ${escape(providerRefLabel(row))}</small>`:''}</div>
       <span class="admin-pack">${fmt(row.coins)} coin${row.coins===1?'':'s'} · ${escape(row.price)}</span>
       <span class="admin-status ${escape(row.status)}">${escape(statusLabel(row.status))}</span>
       <span class="admin-row-actions">${row.status==='paid'?`<button class="secondary" data-purchase="${escape(row.id)}" data-action="refund"${busy?' disabled':''}>Refund</button>`:''}</span>

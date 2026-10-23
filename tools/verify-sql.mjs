@@ -653,6 +653,181 @@ try {
     (await liveFlags.db.query(`select count(*)::int as n from information_schema.columns
       where table_schema='public' and table_name='runs' and column_name='flag_reasons'`)).rows[0].n === 1);
   await liveFlags.db.end();
+
+  // ---------------------------------------------------------------- stripe
+  // Card payments. This file adds no way to move a coin: granting is still grant_purchase and refunding is
+  // still refund_purchase. What it adds is what Stripe calls a purchase, and a log of the events already
+  // acted on, which is what stops one being acted on twice.
+  section('stripe.sql');
+  const stripeSql = await readFile(join(root, 'arcade/supabase/stripe.sql'), 'utf8');
+  const stripeDb = await build(server.url, 'ph_stripe', {migrations: [migration, achievements, flagReasons]});
+  const sdb = stripeDb.db;
+  // Before it has run, the store has to be able to tell "not migrated yet" from a real failure, and it does
+  // that on these two codes.
+  check('without the migration the new columns are reported missing the way the store expects',
+    await refused(sdb.query('select provider_ref from public.purchases')) === '42703');
+  check('and so is the event log',
+    await refused(sdb.query('select 1 from public.payment_events')) === '42P01');
+  const stripeBefore = (await sdb.query(FINGERPRINT)).rows[0].fingerprint;
+  let stripeApplied = null;
+  try {await sdb.query(stripeSql); stripeApplied = true;} catch (error) {stripeApplied = error.message;}
+  check('stripe.sql applies to the live schema', stripeApplied === true, stripeApplied === true ? '' : String(stripeApplied));
+  const stripeOnce = (await sdb.query(FINGERPRINT)).rows[0].fingerprint;
+  let stripeAgain = null;
+  try {await sdb.query(stripeSql); stripeAgain = true;} catch (error) {stripeAgain = error.message;}
+  check('and applies a second time without error', stripeAgain === true, stripeAgain === true ? '' : String(stripeAgain));
+  check('running it twice changes nothing',
+    JSON.stringify(stripeOnce) === JSON.stringify((await sdb.query(FINGERPRINT)).rows[0].fingerprint));
+  check('it did add something the first time', JSON.stringify(stripeBefore) !== JSON.stringify(stripeOnce));
+  check('and it added no function, because nothing new moves a coin',
+    JSON.stringify(stripeBefore.functions) === JSON.stringify(stripeOnce.functions));
+
+  const refCols = (await sdb.query(`select column_name, data_type, is_nullable from information_schema.columns
+    where table_schema='public' and table_name='purchases' and column_name like 'provider%' order by column_name`)).rows;
+  check('purchases carries the session and the payment, both optional text',
+    refCols.map(c => `${c.column_name}:${c.data_type}:${c.is_nullable}`).join(' ') ===
+    'provider:text:NO provider_payment_ref:text:YES provider_ref:text:YES',
+    refCols.map(c => c.column_name).join(','));
+  const stripeIdx = (await sdb.query(`select indexname, indexdef from pg_indexes where schemaname='public'
+    and tablename in ('purchases','payment_events') order by indexname`)).rows;
+  for (const [what, name] of [['a Checkout Session', 'purchases_provider_ref'], ['a payment', 'purchases_provider_payment_ref']])
+    check(`${what} belongs to one purchase and no more`,
+      stripeIdx.some(i => i.indexname === name && /UNIQUE/.test(i.indexdef) && /is not null/i.test(i.indexdef)),
+      stripeIdx.find(i => i.indexname === name)?.indexdef ?? 'missing');
+  const eventCols = (await sdb.query(`select column_name, data_type, is_nullable from information_schema.columns
+    where table_schema='public' and table_name='payment_events' order by ordinal_position`)).rows;
+  check('payment_events has the columns it should',
+    eventCols.map(c => c.column_name).join(',') === 'id,provider,type,purchase_id,created_at',
+    eventCols.map(c => c.column_name).join(','));
+  check('its id is the primary key, which is the guarantee',
+    (await sdb.query(`select conname, pg_get_constraintdef(oid) as def from pg_constraint
+      where conrelid='public.payment_events'::regclass and contype='p'`)).rows[0]?.def === 'PRIMARY KEY (id)');
+  check('row-level security is on',
+    (await sdb.query(`select relrowsecurity from pg_class where oid='public.payment_events'::regclass`)).rows[0]?.relrowsecurity === true);
+  const eventPolicies = (await sdb.query(`select policyname from pg_policies where schemaname='public' and tablename='payment_events'`)).rows;
+  check('and it has no policy at all, so only the service role is in', eventPolicies.length === 0,
+    eventPolicies.map(p => p.policyname).join(','));
+  const eventGrants = (await sdb.query(`select grantee, privilege_type from information_schema.role_table_grants
+    where table_schema='public' and table_name='payment_events' order by 1,2`)).rows;
+  check('no browser key holds anything on it',
+    !eventGrants.some(g => ['anon', 'authenticated', 'PUBLIC'].includes(g.grantee)),
+    eventGrants.map(g => `${g.grantee}:${g.privilege_type}`).join(' '));
+  check('and the service role can read and write it',
+    ['SELECT', 'INSERT'].every(p => eventGrants.some(g => g.grantee === 'service_role' && g.privilege_type === p)),
+    eventGrants.filter(g => g.grantee === 'service_role').map(g => g.privilege_type).join(','));
+
+  // The webhook's two layers, against a real database: the event log refuses a repeat, and grant_purchase
+  // refuses a second grant even when the event id is new.
+  section('stripe.sql: an event cannot be acted on twice');
+  const ivy = await newPlayer(sdb, 'Ivy');
+  const {rows: [ivyBuy]} = await sdb.query(
+    `insert into public.purchases (player_id, pack, coins, amount_cents, currency, reference, provider, provider_ref, provider_payment_ref)
+     values ($1, 10, 10, 1799, 'AUD', 'PHA-IVYY', 'stripe', 'cs_test_ivy', 'pi_test_ivy') returning *`, [ivy]);
+  const logEvent = (id, type = 'checkout.session.completed', purchase = ivyBuy.id) =>
+    sdb.query('insert into public.payment_events (id, provider, type, purchase_id) values ($1, $2, $3, $4)',
+      [id, 'stripe', type, purchase]);
+  await logEvent('stripe:evt_ivy_1');
+  check('an event id can only be written down once',
+    await refused(logEvent('stripe:evt_ivy_1')) === '23505');
+  await sdb.query('select public.grant_purchase($1, $2)', [ivyBuy.id, 'stripe']);
+  check('the webhook grants the coins and the ledger says it was the webhook',
+    await coinsOf(sdb, ivy) === 10 &&
+    (await sdb.query(`select admin_email from public.coin_ledger where purchase_id=$1 and reason='purchase'`, [ivyBuy.id])).rows[0].admin_email === 'stripe');
+  await logEvent('stripe:evt_ivy_2');
+  const regrant = (await sdb.query('select public.grant_purchase($1, $2) as r', [ivyBuy.id, 'stripe'])).rows[0].r;
+  check('a different event about the same session still grants nothing twice',
+    regrant.granted === false && await coinsOf(sdb, ivy) === 10, JSON.stringify(regrant));
+  check('two purchases cannot claim one Checkout Session',
+    await refused(sdb.query(
+      `insert into public.purchases (player_id, pack, coins, amount_cents, currency, reference, provider, provider_ref)
+       values ($1, 1, 1, 299, 'AUD', 'PHA-IVY2', 'stripe', 'cs_test_ivy')`, [ivy])) === '23505');
+  check('nor one payment',
+    await refused(sdb.query(
+      `insert into public.purchases (player_id, pack, coins, amount_cents, currency, reference, provider, provider_payment_ref)
+       values ($1, 1, 1, 299, 'AUD', 'PHA-IVY3', 'stripe', 'pi_test_ivy')`, [ivy])) === '23505');
+  check('but two bank transfers, with neither, are fine',
+    await refused(sdb.query(
+      `insert into public.purchases (player_id, pack, coins, amount_cents, currency, reference, provider)
+       values ($1, 1, 1, 299, 'AUD', 'PHA-IVY4', 'manual'), ($1, 1, 1, 299, 'AUD', 'PHA-IVY5', 'manual')`, [ivy])) === null);
+
+  // A refund of a card purchase goes down exactly the path a bank-transfer refund goes down.
+  section('stripe.sql: a card refund is the refund that was already there');
+  for (let i = 0; i < 3; i++) await sdb.query(START, [ivy, 'blocks', DAY, 4242, 3, null, true]);
+  const ivyPaid = (await sdb.query(START, [ivy, 'blocks', DAY, 4242, 3, null, true])).rows[0];
+  await sdb.query(`update public.runs set score = 800, status = 'closed' where id = $1`, [ivyPaid.id]);
+  await logEvent('stripe:evt_ivy_refund', 'charge.refunded');
+  const ivyRefund = (await sdb.query('select public.refund_purchase($1, $2) as r', [ivyBuy.id, 'stripe'])).rows[0].r;
+  check('it takes back the unspent coins and drops the paid run',
+    ivyRefund.refunded === true && ivyRefund.removed === 9 && ivyRefund.runs === 1 && await coinsOf(sdb, ivy) === 0,
+    JSON.stringify(ivyRefund));
+  check('the run it paid for stops counting',
+    (await sdb.query('select status, reject_reason from public.runs where id = $1', [ivyPaid.id])).rows[0].reject_reason === 'Refunded purchase PHA-IVYY');
+  check('and the purchase keeps its Stripe session, so the admin page can still show it',
+    (await sdb.query('select status, provider_ref, resolved_by from public.purchases where id=$1', [ivyBuy.id])).rows[0].provider_ref === 'cs_test_ivy');
+
+  section('stripe.sql: what a browser key can do with any of it');
+  const jay = await newPlayer(sdb, 'Jay');
+  const {rows: [jayBuy]} = await sdb.query(
+    `insert into public.purchases (player_id, pack, coins, amount_cents, currency, reference, provider, provider_ref)
+     values ($1, 1, 1, 299, 'AUD', 'PHA-JAYY', 'stripe', 'cs_test_jay') returning *`, [jay]);
+  for (const role of ['anon', 'authenticated']) {
+    await asRole(sdb, role, jay);
+    check(`${role} cannot read the event log`,
+      await refused(sdb.query('select * from public.payment_events')) === '42501');
+    check(`${role} cannot write to it`,
+      await refused(sdb.query(`insert into public.payment_events (id, type) values ('stripe:evt_hack', 'checkout.session.completed')`)) === '42501');
+    check(`${role} cannot put a Checkout Session on a purchase`,
+      await refused(sdb.query(`update public.purchases set provider_ref = 'cs_test_hack' where id = $1`, [jayBuy.id])) === '42501');
+    await asOwner(sdb);
+  }
+  await asRole(sdb, 'authenticated', jay);
+  const ownRefs = (await sdb.query('select reference, provider_ref from public.purchases')).rows;
+  check('a player still reads their own purchase, Stripe session and all',
+    ownRefs.length === 1 && ownRefs[0].reference === 'PHA-JAYY' && ownRefs[0].provider_ref === 'cs_test_jay',
+    JSON.stringify(ownRefs));
+  await asOwner(sdb);
+  await asRole(sdb, 'service_role');
+  check('and the service role writes both columns, which is how /api/stripe records a payment',
+    await refused(sdb.query(`update public.purchases set provider_payment_ref = 'pi_test_jay' where id = $1`, [jayBuy.id])) === null);
+  check('and writes the event down',
+    await refused(sdb.query(`insert into public.payment_events (id, provider, type, purchase_id)
+      values ('stripe:evt_jay', 'stripe', 'checkout.session.completed', $1)`, [jayBuy.id])) === null);
+  await asOwner(sdb);
+  check('a deleted purchase leaves its events behind rather than taking them with it',
+    await (async () => {
+      await sdb.query('delete from public.purchases where id = $1', [jayBuy.id]);
+      const left = await sdb.query(`select purchase_id from public.payment_events where id = 'stripe:evt_jay'`);
+      return left.rows.length === 1 && left.rows[0].purchase_id === null;
+    })());
+  await sdb.end();
+
+  // Either order: the migration before tighten-grants, and after it. tools/verify-grants.mjs proves the sweep
+  // itself; this is the one thing that would be missed, which is a new table arriving open.
+  section('stripe.sql and tighten-grants, in both orders');
+  const tighten = await readFile(join(root, 'arcade/supabase/tighten-grants.sql'), 'utf8');
+  for (const [label, order] of [['stripe first', [stripeSql, tighten]], ['tighten first', [tighten, stripeSql]]]) {
+    const db = (await build(server.url, `ph_stripe_${label.split(' ')[0]}`,
+      {migrations: [migration, achievements, flagReasons, ...order]})).db;
+    const grants = (await db.query(`select table_name, grantee, privilege_type from information_schema.role_table_grants
+      where table_schema='public' and grantee in ('anon','authenticated','PUBLIC') order by 1,2,3`)).rows;
+    check(`${label}: no browser key holds anything on payment_events`,
+      !grants.some(g => g.table_name === 'payment_events'),
+      grants.filter(g => g.table_name === 'payment_events').map(g => `${g.grantee}:${g.privilege_type}`).join(' '));
+    check(`${label}: and the only reads left anywhere are the three a policy needs`,
+      grants.every(g => g.privilege_type === 'SELECT' && g.grantee === 'authenticated' &&
+        ['players', 'purchases', 'coin_ledger'].includes(g.table_name)),
+      JSON.stringify(grants.map(g => `${g.table_name}:${g.grantee}:${g.privilege_type}`)));
+    const player = await newPlayer(db, 'Kim');
+    await asRole(db, 'service_role');
+    check(`${label}: the service role can still write an event`,
+      await refused(db.query(`insert into public.payment_events (id, provider, type) values ('stripe:evt_k', 'stripe', 'checkout.session.completed')`)) === null);
+    await asOwner(db);
+    await asRole(db, 'authenticated', player);
+    check(`${label}: and a player still cannot`,
+      await refused(db.query(`insert into public.payment_events (id, type) values ('stripe:evt_hack2', 'x')`)) === '42501');
+    await asOwner(db);
+    await db.end();
+  }
 } finally {
   await migrated?.db?.end().catch(() => {});
   await server.stop();

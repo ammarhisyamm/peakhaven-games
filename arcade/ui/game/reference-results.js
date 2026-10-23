@@ -103,7 +103,8 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
 </section>
 <section class="kg-shop" aria-labelledby="kg-shop-title">
  <button class="kg-close" type="button" aria-label="Close coin shop">${svg('close')}</button>
- <header class="kg-shop-head">${mascot('kg-shop-mascot')}<div><h2 id="kg-shop-title" class="kg-shop-title">${accountShop?'EXTRA TRIES':'KEEP GOING?'}</h2><p>One balance. Play any of the three games.</p><span class="kg-pill">${accountShop?'1 coin = 1 extra try':'1 blue coin = 1 play'}</span></div></header>
+ <header class="kg-shop-head">${mascot('kg-shop-mascot')}<div><h2 id="kg-shop-title" class="kg-shop-title">${accountShop?'EXTRA TRIES':'KEEP GOING?'}</h2><p>One balance. Play any of the three games.</p><span class="kg-pill">${accountShop?'1 coin = 1 extra try':'1 blue coin = 1 play'}</span>${accountShop?.testMode?'<span class="kg-pill kg-test-mode">TEST MODE</span>':''}</div></header>
+ ${accountShop?.testMode?'<p class="kg-test-note">Card payments are in test mode, so only admins can see this shop and no real money moves. Use a Stripe test card.</p>':''}
  <p class="kg-run-note">${eyebrow} · ${title.toLowerCase()} · ${fmt(result?.score)} pts</p>
  <p class="kg-out-note">Your free plays are used up for today.</p>
  <p class="kg-balance">${coinArt(0)}<span>${accountShop?'Your coins':'Shared coins'}</span><strong class="kg-wallet-count">0</strong></p>
@@ -117,7 +118,9 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  <p class="kg-feedback" role="status" aria-live="polite"></p>
 </section>`;
  document.body.append(dialog);
- let busy=false,rankedState=null;
+ // Set when a card payment was started and not finished: the buy button then carries that purchase on rather
+ // than starting a new one, whatever pack is selected underneath.
+ let busy=false,rankedState=null,resumeCoins=0;
  const $=s=>dialog.querySelector(s);
  const feedback=message=>{$('.kg-feedback').textContent=message;};
  const refresh=()=>{
@@ -163,15 +166,22 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  dialog.addEventListener('cancel',event=>{event.preventDefault();if(dialog.dataset.mode==='shop'&&!shopOnly)setMode('result');else exit();});
  $('#kg-buy').onclick=async()=>{
   if(busy)return;
-  const coins=Number($('input:checked')?.value)||packs[0]?.coins||10;
-  // Signed in, this asks the server for a reference to pay against. Nothing is granted here: the coins arrive
-  // once the payment has been matched, so the panel turns into the payment details and stops there.
+  const coins=resumeCoins||Number($('input:checked')?.value)||packs[0]?.coins||10;
+  // Signed in, this asks the server to set the payment up. Nothing is granted here: with a bank transfer the
+  // panel turns into the reference to pay against, and with a card the browser leaves for the payment page
+  // and the coins arrive from the webhook. Either way this request never adds a coin.
   if(accountShop){
    const button=$('#kg-buy');button.disabled=true;feedback('Setting up your payment…');
    let answer;try{answer=await accountShop.buy(coins);}catch{answer={ok:false,error:'That did not go through. Please try again.'};}
    if(!dialog.isConnected)return;
    button.disabled=false;
    if(!answer?.ok)return feedback(answer?.error||'That did not go through. Please try again.');
+   // A hosted checkout: the next step is the provider's own page, so nothing more happens here.
+   if(answer.instructions?.checkoutUrl){
+    button.disabled=true;feedback('Taking you to the secure checkout page…');
+    (accountShop.checkout??(url=>{location.href=url;}))(answer.instructions.checkoutUrl);
+    return;
+   }
    showPayment(answer.purchase,answer.instructions);
    return;
   }
@@ -185,13 +195,20 @@ export function showReferenceResults({game='blocks',result=null,best=0,previousB
  // for, nothing more happens here until the money arrives.
  const payEscape=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  function showPayment(purchase,instructions){
+  // A card payment that was started and not finished is the one case with something left to press: the button
+  // goes back to the provider's page for that same purchase. A bank transfer has only its reference.
+  const card=String(purchase?.provider??instructions?.kind??'')==='stripe';
   const lines=[{label:'Amount',value:purchase?.price??''},{label:'Reference',value:purchase?.reference??''},...(instructions?.lines||[])].filter(line=>line.value);
   $('.kg-pay-lines').innerHTML=lines.map(line=>`<div><dt>${payEscape(line.label)}</dt><dd>${payEscape(line.value)}</dd></div>`).join('');
+  $('.kg-pay-title').textContent=card?'Payment not finished':'Waiting for your payment';
   $('.kg-pay-note').textContent=instructions?.note||'Your coins are added once the payment lands.';
   $('.kg-pay').hidden=false;
-  $('.kg-packs').hidden=true;$('#kg-buy').hidden=true;$('.kg-rule').hidden=true;$('.kg-buy-note').hidden=true;
+  $('.kg-packs').hidden=true;$('.kg-rule').hidden=true;$('.kg-buy-note').hidden=true;
+  resumeCoins=card?Math.max(1,Math.floor(Number(purchase?.coins)||0)):0;
+  $('#kg-buy').hidden=!card;
+  if(card)$('#kg-buy').textContent='CONTINUE PAYMENT';
   $('#kg-shop-exit').textContent='Done';
-  feedback('');dialog.scrollTop=0;
+  feedback(card?'Nothing has been charged yet.':'');dialog.scrollTop=0;
  }
  // A purchase they already have waiting opens straight onto its details, so the reference is never lost.
  if(accountShop?.pending)showPayment(accountShop.pending,accountShop.pendingInstructions);

@@ -181,7 +181,7 @@ async function refused(promise) {
   catch (error) {return error.code || error.message;}
 }
 
-const LIVE = ['schema.sql', 'month-end.sql', 'paid-tries.sql', 'achievements.sql'];
+const LIVE = ['schema.sql', 'month-end.sql', 'paid-tries.sql', 'achievements.sql', 'stripe.sql'];
 const DAY = '2026-10-17';
 
 const server = await startPostgres();
@@ -495,7 +495,7 @@ try {
 
   section('The other order: tighten first, then the later migrations on top');
   const reversed = await build(server.url, 'ph_reversed',
-    ['schema.sql', 'month-end.sql', 'tighten-grants.sql', 'paid-tries.sql', 'achievements.sql']);
+    ['schema.sql', 'month-end.sql', 'tighten-grants.sql', 'paid-tries.sql', 'achievements.sql', 'stripe.sql']);
   const reversedGrants = await grantsOf(reversed);
   check('a migration running after tighten-grants cannot reopen anything', writesOf(reversedGrants).length === 0,
     JSON.stringify(writesOf(reversedGrants)));
